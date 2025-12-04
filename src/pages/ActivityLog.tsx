@@ -1,6 +1,6 @@
 import { Layout } from '@/components/Layout';
 import { loadActivityLog, formatTimestamp, isWithinCurrentPeriod } from '@/lib/timerUtils';
-import { ScrollText, Play, Square, RotateCcw, Filter, Clock } from 'lucide-react';
+import { ScrollText, Play, Square, RotateCcw, Filter, Clock, AlertTriangle, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -25,14 +25,26 @@ const ActivityLog = () => {
       case 'reset':
         return <RotateCcw className="w-4 h-4 text-muted-foreground" />;
       case 'finished':
-        return <Clock className="w-4 h-4 text-warning" />;
+        return <Clock className="w-4 h-4 text-destructive" />;
+      case 'warning':
+        return <AlertTriangle className="w-4 h-4 text-warning" />;
+      case 'extended':
+        return <Plus className="w-4 h-4 text-primary" />;
       default:
         return null;
     }
   };
 
   const getActionLabel = (action: string) => {
-    return action.charAt(0).toUpperCase() + action.slice(1);
+    switch (action) {
+      case 'started': return 'Запущен';
+      case 'stopped': return 'Остановлен';
+      case 'reset': return 'Сброшен';
+      case 'finished': return 'Завершён';
+      case 'warning': return '5 мин осталось';
+      case 'extended': return 'Продлён';
+      default: return action;
+    }
   };
 
   const getActionClass = (action: string) => {
@@ -40,9 +52,12 @@ const ActivityLog = () => {
       case 'started':
         return 'text-success';
       case 'stopped':
-        return 'text-destructive';
       case 'finished':
+        return 'text-destructive';
+      case 'warning':
         return 'text-warning';
+      case 'extended':
+        return 'text-primary';
       default:
         return 'text-muted-foreground';
     }
@@ -59,9 +74,9 @@ const ActivityLog = () => {
                 <ScrollText className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Activity Log</h1>
+                <h1 className="text-2xl font-bold text-foreground">Журнал активности</h1>
                 <p className="text-sm text-muted-foreground">
-                  {logs.length} {logs.length === 1 ? 'entry' : 'entries'}
+                  {logs.length} {logs.length === 1 ? 'запись' : 'записей'}
                 </p>
               </div>
             </div>

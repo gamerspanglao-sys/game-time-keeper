@@ -7,7 +7,7 @@ import { Layers, Gamepad, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Index = () => {
-  const { timers, startTimer, stopTimer, resetTimer, setDuration } = useTimers();
+  const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration } = useTimers();
   const { isFullscreen } = useFullscreen();
 
   const tableTimers = timers.filter(t => t.category === 'table');
@@ -35,6 +35,7 @@ const Index = () => {
                 timer={timer}
                 onStart={startTimer}
                 onStop={stopTimer}
+                onExtend={extendTimer}
                 onReset={resetTimer}
                 onSetDuration={setDuration}
                 compact={compact}
@@ -56,6 +57,7 @@ const Index = () => {
                 timer={timer}
                 onStart={startTimer}
                 onStop={stopTimer}
+                onExtend={extendTimer}
                 onReset={resetTimer}
                 onSetDuration={setDuration}
                 compact={compact}
@@ -77,6 +79,7 @@ const Index = () => {
                 timer={timer}
                 onStart={startTimer}
                 onStop={stopTimer}
+                onExtend={extendTimer}
                 onReset={resetTimer}
                 onSetDuration={setDuration}
                 compact={compact}

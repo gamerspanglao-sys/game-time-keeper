@@ -100,6 +100,16 @@
     text-shadow: var(--glow-destructive);
   }
 
+  .timer-display-warning {
+    @apply text-warning;
+    text-shadow: var(--glow-warning);
+  }
+
+  .timer-display-finished {
+    @apply text-destructive;
+    text-shadow: var(--glow-destructive);
+  }
+
   .status-badge {
     @apply px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider;
   }
@@ -120,6 +130,14 @@
     @apply bg-muted text-muted-foreground border border-border;
   }
 
+  .status-badge-warning {
+    @apply bg-warning/20 text-warning border border-warning/30;
+  }
+
+  .status-badge-finished {
+    @apply bg-destructive/20 text-destructive border border-destructive/30;
+  }
+
   .gaming-card {
     @apply bg-card border border-border rounded-xl p-6 transition-all duration-300;
   }
@@ -132,6 +150,28 @@
   .gaming-card-active {
     @apply border-success/50;
     box-shadow: 0 0 30px hsl(142 71% 45% / 0.15);
+  }
+
+  .gaming-card-warning {
+    @apply border-warning/50;
+    box-shadow: 0 0 30px hsl(45 93% 47% / 0.3);
+    animation: pulse-warning 1s ease-in-out infinite;
+  }
+
+  .gaming-card-finished {
+    @apply border-destructive/50;
+    box-shadow: 0 0 30px hsl(0 84% 60% / 0.4);
+    animation: pulse-danger 0.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-warning {
+    0%, 100% { box-shadow: 0 0 30px hsl(45 93% 47% / 0.3); }
+    50% { box-shadow: 0 0 50px hsl(45 93% 47% / 0.5); }
+  }
+
+  @keyframes pulse-danger {
+    0%, 100% { box-shadow: 0 0 30px hsl(0 84% 60% / 0.4); }
+    50% { box-shadow: 0 0 60px hsl(0 84% 60% / 0.7); }
   }
 
   .nav-link {
