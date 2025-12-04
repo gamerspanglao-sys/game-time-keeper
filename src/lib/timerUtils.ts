@@ -7,8 +7,6 @@ const STORAGE_KEYS = {
 };
 
 export const DEFAULT_TIMERS: Timer[] = [
-  // TEST TIMER - 10 seconds total, warning at 5 sec
-  { id: 'test-timer', name: '🧪 TEST (10 sec)', category: 'table', status: 'idle', startTime: null, duration: 10 * 1000, remainingTime: 10 * 1000, elapsedTime: 0 },
   { id: 'table-1', name: 'Table 1', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
   { id: 'table-2', name: 'Table 2', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
   { id: 'table-3', name: 'Table 3', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
@@ -20,7 +18,7 @@ export const DEFAULT_TIMERS: Timer[] = [
 ];
 
 // Force refresh timers when structure changes
-const TIMERS_VERSION = 4;
+const TIMERS_VERSION = 5;
 
 export function formatTime(ms: number): string {
   if (ms === null || ms === undefined || isNaN(ms)) {
