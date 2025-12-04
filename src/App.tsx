@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import DailyStats from "./pages/DailyStats";
 import ActivityLog from "./pages/ActivityLog";
 import NotFound from "./pages/NotFound";
+import { AdminGuard } from "./components/AdminGuard";
 
 const queryClient = new QueryClient();
 
@@ -18,8 +19,8 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/stats" element={<DailyStats />} />
-          <Route path="/log" element={<ActivityLog />} />
+          <Route path="/stats" element={<AdminGuard><DailyStats /></AdminGuard>} />
+          <Route path="/log" element={<AdminGuard><ActivityLog /></AdminGuard>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
