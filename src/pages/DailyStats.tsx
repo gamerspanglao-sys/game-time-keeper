@@ -1,9 +1,18 @@
 import { Layout } from '@/components/Layout';
+import { AdminGuard } from '@/components/AdminGuard';
 import { getCurrentDayStats, formatTime, getDailyPeriodKey, DEFAULT_TIMERS } from '@/lib/timerUtils';
 import { BarChart3, Clock, Calendar } from 'lucide-react';
 import { useMemo } from 'react';
 
 const DailyStats = () => {
+  return (
+    <AdminGuard>
+      <DailyStatsContent />
+    </AdminGuard>
+  );
+};
+
+const DailyStatsContent = () => {
   const stats = useMemo(() => getCurrentDayStats(), []);
   const periodKey = getDailyPeriodKey();
 

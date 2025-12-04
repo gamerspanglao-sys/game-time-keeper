@@ -1,4 +1,5 @@
 import { Layout } from '@/components/Layout';
+import { AdminGuard } from '@/components/AdminGuard';
 import { loadActivityLog, formatTimestamp, isWithinCurrentPeriod } from '@/lib/timerUtils';
 import { ScrollText, Play, Square, RotateCcw, Filter, Clock, AlertTriangle, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -6,6 +7,14 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const ActivityLog = () => {
+  return (
+    <AdminGuard>
+      <ActivityLogContent />
+    </AdminGuard>
+  );
+};
+
+const ActivityLogContent = () => {
   const [showTodayOnly, setShowTodayOnly] = useState(true);
   const allLogs = useMemo(() => loadActivityLog(), []);
 
