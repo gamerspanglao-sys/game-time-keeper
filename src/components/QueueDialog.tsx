@@ -16,9 +16,13 @@ interface QueueDialogProps {
   timerName: string;
   timerId: string;
   queue: QueueEntry[];
+  remainingTime: number; // in ms
   onAddToQueue: (timerId: string, name: string) => void;
   onRemoveFromQueue: (timerId: string, entryId: string) => void;
 }
+
+const CLEANUP_TIME_MS = 5 * 60 * 1000; // 5 minutes for cleanup
+const SESSION_DURATION_MS = 60 * 60 * 1000; // 1 hour default session
 
 export function QueueDialog({
   isOpen,
@@ -26,6 +30,7 @@ export function QueueDialog({
   timerName,
   timerId,
   queue,
+  remainingTime,
   onAddToQueue,
   onRemoveFromQueue,
 }: QueueDialogProps) {
@@ -44,8 +49,17 @@ export function QueueDialog({
     }
   };
 
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString('en-US', {
+  // Calculate estimated start time for each person in queue
+  const getEstimatedStartTime = (index: number) => {
+    const now = Date.now();
+    // First person: remaining time on current session + cleanup
+    // Others: add 1 hour session + cleanup for each person ahead
+    const waitTime = remainingTime + CLEANUP_TIME_MS + (index * (SESSION_DURATION_MS + CLEANUP_TIME_MS));
+    return new Date(now + waitTime);
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -103,7 +117,7 @@ export function QueueDialog({
                       <p className="font-medium text-foreground">{entry.name}</p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {formatTime(entry.timestamp)}
+                        Start ~{formatTime(getEstimatedStartTime(index))}
                       </p>
                     </div>
                   </div>

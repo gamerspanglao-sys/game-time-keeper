@@ -226,6 +226,7 @@ export function TimerCard({
         timerName={name}
         timerId={id}
         queue={queue}
+        remainingTime={remainingTime}
         onAddToQueue={onAddToQueue}
         onRemoveFromQueue={onRemoveFromQueue}
       />
