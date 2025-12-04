@@ -4,6 +4,7 @@ import { CurrentSessions } from '@/components/CurrentSessions';
 import { useTimers } from '@/hooks/useTimers';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useFullscreen } from '@/hooks/useFullscreen';
+import { useQueue } from '@/hooks/useQueue';
 import { Layers, Gamepad, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +12,7 @@ const Index = () => {
   const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration } = useTimers();
   const { playConfirmSound } = useTimerAlerts();
   const { isFullscreen } = useFullscreen();
+  const { getQueueForTimer, addToQueue, removeFromQueue } = useQueue();
 
   const tableTimers = timers.filter(t => t.category === 'table');
   const playstationTimers = timers.filter(t => t.category === 'playstation');
@@ -54,6 +56,9 @@ const Index = () => {
                 onSetDuration={setDuration}
                 playConfirmSound={playConfirmSound}
                 compact={compact}
+                queue={getQueueForTimer(timer.id)}
+                onAddToQueue={addToQueue}
+                onRemoveFromQueue={removeFromQueue}
               />
             ))}
           </div>
@@ -77,6 +82,9 @@ const Index = () => {
                 onSetDuration={setDuration}
                 playConfirmSound={playConfirmSound}
                 compact={compact}
+                queue={getQueueForTimer(timer.id)}
+                onAddToQueue={addToQueue}
+                onRemoveFromQueue={removeFromQueue}
               />
             ))}
           </div>
@@ -100,6 +108,9 @@ const Index = () => {
                 onSetDuration={setDuration}
                 playConfirmSound={playConfirmSound}
                 compact={compact}
+                queue={getQueueForTimer(timer.id)}
+                onAddToQueue={addToQueue}
+                onRemoveFromQueue={removeFromQueue}
               />
             ))}
           </div>

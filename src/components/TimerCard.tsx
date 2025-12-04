@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Timer, DURATION_PRESETS } from '@/types/timer';
 import { formatTime, getStatusLabel } from '@/lib/timerUtils';
 import { Button } from '@/components/ui/button';
-import { Play, Square, RotateCcw, Plus } from 'lucide-react';
+import { Play, Square, RotateCcw, Plus, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CloseoutDialog } from './CloseoutDialog';
-
+import { QueueDialog } from './QueueDialog';
+import { QueueEntry } from '@/types/queue';
 interface TimerCardProps {
   timer: Timer;
   onStart: (id: string) => void;
@@ -15,6 +16,9 @@ interface TimerCardProps {
   onSetDuration: (id: string, minutes: number) => void;
   playConfirmSound: () => void;
   compact?: boolean;
+  queue: QueueEntry[];
+  onAddToQueue: (timerId: string, name: string) => void;
+  onRemoveFromQueue: (timerId: string, entryId: string) => void;
 }
 
 export function TimerCard({ 
@@ -25,11 +29,14 @@ export function TimerCard({
   onReset, 
   onSetDuration, 
   playConfirmSound,
-  compact 
+  compact,
+  queue,
+  onAddToQueue,
+  onRemoveFromQueue
 }: TimerCardProps) {
   const { id, name, status, remainingTime, duration } = timer;
   const [showCloseout, setShowCloseout] = useState(false);
-
+  const [showQueue, setShowQueue] = useState(false);
   const getTimerDisplayClass = () => {
     switch (status) {
       case 'running': return 'timer-display-running';
@@ -91,9 +98,24 @@ export function TimerCard({
         {/* Header */}
         <div className="flex items-center justify-between">
           <h3 className={cn("font-semibold text-foreground", compact ? "text-base" : "text-xl")}>{name}</h3>
-          <span className={cn('status-badge', getStatusBadgeClass())}>
-            {getStatusLabel(status)}
-          </span>
+          <div className="flex items-center gap-2">
+            {/* Queue button */}
+            <button
+              onClick={() => setShowQueue(true)}
+              className={cn(
+                "flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all",
+                queue.length > 0
+                  ? "bg-primary/20 text-primary border border-primary/30"
+                  : "bg-secondary/50 text-muted-foreground hover:bg-secondary"
+              )}
+            >
+              <Users className="w-3 h-3" />
+              {queue.length > 0 && <span>{queue.length}</span>}
+            </button>
+            <span className={cn('status-badge', getStatusBadgeClass())}>
+              {getStatusLabel(status)}
+            </span>
+          </div>
         </div>
 
         {/* Progress Bar */}
@@ -195,6 +217,17 @@ export function TimerCard({
         onComplete={handleCloseoutComplete}
         onCancel={handleCloseoutCancel}
         playConfirmSound={playConfirmSound}
+      />
+
+      {/* Queue Dialog */}
+      <QueueDialog
+        isOpen={showQueue}
+        onClose={() => setShowQueue(false)}
+        timerName={name}
+        timerId={id}
+        queue={queue}
+        onAddToQueue={onAddToQueue}
+        onRemoveFromQueue={onRemoveFromQueue}
       />
     </>
   );
