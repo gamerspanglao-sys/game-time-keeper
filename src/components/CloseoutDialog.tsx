@@ -9,13 +9,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, Trash2, Power, Banknote } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { calculatePrice, formatElapsedTime, TIMER_PRICING } from '@/lib/timerUtils';
+import { calculatePrice, TIMER_PRICING } from '@/lib/timerUtils';
 
 interface CloseoutDialogProps {
   isOpen: boolean;
   timerName: string;
   timerId: string;
-  elapsedTime: number;
+  duration: number; // Total duration set (for billing)
   onComplete: () => void;
   onCancel: () => void;
   playConfirmSound: () => void;
@@ -27,15 +27,16 @@ export function CloseoutDialog({
   isOpen, 
   timerName,
   timerId,
-  elapsedTime,
+  duration,
   onComplete, 
   onCancel,
   playConfirmSound 
 }: CloseoutDialogProps) {
   const [stage, setStage] = useState<CloseoutStage>('payment');
 
-  const price = calculatePrice(timerId, elapsedTime);
+  const price = calculatePrice(timerId, duration);
   const pricePerHour = TIMER_PRICING[timerId] || 100;
+  const hours = Math.ceil(duration / (60 * 60 * 1000));
 
   const handleConfirm = () => {
     playConfirmSound();
@@ -66,8 +67,8 @@ export function CloseoutDialog({
             <p className="text-muted-foreground">Session at <span className="font-semibold text-foreground">{timerName}</span></p>
             <div className="bg-secondary/50 rounded-xl p-4 space-y-2">
               <div className="flex justify-between text-lg">
-                <span className="text-muted-foreground">Time played:</span>
-                <span className="font-mono font-bold text-foreground">{formatElapsedTime(elapsedTime)}</span>
+                <span className="text-muted-foreground">Time booked:</span>
+                <span className="font-mono font-bold text-foreground">{hours} hour{hours > 1 ? 's' : ''}</span>
               </div>
               <div className="flex justify-between text-lg">
                 <span className="text-muted-foreground">Rate:</span>
