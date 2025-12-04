@@ -27,7 +27,7 @@ export function TimerCard({
   playConfirmSound,
   compact 
 }: TimerCardProps) {
-  const { id, name, status, remainingTime, duration } = timer;
+  const { id, name, status, remainingTime, duration, elapsedTime } = timer;
   const [showCloseout, setShowCloseout] = useState(false);
 
   const getTimerDisplayClass = () => {
@@ -190,6 +190,8 @@ export function TimerCard({
       <CloseoutDialog
         isOpen={showCloseout}
         timerName={name}
+        timerId={id}
+        elapsedTime={elapsedTime}
         onComplete={handleCloseoutComplete}
         onCancel={handleCloseoutCancel}
         playConfirmSound={playConfirmSound}

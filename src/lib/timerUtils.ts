@@ -6,6 +6,18 @@ const STORAGE_KEYS = {
   DAILY_STATS: 'gamers_daily_stats',
 };
 
+// Pricing per hour in pesos
+export const TIMER_PRICING: Record<string, number> = {
+  'table-1': 100,
+  'table-2': 100,
+  'table-3': 100,
+  'playstation-1': 100,
+  'playstation-2': 100,
+  'vip-super': 350,
+  'vip-medium': 250,
+  'vip-comfort': 250,
+};
+
 export const DEFAULT_TIMERS: Timer[] = [
   { id: 'table-1', name: 'Table 1', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
   { id: 'table-2', name: 'Table 2', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
@@ -41,6 +53,23 @@ export function formatTimestamp(timestamp: number): string {
   const minutes = date.getMinutes().toString().padStart(2, '0');
 
   return `[${year}-${month}-${day} ${hours}:${minutes}]`;
+}
+
+export function calculatePrice(timerId: string, elapsedMs: number): number {
+  const pricePerHour = TIMER_PRICING[timerId] || 100;
+  const hours = elapsedMs / (60 * 60 * 1000);
+  // Round up to nearest hour for billing
+  const billedHours = Math.ceil(hours);
+  return billedHours * pricePerHour;
+}
+
+export function formatElapsedTime(ms: number): string {
+  const hours = Math.floor(ms / (60 * 60 * 1000));
+  const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
 }
 
 export function getDailyPeriodKey(): string {
