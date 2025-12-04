@@ -10,11 +10,15 @@ export const DEFAULT_TIMERS: Timer[] = [
   { id: 'table-1', name: 'Table 1', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
   { id: 'table-2', name: 'Table 2', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
   { id: 'table-3', name: 'Table 3', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
-  { id: 'playstation', name: 'PlayStation', category: 'playstation', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
+  { id: 'playstation-1', name: 'PlayStation 1', category: 'playstation', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
+  { id: 'playstation-2', name: 'PlayStation 2', category: 'playstation', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
   { id: 'vip-super', name: 'VIP Super', category: 'vip', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
   { id: 'vip-medium', name: 'VIP Medium', category: 'vip', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
   { id: 'vip-comfort', name: 'VIP Comfort', category: 'vip', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
 ];
+
+// Force refresh timers when structure changes
+const TIMERS_VERSION = 2;
 
 export function formatTime(ms: number): string {
   if (ms === null || ms === undefined || isNaN(ms)) {
@@ -70,6 +74,14 @@ export function isWithinCurrentPeriod(timestamp: number): boolean {
 
 export function loadTimers(): Timer[] {
   try {
+    // Check version to force reset when structure changes
+    const storedVersion = localStorage.getItem(STORAGE_KEYS.TIMERS + '_version');
+    if (storedVersion !== String(TIMERS_VERSION)) {
+      localStorage.removeItem(STORAGE_KEYS.TIMERS);
+      localStorage.setItem(STORAGE_KEYS.TIMERS + '_version', String(TIMERS_VERSION));
+      return DEFAULT_TIMERS;
+    }
+
     const stored = localStorage.getItem(STORAGE_KEYS.TIMERS);
     if (stored) {
       const savedTimers = JSON.parse(stored) as Partial<Timer>[];
@@ -78,6 +90,12 @@ export function loadTimers(): Timer[] {
         const saved = savedTimers.find(t => t.id === defaultTimer.id);
         if (!saved) return defaultTimer;
         
+        // Validate status is a known value
+        const validStatuses: TimerStatus[] = ['idle', 'running', 'warning', 'finished', 'stopped'];
+        const status = validStatuses.includes(saved.status as TimerStatus) 
+          ? (saved.status as TimerStatus) 
+          : 'idle';
+        
         // Ensure all required fields have valid values
         const timer: Timer = {
           ...defaultTimer,
@@ -85,7 +103,7 @@ export function loadTimers(): Timer[] {
           duration: saved.duration ?? defaultTimer.duration,
           remainingTime: saved.remainingTime ?? defaultTimer.remainingTime,
           elapsedTime: saved.elapsedTime ?? 0,
-          status: (saved.status as TimerStatus) ?? 'idle',
+          status,
         };
         
         // Handle running timers that need time adjustment
@@ -108,6 +126,7 @@ export function loadTimers(): Timer[] {
     // Clear corrupted data
     localStorage.removeItem(STORAGE_KEYS.TIMERS);
   }
+  localStorage.setItem(STORAGE_KEYS.TIMERS + '_version', String(TIMERS_VERSION));
   return DEFAULT_TIMERS;
 }
 
