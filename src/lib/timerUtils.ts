@@ -7,17 +7,17 @@ const STORAGE_KEYS = {
 };
 
 export const DEFAULT_TIMERS: Timer[] = [
-  { id: 'table-1', name: 'Table 1', category: 'table', status: 'idle', startTime: null, elapsedTime: 0, pausedAt: null },
-  { id: 'table-2', name: 'Table 2', category: 'table', status: 'idle', startTime: null, elapsedTime: 0, pausedAt: null },
-  { id: 'table-3', name: 'Table 3', category: 'table', status: 'idle', startTime: null, elapsedTime: 0, pausedAt: null },
-  { id: 'playstation', name: 'PlayStation', category: 'playstation', status: 'idle', startTime: null, elapsedTime: 0, pausedAt: null },
-  { id: 'vip-super', name: 'VIP Super', category: 'vip', status: 'idle', startTime: null, elapsedTime: 0, pausedAt: null },
-  { id: 'vip-medium', name: 'VIP Medium', category: 'vip', status: 'idle', startTime: null, elapsedTime: 0, pausedAt: null },
-  { id: 'vip-comfort', name: 'VIP Comfort', category: 'vip', status: 'idle', startTime: null, elapsedTime: 0, pausedAt: null },
+  { id: 'table-1', name: 'Table 1', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
+  { id: 'table-2', name: 'Table 2', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
+  { id: 'table-3', name: 'Table 3', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
+  { id: 'playstation', name: 'PlayStation', category: 'playstation', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
+  { id: 'vip-super', name: 'VIP Super', category: 'vip', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
+  { id: 'vip-medium', name: 'VIP Medium', category: 'vip', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
+  { id: 'vip-comfort', name: 'VIP Comfort', category: 'vip', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
 ];
 
 export function formatTime(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
@@ -40,7 +40,6 @@ export function getDailyPeriodKey(): string {
   const now = new Date();
   const hours = now.getHours();
   
-  // If before 5am, use previous day
   if (hours < 5) {
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -54,34 +53,33 @@ export function isWithinCurrentPeriod(timestamp: number): boolean {
   const now = new Date();
   const date = new Date(timestamp);
   
-  // Get the start of current period (5am today or 5am yesterday)
   const periodStart = new Date(now);
   if (now.getHours() < 5) {
     periodStart.setDate(periodStart.getDate() - 1);
   }
   periodStart.setHours(5, 0, 0, 0);
   
-  // Get the end of current period (5am tomorrow or 5am today)
   const periodEnd = new Date(periodStart);
   periodEnd.setDate(periodEnd.getDate() + 1);
   
   return date >= periodStart && date < periodEnd;
 }
 
-// LocalStorage functions
 export function loadTimers(): Timer[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.TIMERS);
     if (stored) {
       const timers = JSON.parse(stored) as Timer[];
-      // Recalculate elapsed time for running timers
       return timers.map(timer => {
         if (timer.status === 'running' && timer.startTime) {
-          const additionalTime = Date.now() - timer.startTime;
+          const elapsed = Date.now() - timer.startTime;
+          const newRemaining = Math.max(0, timer.remainingTime - elapsed);
           return {
             ...timer,
             startTime: Date.now(),
-            elapsedTime: timer.elapsedTime + additionalTime
+            remainingTime: newRemaining,
+            elapsedTime: timer.elapsedTime + elapsed,
+            status: newRemaining <= 0 ? 'finished' as TimerStatus : timer.status
           };
         }
         return timer;
@@ -135,7 +133,7 @@ export function addActivityLogEntry(
     action,
   };
   
-  const newLog = [entry, ...log].slice(0, 500); // Keep last 500 entries
+  const newLog = [entry, ...log].slice(0, 500);
   saveActivityLog(newLog);
   return newLog;
 }
@@ -175,7 +173,6 @@ export function updateDailyStats(timerId: string, elapsedTime: number): void {
     });
   }
   
-  // Keep only last 30 days
   const sortedStats = stats.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
   saveDailyStats(sortedStats);
 }
@@ -189,8 +186,8 @@ export function getCurrentDayStats(): DailyStats | null {
 export function getStatusLabel(status: TimerStatus): string {
   switch (status) {
     case 'running': return 'Running';
-    case 'paused': return 'Paused';
     case 'stopped': return 'Stopped';
+    case 'finished': return 'Finished';
     default: return 'Idle';
   }
 }

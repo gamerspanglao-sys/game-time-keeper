@@ -1,6 +1,6 @@
 import { Layout } from '@/components/Layout';
 import { loadActivityLog, formatTimestamp, isWithinCurrentPeriod } from '@/lib/timerUtils';
-import { ScrollText, Play, Pause, Square, RotateCcw, Filter } from 'lucide-react';
+import { ScrollText, Play, Square, RotateCcw, Filter, Clock } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -19,14 +19,13 @@ const ActivityLog = () => {
   const getActionIcon = (action: string) => {
     switch (action) {
       case 'started':
-      case 'resumed':
         return <Play className="w-4 h-4 text-success" />;
-      case 'paused':
-        return <Pause className="w-4 h-4 text-warning" />;
       case 'stopped':
         return <Square className="w-4 h-4 text-destructive" />;
       case 'reset':
         return <RotateCcw className="w-4 h-4 text-muted-foreground" />;
+      case 'finished':
+        return <Clock className="w-4 h-4 text-warning" />;
       default:
         return null;
     }
@@ -39,12 +38,11 @@ const ActivityLog = () => {
   const getActionClass = (action: string) => {
     switch (action) {
       case 'started':
-      case 'resumed':
         return 'text-success';
-      case 'paused':
-        return 'text-warning';
       case 'stopped':
         return 'text-destructive';
+      case 'finished':
+        return 'text-warning';
       default:
         return 'text-muted-foreground';
     }
