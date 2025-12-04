@@ -1,4 +1,4 @@
-export type TimerStatus = 'idle' | 'running' | 'stopped' | 'finished';
+export type TimerStatus = 'idle' | 'running' | 'warning' | 'finished' | 'stopped';
 
 export type TimerCategory = 'table' | 'playstation' | 'vip';
 
@@ -18,7 +18,7 @@ export interface ActivityLogEntry {
   timestamp: number;
   timerId: string;
   timerName: string;
-  action: 'started' | 'stopped' | 'reset' | 'finished';
+  action: 'started' | 'stopped' | 'reset' | 'finished' | 'extended' | 'warning';
 }
 
 export interface DailyStats {
@@ -28,5 +28,8 @@ export interface DailyStats {
   };
 }
 
-// Preset durations in minutes
-export const DURATION_PRESETS = [30, 60, 90, 120, 180];
+// Preset durations in minutes (1h, 2h, 3h)
+export const DURATION_PRESETS = [60, 120, 180];
+
+// Warning threshold - 5 minutes in ms
+export const WARNING_THRESHOLD = 5 * 60 * 1000;

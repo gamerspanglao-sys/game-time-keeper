@@ -185,9 +185,10 @@ export function getCurrentDayStats(): DailyStats | null {
 
 export function getStatusLabel(status: TimerStatus): string {
   switch (status) {
-    case 'running': return 'Running';
-    case 'stopped': return 'Stopped';
-    case 'finished': return 'Finished';
-    default: return 'Idle';
+    case 'running': return 'Активен';
+    case 'warning': return '⚠️ 5 мин';
+    case 'stopped': return 'Остановлен';
+    case 'finished': return '🔴 Время!';
+    default: return 'Готов';
   }
 }
