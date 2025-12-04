@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { Lock } from 'lucide-react';
 
 const ADMIN_PIN = '8808';
@@ -12,14 +20,17 @@ interface AdminGuardProps {
 
 export function AdminGuard({ children }: AdminGuardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showDialog, setShowDialog] = useState(false);
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if already authenticated in this session
     const authenticated = sessionStorage.getItem(SESSION_KEY);
     if (authenticated === 'true') {
       setIsAuthenticated(true);
+    } else {
+      setShowDialog(true);
     }
   }, []);
 
@@ -27,6 +38,7 @@ export function AdminGuard({ children }: AdminGuardProps) {
     e.preventDefault();
     if (pin === ADMIN_PIN) {
       setIsAuthenticated(true);
+      setShowDialog(false);
       sessionStorage.setItem(SESSION_KEY, 'true');
       setError(false);
     } else {
@@ -35,20 +47,27 @@ export function AdminGuard({ children }: AdminGuardProps) {
     }
   };
 
+  const handleBack = () => {
+    setShowDialog(false);
+    navigate('/');
+  };
+
   if (isAuthenticated) {
     return <>{children}</>;
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center space-y-2">
-          <div className="mx-auto w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center">
-            <Lock className="w-8 h-8 text-primary" />
+    <Dialog open={showDialog} onOpenChange={(open) => !open && handleBack()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <div className="mx-auto w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center mb-2">
+            <Lock className="w-6 h-6 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Admin Access</h1>
-          <p className="text-muted-foreground">Enter PIN to continue</p>
-        </div>
+          <DialogTitle className="text-center">Admin Access</DialogTitle>
+          <DialogDescription className="text-center">
+            Enter PIN to continue
+          </DialogDescription>
+        </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
@@ -59,17 +78,22 @@ export function AdminGuard({ children }: AdminGuardProps) {
             value={pin}
             onChange={(e) => setPin(e.target.value)}
             placeholder="••••"
-            className={`text-center text-2xl tracking-widest ${error ? 'border-red-500' : ''}`}
+            className={`text-center text-2xl tracking-widest ${error ? 'border-destructive' : ''}`}
             autoFocus
           />
           {error && (
-            <p className="text-red-500 text-sm text-center">Wrong PIN</p>
+            <p className="text-destructive text-sm text-center">Wrong PIN</p>
           )}
-          <Button type="submit" className="w-full" disabled={pin.length < 4}>
-            Unlock
-          </Button>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={handleBack}>
+              Back
+            </Button>
+            <Button type="submit" className="flex-1" disabled={pin.length < 4}>
+              Unlock
+            </Button>
+          </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

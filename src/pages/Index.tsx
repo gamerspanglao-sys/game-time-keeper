@@ -5,6 +5,7 @@ import { useTimers } from '@/hooks/useTimers';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { useQueue } from '@/hooks/useQueue';
+import { useWakeLock } from '@/hooks/useWakeLock';
 import { Layers, Gamepad, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +14,10 @@ const Index = () => {
   const { playConfirmSound } = useTimerAlerts();
   const { isFullscreen } = useFullscreen();
   const { getQueueForTimer, addToQueue, removeFromQueue } = useQueue();
+  
+  // Keep screen awake when any timer is running
+  const hasActiveTimers = timers.some(t => t.status === 'running' || t.status === 'warning' || t.status === 'finished');
+  useWakeLock(hasActiveTimers);
 
   const tableTimers = timers.filter(t => t.category === 'table');
   const playstationTimers = timers.filter(t => t.category === 'playstation');
