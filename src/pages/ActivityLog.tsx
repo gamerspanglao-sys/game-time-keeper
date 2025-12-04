@@ -37,12 +37,12 @@ const ActivityLog = () => {
 
   const getActionLabel = (action: string) => {
     switch (action) {
-      case 'started': return 'Запущен';
-      case 'stopped': return 'Остановлен';
-      case 'reset': return 'Сброшен';
-      case 'finished': return 'Завершён';
-      case 'warning': return '5 мин осталось';
-      case 'extended': return 'Продлён';
+      case 'started': return 'Started';
+      case 'stopped': return 'Stopped';
+      case 'reset': return 'Reset';
+      case 'finished': return 'Finished';
+      case 'warning': return '5 min left';
+      case 'extended': return 'Extended';
       default: return action;
     }
   };
@@ -74,9 +74,9 @@ const ActivityLog = () => {
                 <ScrollText className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Журнал активности</h1>
+                <h1 className="text-2xl font-bold text-foreground">Activity Log</h1>
                 <p className="text-sm text-muted-foreground">
-                  {logs.length} {logs.length === 1 ? 'запись' : 'записей'}
+                  {logs.length} {logs.length === 1 ? 'entry' : 'entries'}
                 </p>
               </div>
             </div>

@@ -17,6 +17,9 @@ export const DEFAULT_TIMERS: Timer[] = [
 ];
 
 export function formatTime(ms: number): string {
+  if (ms === null || ms === undefined || isNaN(ms)) {
+    return '00:00:00';
+  }
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -69,9 +72,24 @@ export function loadTimers(): Timer[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.TIMERS);
     if (stored) {
-      const timers = JSON.parse(stored) as Timer[];
-      return timers.map(timer => {
-        if (timer.status === 'running' && timer.startTime) {
+      const savedTimers = JSON.parse(stored) as Partial<Timer>[];
+      // Merge saved data with defaults to ensure all fields exist
+      return DEFAULT_TIMERS.map(defaultTimer => {
+        const saved = savedTimers.find(t => t.id === defaultTimer.id);
+        if (!saved) return defaultTimer;
+        
+        // Ensure all required fields have valid values
+        const timer: Timer = {
+          ...defaultTimer,
+          ...saved,
+          duration: saved.duration ?? defaultTimer.duration,
+          remainingTime: saved.remainingTime ?? defaultTimer.remainingTime,
+          elapsedTime: saved.elapsedTime ?? 0,
+          status: (saved.status as TimerStatus) ?? 'idle',
+        };
+        
+        // Handle running timers that need time adjustment
+        if ((timer.status === 'running' || timer.status === 'warning') && timer.startTime) {
           const elapsed = Date.now() - timer.startTime;
           const newRemaining = Math.max(0, timer.remainingTime - elapsed);
           return {
@@ -87,6 +105,8 @@ export function loadTimers(): Timer[] {
     }
   } catch (e) {
     console.error('Error loading timers:', e);
+    // Clear corrupted data
+    localStorage.removeItem(STORAGE_KEYS.TIMERS);
   }
   return DEFAULT_TIMERS;
 }
@@ -185,10 +205,10 @@ export function getCurrentDayStats(): DailyStats | null {
 
 export function getStatusLabel(status: TimerStatus): string {
   switch (status) {
-    case 'running': return 'Активен';
-    case 'warning': return '⚠️ 5 мин';
-    case 'stopped': return 'Остановлен';
-    case 'finished': return '🔴 Время!';
-    default: return 'Готов';
+    case 'running': return 'Active';
+    case 'warning': return '⚠️ 5 min';
+    case 'stopped': return 'Stopped';
+    case 'finished': return '🔴 Time!';
+    default: return 'Ready';
   }
 }
