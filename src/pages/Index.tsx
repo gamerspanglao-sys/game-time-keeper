@@ -13,11 +13,23 @@ const Index = () => {
   const tableTimers = timers.filter(t => t.category === 'table');
   const playstationTimers = timers.filter(t => t.category === 'playstation');
   const vipTimers = timers.filter(t => t.category === 'vip');
+  
+  // Check if any timer is in finished state for screen flash effect
+  const hasFinishedTimer = timers.some(t => t.status === 'finished');
+  const hasWarningTimer = timers.some(t => t.status === 'warning');
 
   const compact = isFullscreen;
 
   return (
     <Layout compact={compact}>
+      {/* Full screen flash overlay for alerts */}
+      {hasFinishedTimer && (
+        <div className="fixed inset-0 bg-destructive pointer-events-none z-50 screen-flash" />
+      )}
+      {hasWarningTimer && !hasFinishedTimer && (
+        <div className="fixed inset-0 bg-warning pointer-events-none z-50 opacity-0 animate-pulse" 
+             style={{ animationDuration: '1s' }} />
+      )}
       <div className={cn("max-w-7xl mx-auto", compact ? "space-y-4" : "space-y-6")}>
         {/* Current Sessions */}
         <CurrentSessions timers={timers} compact={compact} />

@@ -20,8 +20,8 @@ export function TimerCard({ timer, onStart, onStop, onExtend, onReset, onSetDura
   const getTimerDisplayClass = () => {
     switch (status) {
       case 'running': return 'timer-display-running';
-      case 'warning': return 'timer-display-warning animate-pulse';
-      case 'finished': return 'timer-display-finished animate-pulse';
+      case 'warning': return 'timer-display-warning animate-bounce';
+      case 'finished': return 'timer-display-finished animate-pulse scale-110';
       case 'stopped': return 'timer-display-stopped';
       default: return 'text-muted-foreground';
     }

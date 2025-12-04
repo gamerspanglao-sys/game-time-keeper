@@ -28,7 +28,7 @@ export function useTimers() {
             
             // Timer finished
             if (newRemaining <= 0) {
-              playFinishedAlarm(timer.id);
+              playFinishedAlarm(timer.id, timer.name);
               const newLog = addActivityLogEntry(activityLog, timer.id, timer.name, 'finished');
               setActivityLog(newLog);
               updateDailyStats(timer.id, timer.elapsedTime + 1000);
@@ -46,7 +46,7 @@ export function useTimers() {
             if (newRemaining <= WARNING_THRESHOLD && timer.status === 'running') {
               if (!warnedTimersRef.current.has(timer.id)) {
                 warnedTimersRef.current.add(timer.id);
-                playWarningBeep();
+                playWarningBeep(timer.name);
                 const newLog = addActivityLogEntry(activityLog, timer.id, timer.name, 'warning');
                 setActivityLog(newLog);
               }
