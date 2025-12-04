@@ -127,13 +127,17 @@ export function useTimerAlerts() {
     flashTitle(timerName ? `${timerName} FINISHED!` : 'TIMER FINISHED!');
     
     // Send persistent notification
-    if (timerName) {
-      sendNotification(
-        '🔴 TIME IS UP!', 
-        `${timerName} has finished! Please attend to this immediately.`,
-        true
-      );
-    }
+    const sendReminderNotification = () => {
+      if (timerName) {
+        sendNotification(
+          '🔴 TIME IS UP!', 
+          `${timerName} has finished! Please attend to this immediately.`,
+          true
+        );
+      }
+    };
+    
+    sendReminderNotification();
     
     const playBeep = () => {
       try {
@@ -150,22 +154,22 @@ export function useTimerAlerts() {
           oscillator.frequency.value = freq;
           oscillator.type = 'square';
           
-          gainNode.gain.setValueAtTime(0.7, audioContext.currentTime + startTime);
+          gainNode.gain.setValueAtTime(0.8, audioContext.currentTime + startTime);
           gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + duration);
           
           oscillator.start(audioContext.currentTime + startTime);
           oscillator.stop(audioContext.currentTime + startTime + duration);
         };
         
-        // Urgent alarm pattern: high-low-high-low
-        playTone(1200, 0, 0.1);
-        playTone(800, 0.15, 0.1);
-        playTone(1200, 0.3, 0.1);
-        playTone(800, 0.45, 0.1);
+        // Urgent alarm pattern: high-low-high-low (louder)
+        playTone(1200, 0, 0.15);
+        playTone(800, 0.2, 0.15);
+        playTone(1200, 0.4, 0.15);
+        playTone(800, 0.6, 0.15);
         
         // Vibrate on mobile
         if ('vibrate' in navigator) {
-          navigator.vibrate([150, 50, 150, 50, 150]);
+          navigator.vibrate([200, 100, 200, 100, 200]);
         }
       } catch (e) {
         console.error('Error playing finished alarm:', e);
@@ -173,19 +177,39 @@ export function useTimerAlerts() {
     };
 
     playBeep();
-    const intervalId = setInterval(playBeep, 700);
     
-    const intervalKey = `alarm_${timerId}`;
-    (window as any)[intervalKey] = intervalId;
+    // Continuous alarm every 700ms
+    const alarmIntervalId = setInterval(playBeep, 700);
+    const alarmKey = `alarm_${timerId}`;
+    (window as any)[alarmKey] = alarmIntervalId;
+    
+    // Reminder notification every 30 seconds
+    const reminderIntervalId = setInterval(() => {
+      sendReminderNotification();
+      // Also play louder beeps for reminder
+      playBeep();
+    }, 30000);
+    const reminderKey = `reminder_${timerId}`;
+    (window as any)[reminderKey] = reminderIntervalId;
   }, [ensureAudioContext, flashTitle, sendNotification]);
 
   const stopAlarm = useCallback((timerId: string) => {
     activeAlarmsRef.current.delete(timerId);
-    const intervalKey = `alarm_${timerId}`;
-    const intervalId = (window as any)[intervalKey];
-    if (intervalId) {
-      clearInterval(intervalId);
-      delete (window as any)[intervalKey];
+    
+    // Stop alarm interval
+    const alarmKey = `alarm_${timerId}`;
+    const alarmIntervalId = (window as any)[alarmKey];
+    if (alarmIntervalId) {
+      clearInterval(alarmIntervalId);
+      delete (window as any)[alarmKey];
+    }
+    
+    // Stop reminder interval
+    const reminderKey = `reminder_${timerId}`;
+    const reminderIntervalId = (window as any)[reminderKey];
+    if (reminderIntervalId) {
+      clearInterval(reminderIntervalId);
+      delete (window as any)[reminderKey];
     }
     
     if (activeAlarmsRef.current.size === 0) {
