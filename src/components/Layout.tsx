@@ -1,12 +1,28 @@
 import { ReactNode } from 'react';
 import { Navigation } from './Navigation';
 import { Gamepad2 } from 'lucide-react';
+import { useFullscreen } from '@/hooks/useFullscreen';
+import { cn } from '@/lib/utils';
 
 interface LayoutProps {
   children: ReactNode;
+  compact?: boolean;
 }
 
-export function Layout({ children }: LayoutProps) {
+export function Layout({ children, compact }: LayoutProps) {
+  const { isFullscreen } = useFullscreen();
+
+  if (compact || isFullscreen) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation compact />
+        <main className="p-3">
+          {children}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
       <Navigation />
@@ -22,7 +38,7 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </div>
         
-        <div className="p-4 md:p-8">
+        <div className="p-4 md:p-6">
           {children}
         </div>
       </main>

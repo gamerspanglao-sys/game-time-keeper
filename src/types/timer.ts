@@ -1,4 +1,4 @@
-export type TimerStatus = 'idle' | 'running' | 'paused' | 'stopped';
+export type TimerStatus = 'idle' | 'running' | 'stopped' | 'finished';
 
 export type TimerCategory = 'table' | 'playstation' | 'vip';
 
@@ -8,8 +8,9 @@ export interface Timer {
   category: TimerCategory;
   status: TimerStatus;
   startTime: number | null;
-  elapsedTime: number;
-  pausedAt: number | null;
+  duration: number; // countdown duration in ms
+  remainingTime: number; // remaining time in ms
+  elapsedTime: number; // for stats tracking
 }
 
 export interface ActivityLogEntry {
@@ -17,12 +18,15 @@ export interface ActivityLogEntry {
   timestamp: number;
   timerId: string;
   timerName: string;
-  action: 'started' | 'paused' | 'resumed' | 'stopped' | 'reset';
+  action: 'started' | 'stopped' | 'reset' | 'finished';
 }
 
 export interface DailyStats {
   date: string;
   timers: {
-    [timerId: string]: number; // total elapsed time in ms
+    [timerId: string]: number;
   };
 }
+
+// Preset durations in minutes
+export const DURATION_PRESETS = [30, 60, 90, 120, 180];
