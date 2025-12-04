@@ -102,7 +102,7 @@ export function TimerCard({ timer, onStart, onStop, onExtend, onReset, onSetDura
                   : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-muted'
               )}
             >
-              {minutes / 60}ч
+              {minutes / 60}h
             </button>
           ))}
         </div>
@@ -118,7 +118,7 @@ export function TimerCard({ timer, onStart, onStop, onExtend, onReset, onSetDura
             className="flex-1"
           >
             <Play className="w-5 h-5" />
-            Старт
+            Start
           </Button>
         )}
 
@@ -131,7 +131,7 @@ export function TimerCard({ timer, onStart, onStop, onExtend, onReset, onSetDura
               className="flex-1"
             >
               <Square className="w-5 h-5" />
-              Завершить
+              End
             </Button>
             <Button 
               variant="timer" 
@@ -140,7 +140,7 @@ export function TimerCard({ timer, onStart, onStop, onExtend, onReset, onSetDura
               className="flex-1"
             >
               <Plus className="w-5 h-5" />
-              +1 час
+              +1 hour
             </Button>
           </>
         )}
@@ -153,7 +153,7 @@ export function TimerCard({ timer, onStart, onStop, onExtend, onReset, onSetDura
             className="flex-1"
           >
             <RotateCcw className="w-5 h-5" />
-            Сброс
+            Reset
           </Button>
         )}
       </div>
