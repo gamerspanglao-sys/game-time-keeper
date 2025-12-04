@@ -153,25 +153,47 @@
   }
 
   .gaming-card-warning {
-    @apply border-warning/50;
-    box-shadow: 0 0 30px hsl(45 93% 47% / 0.3);
-    animation: pulse-warning 1s ease-in-out infinite;
+    @apply border-warning;
+    box-shadow: 0 0 40px hsl(45 93% 47% / 0.5);
+    animation: flash-warning 0.8s ease-in-out infinite;
   }
 
   .gaming-card-finished {
-    @apply border-destructive/50;
-    box-shadow: 0 0 30px hsl(0 84% 60% / 0.4);
-    animation: pulse-danger 0.5s ease-in-out infinite;
+    @apply border-destructive;
+    box-shadow: 0 0 50px hsl(0 84% 60% / 0.6);
+    animation: flash-danger 0.4s ease-in-out infinite;
   }
 
-  @keyframes pulse-warning {
-    0%, 100% { box-shadow: 0 0 30px hsl(45 93% 47% / 0.3); }
-    50% { box-shadow: 0 0 50px hsl(45 93% 47% / 0.5); }
+  @keyframes flash-warning {
+    0%, 100% { 
+      box-shadow: 0 0 40px hsl(45 93% 47% / 0.5);
+      background-color: hsl(var(--card));
+    }
+    50% { 
+      box-shadow: 0 0 80px hsl(45 93% 47% / 0.8);
+      background-color: hsl(45 93% 47% / 0.15);
+    }
   }
 
-  @keyframes pulse-danger {
-    0%, 100% { box-shadow: 0 0 30px hsl(0 84% 60% / 0.4); }
-    50% { box-shadow: 0 0 60px hsl(0 84% 60% / 0.7); }
+  @keyframes flash-danger {
+    0%, 100% { 
+      box-shadow: 0 0 50px hsl(0 84% 60% / 0.6);
+      background-color: hsl(var(--card));
+    }
+    50% { 
+      box-shadow: 0 0 100px hsl(0 84% 60% / 0.9);
+      background-color: hsl(0 84% 60% / 0.25);
+    }
+  }
+  
+  /* Full screen flash overlay for finished timers */
+  .screen-flash {
+    animation: screen-flash-animation 0.5s ease-in-out infinite;
+  }
+  
+  @keyframes screen-flash-animation {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 0.3; }
   }
 
   .nav-link {
