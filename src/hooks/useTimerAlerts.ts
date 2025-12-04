@@ -4,13 +4,41 @@ export function useTimerAlerts() {
   const activeAlarmsRef = useRef<Set<string>>(new Set());
   const titleIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const originalTitle = useRef(document.title);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  // Initialize AudioContext on first user interaction
+  const ensureAudioContext = useCallback(() => {
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    // Resume if suspended (required after user interaction)
+    if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
+    return audioContextRef.current;
+  }, []);
 
   // Request notification permission on mount
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
-  }, []);
+    
+    // Initialize audio context on any user interaction
+    const initAudio = () => {
+      ensureAudioContext();
+      document.removeEventListener('click', initAudio);
+      document.removeEventListener('touchstart', initAudio);
+    };
+    
+    document.addEventListener('click', initAudio);
+    document.addEventListener('touchstart', initAudio);
+    
+    return () => {
+      document.removeEventListener('click', initAudio);
+      document.removeEventListener('touchstart', initAudio);
+    };
+  }, [ensureAudioContext]);
 
   const sendNotification = useCallback((title: string, body: string, requireInteraction = false) => {
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -51,21 +79,26 @@ export function useTimerAlerts() {
 
   const playWarningBeep = useCallback((timerName?: string) => {
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      oscillator.frequency.value = 800;
-      oscillator.type = 'sine';
+      const audioContext = ensureAudioContext();
       
-      gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
+      // Play 3 beeps for warning
+      for (let i = 0; i < 3; i++) {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
 
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.8);
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.frequency.value = 880;
+        oscillator.type = 'sine';
+        
+        const startTime = audioContext.currentTime + i * 0.3;
+        gainNode.gain.setValueAtTime(0.5, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.2);
+
+        oscillator.start(startTime);
+        oscillator.stop(startTime + 0.2);
+      }
       
       // Send notification for warning
       if (timerName) {
@@ -75,10 +108,15 @@ export function useTimerAlerts() {
           false
         );
       }
+      
+      // Vibrate
+      if ('vibrate' in navigator) {
+        navigator.vibrate([100, 50, 100, 50, 100]);
+      }
     } catch (e) {
       console.error('Error playing warning beep:', e);
     }
-  }, [sendNotification]);
+  }, [ensureAudioContext, sendNotification]);
 
   const playFinishedAlarm = useCallback((timerId: string, timerName?: string) => {
     if (activeAlarmsRef.current.has(timerId)) return;
@@ -93,15 +131,15 @@ export function useTimerAlerts() {
       sendNotification(
         '🔴 TIME IS UP!', 
         `${timerName} has finished! Please attend to this immediately.`,
-        true // requireInteraction - notification won't auto-dismiss
+        true
       );
     }
     
     const playBeep = () => {
       try {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const audioContext = ensureAudioContext();
         
-        // Play a more attention-grabbing alarm pattern
+        // Play loud alarm pattern
         const playTone = (freq: number, startTime: number, duration: number) => {
           const oscillator = audioContext.createOscillator();
           const gainNode = audioContext.createGain();
@@ -112,21 +150,22 @@ export function useTimerAlerts() {
           oscillator.frequency.value = freq;
           oscillator.type = 'square';
           
-          gainNode.gain.setValueAtTime(0.6, audioContext.currentTime + startTime);
+          gainNode.gain.setValueAtTime(0.7, audioContext.currentTime + startTime);
           gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + duration);
           
           oscillator.start(audioContext.currentTime + startTime);
           oscillator.stop(audioContext.currentTime + startTime + duration);
         };
         
-        // Alarm pattern: high-low-high
-        playTone(1200, 0, 0.15);
-        playTone(800, 0.2, 0.15);
-        playTone(1200, 0.4, 0.15);
+        // Urgent alarm pattern: high-low-high-low
+        playTone(1200, 0, 0.1);
+        playTone(800, 0.15, 0.1);
+        playTone(1200, 0.3, 0.1);
+        playTone(800, 0.45, 0.1);
         
         // Vibrate on mobile
         if ('vibrate' in navigator) {
-          navigator.vibrate([100, 50, 100, 50, 100]);
+          navigator.vibrate([150, 50, 150, 50, 150]);
         }
       } catch (e) {
         console.error('Error playing finished alarm:', e);
@@ -134,12 +173,11 @@ export function useTimerAlerts() {
     };
 
     playBeep();
-    const intervalId = setInterval(playBeep, 800); // More frequent alarm
+    const intervalId = setInterval(playBeep, 700);
     
-    // Store interval ID associated with timerId
     const intervalKey = `alarm_${timerId}`;
     (window as any)[intervalKey] = intervalId;
-  }, [flashTitle, sendNotification]);
+  }, [ensureAudioContext, flashTitle, sendNotification]);
 
   const stopAlarm = useCallback((timerId: string) => {
     activeAlarmsRef.current.delete(timerId);
@@ -150,7 +188,6 @@ export function useTimerAlerts() {
       delete (window as any)[intervalKey];
     }
     
-    // Stop title flashing if no more active alarms
     if (activeAlarmsRef.current.size === 0) {
       stopFlashTitle();
     }
@@ -164,9 +201,35 @@ export function useTimerAlerts() {
     stopFlashTitle();
   }, [stopAlarm, stopFlashTitle]);
 
+  // Play a confirmation sound
+  const playConfirmSound = useCallback(() => {
+    try {
+      const audioContext = ensureAudioContext();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = 600;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.15);
+    } catch (e) {
+      console.error('Error playing confirm sound:', e);
+    }
+  }, [ensureAudioContext]);
+
   useEffect(() => {
     return () => {
       stopAllAlarms();
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
     };
   }, [stopAllAlarms]);
 
@@ -176,5 +239,7 @@ export function useTimerAlerts() {
     stopAlarm,
     stopAllAlarms,
     sendNotification,
+    playConfirmSound,
+    ensureAudioContext,
   };
 }

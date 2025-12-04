@@ -2,12 +2,14 @@ import { Layout } from '@/components/Layout';
 import { TimerCard } from '@/components/TimerCard';
 import { CurrentSessions } from '@/components/CurrentSessions';
 import { useTimers } from '@/hooks/useTimers';
+import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { Layers, Gamepad, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Index = () => {
   const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration } = useTimers();
+  const { playConfirmSound } = useTimerAlerts();
   const { isFullscreen } = useFullscreen();
 
   const tableTimers = timers.filter(t => t.category === 'table');
@@ -50,6 +52,7 @@ const Index = () => {
                 onExtend={extendTimer}
                 onReset={resetTimer}
                 onSetDuration={setDuration}
+                playConfirmSound={playConfirmSound}
                 compact={compact}
               />
             ))}
@@ -72,6 +75,7 @@ const Index = () => {
                 onExtend={extendTimer}
                 onReset={resetTimer}
                 onSetDuration={setDuration}
+                playConfirmSound={playConfirmSound}
                 compact={compact}
               />
             ))}
@@ -94,6 +98,7 @@ const Index = () => {
                 onExtend={extendTimer}
                 onReset={resetTimer}
                 onSetDuration={setDuration}
+                playConfirmSound={playConfirmSound}
                 compact={compact}
               />
             ))}

@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Timer, DURATION_PRESETS } from '@/types/timer';
 import { formatTime, getStatusLabel } from '@/lib/timerUtils';
 import { Button } from '@/components/ui/button';
 import { Play, Square, RotateCcw, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CloseoutDialog } from './CloseoutDialog';
 
 interface TimerCardProps {
   timer: Timer;
@@ -11,11 +13,22 @@ interface TimerCardProps {
   onExtend: (id: string) => void;
   onReset: (id: string) => void;
   onSetDuration: (id: string, minutes: number) => void;
+  playConfirmSound: () => void;
   compact?: boolean;
 }
 
-export function TimerCard({ timer, onStart, onStop, onExtend, onReset, onSetDuration, compact }: TimerCardProps) {
+export function TimerCard({ 
+  timer, 
+  onStart, 
+  onStop, 
+  onExtend, 
+  onReset, 
+  onSetDuration, 
+  playConfirmSound,
+  compact 
+}: TimerCardProps) {
   const { id, name, status, remainingTime, duration } = timer;
+  const [showCloseout, setShowCloseout] = useState(false);
 
   const getTimerDisplayClass = () => {
     switch (status) {
@@ -55,108 +68,132 @@ export function TimerCard({ timer, onStart, onStop, onExtend, onReset, onSetDura
     return 'bg-gradient-to-r from-primary to-success';
   };
 
+  const handleEndClick = () => {
+    setShowCloseout(true);
+  };
+
+  const handleCloseoutComplete = () => {
+    setShowCloseout(false);
+    onStop(id);
+  };
+
+  const handleCloseoutCancel = () => {
+    setShowCloseout(false);
+  };
+
   return (
-    <div className={cn(
-      'gaming-card flex flex-col gap-4',
-      getCardClass(),
-      compact && 'p-4'
-    )}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className={cn("font-semibold text-foreground", compact ? "text-base" : "text-xl")}>{name}</h3>
-        <span className={cn('status-badge', getStatusBadgeClass())}>
-          {getStatusLabel(status)}
-        </span>
-      </div>
-
-      {/* Progress Bar */}
-      {isActive && (
-        <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-          <div
-            className={cn("h-full rounded-full transition-all duration-1000", getProgressBarClass())}
-            style={{ width: `${Math.min(100, progress)}%` }}
-          />
-        </div>
-      )}
-
-      {/* Timer Display */}
+    <>
       <div className={cn(
-        'font-mono font-bold tracking-wider text-center',
-        compact ? 'text-4xl' : 'text-5xl md:text-6xl',
-        getTimerDisplayClass()
+        'gaming-card flex flex-col gap-4',
+        getCardClass(),
+        compact && 'p-4'
       )}>
-        {formatTime(remainingTime)}
-      </div>
-
-      {/* Duration Presets - Only show when idle */}
-      {status === 'idle' && (
-        <div className="flex flex-wrap gap-2 justify-center">
-          {DURATION_PRESETS.map(minutes => (
-            <button
-              key={minutes}
-              onClick={() => onSetDuration(id, minutes)}
-              className={cn(
-                'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                duration === minutes * 60 * 1000
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-muted'
-              )}
-            >
-              {minutes / 60}h
-            </button>
-          ))}
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h3 className={cn("font-semibold text-foreground", compact ? "text-base" : "text-xl")}>{name}</h3>
+          <span className={cn('status-badge', getStatusBadgeClass())}>
+            {getStatusLabel(status)}
+          </span>
         </div>
-      )}
 
-      {/* Controls */}
-      <div className="flex items-center gap-2">
-        {(status === 'idle' || status === 'stopped') && (
-          <Button 
-            variant="success" 
-            size={compact ? "default" : "lg"}
-            onClick={() => onStart(id)}
-            className="flex-1"
-          >
-            <Play className="w-5 h-5" />
-            Start
-          </Button>
+        {/* Progress Bar */}
+        {isActive && (
+          <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+            <div
+              className={cn("h-full rounded-full transition-all duration-1000", getProgressBarClass())}
+              style={{ width: `${Math.min(100, progress)}%` }}
+            />
+          </div>
         )}
 
-        {(status === 'running' || status === 'warning' || status === 'finished') && (
-          <>
+        {/* Timer Display */}
+        <div className={cn(
+          'font-mono font-bold tracking-wider text-center',
+          compact ? 'text-4xl' : 'text-5xl md:text-6xl',
+          getTimerDisplayClass()
+        )}>
+          {formatTime(remainingTime)}
+        </div>
+
+        {/* Duration Presets - Only show when idle */}
+        {status === 'idle' && (
+          <div className="flex flex-wrap gap-2 justify-center">
+            {DURATION_PRESETS.map(minutes => (
+              <button
+                key={minutes}
+                onClick={() => onSetDuration(id, minutes)}
+                className={cn(
+                  'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                  duration === minutes * 60 * 1000
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-muted'
+                )}
+              >
+                {minutes / 60}h
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Controls */}
+        <div className="flex items-center gap-2">
+          {(status === 'idle' || status === 'stopped') && (
             <Button 
-              variant="destructive" 
+              variant="success" 
               size={compact ? "default" : "lg"}
-              onClick={() => onStop(id)}
+              onClick={() => onStart(id)}
               className="flex-1"
             >
-              <Square className="w-5 h-5" />
-              End
+              <Play className="w-5 h-5" />
+              Start
             </Button>
+          )}
+
+          {(status === 'running' || status === 'warning' || status === 'finished') && (
+            <>
+              <Button 
+                variant="destructive" 
+                size={compact ? "default" : "lg"}
+                onClick={handleEndClick}
+                className="flex-1"
+              >
+                <Square className="w-5 h-5" />
+                End
+              </Button>
+              <Button 
+                variant="timer" 
+                size={compact ? "default" : "lg"}
+                onClick={() => onExtend(id)}
+                className="flex-1"
+              >
+                <Plus className="w-5 h-5" />
+                +1 hour
+              </Button>
+            </>
+          )}
+
+          {status === 'stopped' && (
             <Button 
               variant="timer" 
               size={compact ? "default" : "lg"}
-              onClick={() => onExtend(id)}
+              onClick={() => onReset(id)}
               className="flex-1"
             >
-              <Plus className="w-5 h-5" />
-              +1 hour
+              <RotateCcw className="w-5 h-5" />
+              Reset
             </Button>
-          </>
-        )}
-
-        {status === 'stopped' && (
-          <Button 
-            variant="timer" 
-            size={compact ? "default" : "lg"}
-            onClick={() => onReset(id)}
-            className="flex-1"
-          >
-            <RotateCcw className="w-5 h-5" />
-            Reset
-          </Button>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Closeout Dialog */}
+      <CloseoutDialog
+        isOpen={showCloseout}
+        timerName={name}
+        onComplete={handleCloseoutComplete}
+        onCancel={handleCloseoutCancel}
+        playConfirmSound={playConfirmSound}
+      />
+    </>
   );
 }
