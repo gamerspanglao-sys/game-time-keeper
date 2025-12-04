@@ -82,6 +82,8 @@ export function TimerCard({
   const handleCloseoutComplete = () => {
     setShowCloseout(false);
     onStop(id);
+    // Reset timer to idle state after closeout
+    setTimeout(() => onReset(id), 100);
   };
 
   const handleCloseoutCancel = () => {
