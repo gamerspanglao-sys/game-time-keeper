@@ -20,7 +20,7 @@ export const DEFAULT_TIMERS: Timer[] = [
 ];
 
 // Force refresh timers when structure changes
-const TIMERS_VERSION = 3;
+const TIMERS_VERSION = 4;
 
 export function formatTime(ms: number): string {
   if (ms === null || ms === undefined || isNaN(ms)) {
