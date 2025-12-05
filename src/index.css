@@ -56,6 +56,11 @@
     --glow-success: 0 0 20px hsl(142 71% 45% / 0.5);
     --glow-warning: 0 0 20px hsl(45 93% 47% / 0.5);
     --glow-destructive: 0 0 20px hsl(0 84% 60% / 0.5);
+
+    /* Category colors */
+    --category-table: 142 71% 45%;
+    --category-playstation: 217 91% 60%;
+    --category-vip: 280 65% 60%;
   }
 
   .dark {
@@ -145,6 +150,33 @@
   .gaming-card:hover {
     @apply border-primary/30;
     box-shadow: 0 0 30px hsl(142 71% 45% / 0.1);
+  }
+
+  /* Category styles */
+  .gaming-card-table {
+    border-left: 3px solid hsl(var(--category-table));
+  }
+
+  .gaming-card-playstation {
+    border-left: 3px solid hsl(var(--category-playstation));
+  }
+
+  .gaming-card-vip {
+    border-left: 3px solid hsl(var(--category-vip));
+  }
+
+  .category-badge-table {
+    @apply bg-success/15 text-success;
+  }
+
+  .category-badge-playstation {
+    background-color: hsl(217 91% 60% / 0.15);
+    color: hsl(217 91% 60%);
+  }
+
+  .category-badge-vip {
+    background-color: hsl(280 65% 60% / 0.15);
+    color: hsl(280 65% 60%);
   }
 
   .gaming-card-active {
