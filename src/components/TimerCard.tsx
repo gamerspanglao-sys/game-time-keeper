@@ -366,6 +366,22 @@ export function TimerCard({
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
+                  onClick={() => handleAdjustTime(-1)}
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                >
+                  <Minus className="w-4 h-4 mr-1" />
+                  1 min
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleAdjustTime(1)}
+                  className="text-success border-success/30 hover:bg-success/10"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  1 min
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => handleAdjustTime(-5)}
                   className="text-destructive border-destructive/30 hover:bg-destructive/10"
                 >
@@ -395,22 +411,6 @@ export function TimerCard({
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   10 min
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => handleAdjustTime(-30)}
-                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                >
-                  <Minus className="w-4 h-4 mr-1" />
-                  30 min
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => handleAdjustTime(30)}
-                  className="text-success border-success/30 hover:bg-success/10"
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  30 min
                 </Button>
               </div>
               
