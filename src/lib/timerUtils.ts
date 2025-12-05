@@ -137,13 +137,19 @@ export function loadTimers(): Timer[] {
         
         // Handle running timers that need time adjustment
         if ((timer.status === 'running' || timer.status === 'warning') && timer.startTime) {
-          const elapsed = Date.now() - timer.startTime;
-          const newRemaining = Math.max(0, timer.remainingTime - elapsed);
+          // Use remainingAtStart if available, otherwise use remainingTime
+          const remainingAtStart = saved.remainingAtStart ?? timer.remainingTime;
+          const elapsedAtStart = saved.elapsedAtStart ?? timer.elapsedTime;
+          const elapsedSinceStart = Date.now() - timer.startTime;
+          const newRemaining = Math.max(0, remainingAtStart - elapsedSinceStart);
+          const newElapsed = elapsedAtStart + elapsedSinceStart;
+          
           return {
             ...timer,
-            startTime: Date.now(),
             remainingTime: newRemaining,
-            elapsedTime: timer.elapsedTime + elapsed,
+            elapsedTime: newElapsed,
+            remainingAtStart: remainingAtStart,
+            elapsedAtStart: elapsedAtStart,
             status: newRemaining <= 0 ? 'finished' as TimerStatus : timer.status
           };
         }
