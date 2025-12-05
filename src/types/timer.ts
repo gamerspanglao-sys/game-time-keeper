@@ -11,6 +11,8 @@ export interface Timer {
   duration: number; // countdown duration in ms
   remainingTime: number; // remaining time in ms
   elapsedTime: number; // for stats tracking
+  remainingAtStart?: number; // remaining time when timer was started
+  elapsedAtStart?: number; // elapsed time when timer was started
 }
 
 export interface ActivityLogEntry {
