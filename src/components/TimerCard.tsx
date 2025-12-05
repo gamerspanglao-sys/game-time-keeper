@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Timer, DURATION_PRESETS } from '@/types/timer';
+import { Timer, DURATION_PRESETS, TimerCategory } from '@/types/timer';
 import { formatTime, getStatusLabel } from '@/lib/timerUtils';
 import { Button } from '@/components/ui/button';
-import { Play, Square, RotateCcw, Plus, Users } from 'lucide-react';
+import { Play, Square, RotateCcw, Plus, Users, Circle, Gamepad2, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CloseoutDialog } from './CloseoutDialog';
 import { QueueDialog } from './QueueDialog';
@@ -34,9 +34,33 @@ export function TimerCard({
   onAddToQueue,
   onRemoveFromQueue
 }: TimerCardProps) {
-  const { id, name, status, remainingTime, duration } = timer;
+  const { id, name, status, remainingTime, duration, category } = timer;
   const [showCloseout, setShowCloseout] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+
+  const getCategoryIcon = () => {
+    switch (category) {
+      case 'table': return <Circle className="w-4 h-4" />;
+      case 'playstation': return <Gamepad2 className="w-4 h-4" />;
+      case 'vip': return <Crown className="w-4 h-4" />;
+    }
+  };
+
+  const getCategoryClass = () => {
+    switch (category) {
+      case 'table': return 'gaming-card-table';
+      case 'playstation': return 'gaming-card-playstation';
+      case 'vip': return 'gaming-card-vip';
+    }
+  };
+
+  const getCategoryBadgeClass = () => {
+    switch (category) {
+      case 'table': return 'category-badge-table';
+      case 'playstation': return 'category-badge-playstation';
+      case 'vip': return 'category-badge-vip';
+    }
+  };
   const getTimerDisplayClass = () => {
     switch (status) {
       case 'running': return 'timer-display-running';
@@ -94,12 +118,18 @@ export function TimerCard({
     <>
       <div className={cn(
         'gaming-card flex flex-col gap-4',
+        getCategoryClass(),
         getCardClass(),
         compact && 'p-4'
       )}>
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h3 className={cn("font-semibold text-foreground", compact ? "text-base" : "text-xl")}>{name}</h3>
+          <div className="flex items-center gap-2">
+            <span className={cn("p-1.5 rounded-lg", getCategoryBadgeClass())}>
+              {getCategoryIcon()}
+            </span>
+            <h3 className={cn("font-semibold text-foreground", compact ? "text-base" : "text-xl")}>{name}</h3>
+          </div>
           <div className="flex items-center gap-2">
             {/* Queue button */}
             <button
