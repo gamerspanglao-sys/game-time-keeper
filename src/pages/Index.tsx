@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 
 const Index = () => {
   const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration } = useTimers();
-  const { playConfirmSound, stopAlarm } = useTimerAlerts();
+  const { playConfirmSound, stopAlarm, notifyQueueNext } = useTimerAlerts();
   const { isFullscreen } = useFullscreen();
   const { getQueueForTimer, addToQueue, removeFromQueue } = useQueue();
   
@@ -61,6 +61,7 @@ const Index = () => {
                 onSetDuration={setDuration}
                 playConfirmSound={playConfirmSound}
                 stopAlarm={stopAlarm}
+                notifyQueueNext={notifyQueueNext}
                 compact={compact}
                 queue={getQueueForTimer(timer.id)}
                 onAddToQueue={addToQueue}
@@ -88,6 +89,7 @@ const Index = () => {
                 onSetDuration={setDuration}
                 playConfirmSound={playConfirmSound}
                 stopAlarm={stopAlarm}
+                notifyQueueNext={notifyQueueNext}
                 compact={compact}
                 queue={getQueueForTimer(timer.id)}
                 onAddToQueue={addToQueue}
@@ -115,6 +117,7 @@ const Index = () => {
                 onSetDuration={setDuration}
                 playConfirmSound={playConfirmSound}
                 stopAlarm={stopAlarm}
+                notifyQueueNext={notifyQueueNext}
                 compact={compact}
                 queue={getQueueForTimer(timer.id)}
                 onAddToQueue={addToQueue}

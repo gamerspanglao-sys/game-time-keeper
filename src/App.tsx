@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import DailyStats from "./pages/DailyStats";
 import ActivityLog from "./pages/ActivityLog";
+import Tournaments from "./pages/Tournaments";
 import NotFound from "./pages/NotFound";
 import { AdminGuard } from "./components/AdminGuard";
 
@@ -21,6 +22,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/stats" element={<AdminGuard><DailyStats /></AdminGuard>} />
           <Route path="/log" element={<AdminGuard><ActivityLog /></AdminGuard>} />
+          <Route path="/tournaments" element={<Tournaments />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
