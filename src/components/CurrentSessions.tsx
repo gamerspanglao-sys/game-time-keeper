@@ -1,6 +1,6 @@
 import { Timer } from '@/types/timer';
 import { formatTime } from '@/lib/timerUtils';
-import { Activity, Clock } from 'lucide-react';
+import { Activity, Clock, Circle, Gamepad2, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CurrentSessionsProps {
@@ -40,6 +40,22 @@ export function CurrentSessions({ timers, compact }: CurrentSessionsProps) {
     }
   };
 
+  const getCategoryIcon = (category: Timer['category']) => {
+    switch (category) {
+      case 'table': return <Circle className="w-3.5 h-3.5" />;
+      case 'playstation': return <Gamepad2 className="w-3.5 h-3.5" />;
+      case 'vip': return <Crown className="w-3.5 h-3.5" />;
+    }
+  };
+
+  const getCategoryBadgeClass = (category: Timer['category']) => {
+    switch (category) {
+      case 'table': return 'bg-success/15 text-success';
+      case 'playstation': return 'bg-[hsl(217,91%,60%)]/15 text-[hsl(217,91%,60%)]';
+      case 'vip': return 'bg-[hsl(280,65%,60%)]/15 text-[hsl(280,65%,60%)]';
+    }
+  };
+
   return (
     <div className={cn("gaming-card", compact && "p-4")}>
       <div className="flex items-center gap-3 mb-4">
@@ -70,6 +86,9 @@ export function CurrentSessions({ timers, compact }: CurrentSessionsProps) {
               )}
             >
               <div className="flex items-center gap-2">
+                <span className={cn("p-1 rounded", getCategoryBadgeClass(timer.category))}>
+                  {getCategoryIcon(timer.category)}
+                </span>
                 <div className={cn(
                   'w-2 h-2 rounded-full animate-pulse',
                   getDotColor(timer.status)

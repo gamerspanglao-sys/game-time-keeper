@@ -19,6 +19,7 @@ interface CloseoutDialogProps {
   onComplete: () => void;
   onCancel: () => void;
   playConfirmSound: () => void;
+  stopAlarm: () => void;
 }
 
 type CloseoutStage = 'payment' | 'cleanup' | 'equipment';
@@ -30,7 +31,8 @@ export function CloseoutDialog({
   duration,
   onComplete, 
   onCancel,
-  playConfirmSound 
+  playConfirmSound,
+  stopAlarm
 }: CloseoutDialogProps) {
   const [stage, setStage] = useState<CloseoutStage>('payment');
 
@@ -42,6 +44,8 @@ export function CloseoutDialog({
     playConfirmSound();
     
     if (stage === 'payment') {
+      // Stop alarm after payment is confirmed
+      stopAlarm();
       setStage('cleanup');
     } else if (stage === 'cleanup') {
       setStage('equipment');

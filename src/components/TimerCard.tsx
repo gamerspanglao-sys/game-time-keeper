@@ -15,6 +15,7 @@ interface TimerCardProps {
   onReset: (id: string) => void;
   onSetDuration: (id: string, minutes: number) => void;
   playConfirmSound: () => void;
+  stopAlarm: (id: string) => void;
   compact?: boolean;
   queue: QueueEntry[];
   onAddToQueue: (timerId: string, name: string) => void;
@@ -29,6 +30,7 @@ export function TimerCard({
   onReset, 
   onSetDuration, 
   playConfirmSound,
+  stopAlarm,
   compact,
   queue,
   onAddToQueue,
@@ -249,6 +251,7 @@ export function TimerCard({
         onComplete={handleCloseoutComplete}
         onCancel={handleCloseoutCancel}
         playConfirmSound={playConfirmSound}
+        stopAlarm={() => stopAlarm(id)}
       />
 
       {/* Queue Dialog */}
