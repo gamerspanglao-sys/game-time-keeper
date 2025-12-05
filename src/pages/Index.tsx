@@ -10,7 +10,7 @@ import { Layers, Gamepad, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Index = () => {
-  const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration } = useTimers();
+  const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration, adjustTime } = useTimers();
   const { playConfirmSound, stopAlarm, notifyQueueNext } = useTimerAlerts();
   const { isFullscreen } = useFullscreen();
   const { getQueueForTimer, addToQueue, removeFromQueue } = useQueue();
@@ -59,6 +59,7 @@ const Index = () => {
                 onExtend={extendTimer}
                 onReset={resetTimer}
                 onSetDuration={setDuration}
+                onAdjustTime={adjustTime}
                 playConfirmSound={playConfirmSound}
                 stopAlarm={stopAlarm}
                 notifyQueueNext={notifyQueueNext}
@@ -87,6 +88,7 @@ const Index = () => {
                 onExtend={extendTimer}
                 onReset={resetTimer}
                 onSetDuration={setDuration}
+                onAdjustTime={adjustTime}
                 playConfirmSound={playConfirmSound}
                 stopAlarm={stopAlarm}
                 notifyQueueNext={notifyQueueNext}
@@ -115,6 +117,7 @@ const Index = () => {
                 onExtend={extendTimer}
                 onReset={resetTimer}
                 onSetDuration={setDuration}
+                onAdjustTime={adjustTime}
                 playConfirmSound={playConfirmSound}
                 stopAlarm={stopAlarm}
                 notifyQueueNext={notifyQueueNext}

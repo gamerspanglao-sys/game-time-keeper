@@ -191,6 +191,52 @@ export function useTimers() {
     });
   }, [activityLog, stopAlarm]);
 
+  const adjustTime = useCallback((timerId: string, adjustMinutes: number) => {
+    setTimers(prevTimers => {
+      const timer = prevTimers.find(t => t.id === timerId);
+      if (!timer || (timer.status !== 'running' && timer.status !== 'warning' && timer.status !== 'finished')) {
+        return prevTimers;
+      }
+
+      const adjustMs = adjustMinutes * 60 * 1000;
+      const newRemaining = Math.max(0, timer.remainingTime + adjustMs);
+      const newDuration = Math.max(0, timer.duration + adjustMs);
+      const newRemainingAtStart = (timer.remainingAtStart ?? timer.remainingTime) + adjustMs;
+      
+      // If we're reducing time and it hits 0, mark as finished
+      if (newRemaining <= 0) {
+        return prevTimers.map(t =>
+          t.id === timerId
+            ? { 
+                ...t, 
+                remainingTime: 0,
+                duration: newDuration,
+                remainingAtStart: Math.max(0, newRemainingAtStart),
+                status: 'finished' as const
+              }
+            : t
+        );
+      }
+
+      // Reset warning state if time was extended above threshold
+      if (newRemaining > WARNING_THRESHOLD && timer.status === 'warning') {
+        warnedTimersRef.current.delete(timerId);
+      }
+
+      return prevTimers.map(t =>
+        t.id === timerId
+          ? { 
+              ...t, 
+              remainingTime: newRemaining,
+              duration: newDuration,
+              remainingAtStart: newRemainingAtStart,
+              status: newRemaining <= WARNING_THRESHOLD ? 'warning' as const : 'running' as const
+            }
+          : t
+      );
+    });
+  }, []);
+
   const getActiveTimers = useCallback(() => {
     return timers.filter(t => t.status === 'running' || t.status === 'warning' || t.status === 'finished');
   }, [timers]);
@@ -203,6 +249,7 @@ export function useTimers() {
     stopTimer,
     extendTimer,
     resetTimer,
+    adjustTime,
     getActiveTimers,
   };
 }
