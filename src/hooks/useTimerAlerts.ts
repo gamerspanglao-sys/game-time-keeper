@@ -257,6 +257,57 @@ export function useTimerAlerts() {
     };
   }, [stopAllAlarms]);
 
+  // Notify next person in queue
+  const notifyQueueNext = useCallback((timerName: string, personName: string) => {
+    try {
+      const audioContext = ensureAudioContext();
+      
+      // Play friendly notification sound
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = 523.25; // C5
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+
+      // Play second tone
+      setTimeout(() => {
+        const osc2 = audioContext.createOscillator();
+        const gain2 = audioContext.createGain();
+        osc2.connect(gain2);
+        gain2.connect(audioContext.destination);
+        osc2.frequency.value = 659.25; // E5
+        osc2.type = 'sine';
+        gain2.gain.setValueAtTime(0.4, audioContext.currentTime);
+        gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        osc2.start(audioContext.currentTime);
+        osc2.stop(audioContext.currentTime + 0.3);
+      }, 150);
+    } catch (e) {
+      console.error('Error playing queue notification:', e);
+    }
+
+    // Send notification
+    sendNotification(
+      '🎮 Your Turn!',
+      `${personName}, ${timerName} is now available!`,
+      true
+    );
+
+    // Vibrate
+    if ('vibrate' in navigator) {
+      navigator.vibrate([100, 50, 100, 50, 200]);
+    }
+  }, [ensureAudioContext, sendNotification]);
+
   return {
     playWarningBeep,
     playFinishedAlarm,
@@ -265,5 +316,6 @@ export function useTimerAlerts() {
     sendNotification,
     playConfirmSound,
     ensureAudioContext,
+    notifyQueueNext,
   };
 }

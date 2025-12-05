@@ -16,6 +16,7 @@ interface TimerCardProps {
   onSetDuration: (id: string, minutes: number) => void;
   playConfirmSound: () => void;
   stopAlarm: (id: string) => void;
+  notifyQueueNext?: (timerName: string, personName: string) => void;
   compact?: boolean;
   queue: QueueEntry[];
   onAddToQueue: (timerId: string, name: string) => void;
@@ -31,6 +32,7 @@ export function TimerCard({
   onSetDuration, 
   playConfirmSound,
   stopAlarm,
+  notifyQueueNext,
   compact,
   queue,
   onAddToQueue,
@@ -107,6 +109,12 @@ export function TimerCard({
 
   const handleCloseoutComplete = () => {
     setShowCloseout(false);
+    
+    // Notify next person in queue if exists
+    if (queue.length > 0 && notifyQueueNext) {
+      notifyQueueNext(name, queue[0].name);
+    }
+    
     onStop(id);
     // Reset timer to idle state after closeout
     setTimeout(() => onReset(id), 100);
