@@ -2,11 +2,22 @@ import { useState } from 'react';
 import { Timer, DURATION_PRESETS, TimerCategory } from '@/types/timer';
 import { formatTime, getStatusLabel } from '@/lib/timerUtils';
 import { Button } from '@/components/ui/button';
-import { Play, Square, RotateCcw, Plus, Users, Circle, Gamepad2, Crown } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Play, Square, RotateCcw, Plus, Users, Circle, Gamepad2, Crown, Pencil, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CloseoutDialog } from './CloseoutDialog';
 import { QueueDialog } from './QueueDialog';
 import { QueueEntry } from '@/types/queue';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+
+const ADMIN_PASSWORD = '8808';
+
 interface TimerCardProps {
   timer: Timer;
   onStart: (id: string) => void;
@@ -14,6 +25,7 @@ interface TimerCardProps {
   onExtend: (id: string) => void;
   onReset: (id: string) => void;
   onSetDuration: (id: string, minutes: number) => void;
+  onAdjustTime: (id: string, minutes: number) => void;
   playConfirmSound: () => void;
   stopAlarm: (id: string) => void;
   notifyQueueNext?: (timerName: string, personName: string) => void;
@@ -30,6 +42,7 @@ export function TimerCard({
   onExtend, 
   onReset, 
   onSetDuration, 
+  onAdjustTime,
   playConfirmSound,
   stopAlarm,
   notifyQueueNext,
@@ -41,6 +54,39 @@ export function TimerCard({
   const { id, name, status, remainingTime, duration, category } = timer;
   const [showCloseout, setShowCloseout] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  const [showAdjust, setShowAdjust] = useState(false);
+  const [adjustPassword, setAdjustPassword] = useState('');
+  const [adjustMinutes, setAdjustMinutes] = useState(10);
+  const [passwordError, setPasswordError] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const handleAdjustClick = () => {
+    setShowAdjust(true);
+    setAdjustPassword('');
+    setPasswordError(false);
+    setIsAuthenticated(false);
+  };
+
+  const handlePasswordSubmit = () => {
+    if (adjustPassword === ADMIN_PASSWORD) {
+      setIsAuthenticated(true);
+      setPasswordError(false);
+    } else {
+      setPasswordError(true);
+    }
+  };
+
+  const handleAdjustTime = (minutes: number) => {
+    onAdjustTime(id, minutes);
+    playConfirmSound();
+  };
+
+  const handleCloseAdjust = () => {
+    setShowAdjust(false);
+    setAdjustPassword('');
+    setIsAuthenticated(false);
+    setPasswordError(false);
+  };
 
   const getCategoryIcon = () => {
     switch (category) {
@@ -171,12 +217,24 @@ export function TimerCard({
         )}
 
         {/* Timer Display */}
-        <div className={cn(
-          'font-mono font-bold tracking-wider text-center',
-          compact ? 'text-4xl' : 'text-5xl md:text-6xl',
-          getTimerDisplayClass()
-        )}>
-          {formatTime(remainingTime)}
+        <div className="relative flex items-center justify-center">
+          <div className={cn(
+            'font-mono font-bold tracking-wider text-center',
+            compact ? 'text-4xl' : 'text-5xl md:text-6xl',
+            getTimerDisplayClass()
+          )}>
+            {formatTime(remainingTime)}
+          </div>
+          {/* Edit time button - only show when timer is active */}
+          {isActive && (
+            <button
+              onClick={handleAdjustClick}
+              className="absolute right-0 p-1.5 rounded-lg bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground transition-all"
+              title="Adjust time (admin)"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Duration Presets - Only show when idle */}
@@ -273,6 +331,96 @@ export function TimerCard({
         onAddToQueue={onAddToQueue}
         onRemoveFromQueue={onRemoveFromQueue}
       />
+
+      {/* Adjust Time Dialog */}
+      <Dialog open={showAdjust} onOpenChange={(open) => !open && handleCloseAdjust()}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Adjust Time</DialogTitle>
+            <DialogDescription>{name}</DialogDescription>
+          </DialogHeader>
+          
+          {!isAuthenticated ? (
+            <div className="space-y-4 pt-2">
+              <Input
+                type="password"
+                placeholder="Enter admin password"
+                value={adjustPassword}
+                onChange={(e) => setAdjustPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
+                className={cn(passwordError && "border-destructive")}
+              />
+              {passwordError && (
+                <p className="text-sm text-destructive">Wrong password</p>
+              )}
+              <Button onClick={handlePasswordSubmit} className="w-full">
+                Confirm
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4 pt-2">
+              <div className="text-center text-lg font-mono text-foreground">
+                Current: {formatTime(remainingTime)}
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => handleAdjustTime(-5)}
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                >
+                  <Minus className="w-4 h-4 mr-1" />
+                  5 min
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleAdjustTime(5)}
+                  className="text-success border-success/30 hover:bg-success/10"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  5 min
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleAdjustTime(-10)}
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                >
+                  <Minus className="w-4 h-4 mr-1" />
+                  10 min
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleAdjustTime(10)}
+                  className="text-success border-success/30 hover:bg-success/10"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  10 min
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleAdjustTime(-30)}
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                >
+                  <Minus className="w-4 h-4 mr-1" />
+                  30 min
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleAdjustTime(30)}
+                  className="text-success border-success/30 hover:bg-success/10"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  30 min
+                </Button>
+              </div>
+              
+              <Button variant="secondary" onClick={handleCloseAdjust} className="w-full">
+                Done
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
