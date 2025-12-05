@@ -18,26 +18,31 @@ export function useTimers() {
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {
+      const now = Date.now();
+      
       setTimers(prevTimers => {
         const hasRunning = prevTimers.some(t => t.status === 'running' || t.status === 'warning');
         if (!hasRunning) return prevTimers;
 
         const updated = prevTimers.map(timer => {
-          if ((timer.status === 'running' || timer.status === 'warning') && timer.startTime) {
-            const newRemaining = timer.remainingTime - 1000;
+          if ((timer.status === 'running' || timer.status === 'warning') && timer.startTime && timer.remainingAtStart !== undefined) {
+            // Calculate actual elapsed time since timer started
+            const elapsedSinceStart = now - timer.startTime;
+            const newRemaining = Math.max(0, timer.remainingAtStart - elapsedSinceStart);
+            const newElapsed = (timer.elapsedAtStart || 0) + elapsedSinceStart;
             
             // Timer finished
             if (newRemaining <= 0) {
               playFinishedAlarm(timer.id, timer.name);
               const newLog = addActivityLogEntry(activityLog, timer.id, timer.name, 'finished');
               setActivityLog(newLog);
-              updateDailyStats(timer.id, timer.elapsedTime + 1000);
+              updateDailyStats(timer.id, newElapsed);
               warnedTimersRef.current.delete(timer.id);
               
               return {
                 ...timer,
                 remainingTime: 0,
-                elapsedTime: timer.elapsedTime + 1000,
+                elapsedTime: newElapsed,
                 status: 'finished' as const,
               };
             }
@@ -54,7 +59,7 @@ export function useTimers() {
               return {
                 ...timer,
                 remainingTime: newRemaining,
-                elapsedTime: timer.elapsedTime + 1000,
+                elapsedTime: newElapsed,
                 status: 'warning' as const,
               };
             }
@@ -62,7 +67,7 @@ export function useTimers() {
             return {
               ...timer,
               remainingTime: newRemaining,
-              elapsedTime: timer.elapsedTime + 1000,
+              elapsedTime: newElapsed,
             };
           }
           return timer;
@@ -71,7 +76,7 @@ export function useTimers() {
         saveTimers(updated);
         return updated;
       });
-    }, 1000);
+    }, 250); // More frequent updates for smoother display
 
     return () => {
       if (intervalRef.current) {
@@ -105,7 +110,13 @@ export function useTimers() {
 
       return prevTimers.map(t =>
         t.id === timerId
-          ? { ...t, status: 'running' as const, startTime: Date.now() }
+          ? { 
+              ...t, 
+              status: 'running' as const, 
+              startTime: Date.now(),
+              remainingAtStart: t.remainingTime,
+              elapsedAtStart: t.elapsedTime
+            }
           : t
       );
     });
@@ -144,14 +155,17 @@ export function useTimers() {
       const newLog = addActivityLogEntry(activityLog, timerId, timer.name, 'extended');
       setActivityLog(newLog);
 
+      const newRemaining = timer.remainingTime + additionalMs;
       return prevTimers.map(t =>
         t.id === timerId
           ? { 
               ...t, 
               status: 'running' as const, 
-              remainingTime: t.remainingTime + additionalMs,
+              remainingTime: newRemaining,
               duration: t.duration + additionalMs,
-              startTime: Date.now()
+              startTime: Date.now(),
+              remainingAtStart: newRemaining,
+              elapsedAtStart: t.elapsedTime
             }
           : t
       );
