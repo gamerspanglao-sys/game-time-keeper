@@ -59,25 +59,15 @@ async function getVariantIdBySku(sku: string, token: string): Promise<string | n
     }
 
     const data = await response.json();
-    console.log(`📋 Loyverse returned ${data.items?.length || 0} items for SKU ${sku}`);
     
     if (data.items && data.items.length > 0) {
-      // Find item with EXACT SKU match
-      for (const item of data.items) {
-        if (item.variants && item.variants.length > 0) {
-          for (const variant of item.variants) {
-            if (variant.sku === sku) {
-              variantCache[sku] = variant.variant_id;
-              console.log(`✅ Found EXACT match: ${item.item_name} (variant_id: ${variant.variant_id}) for SKU: ${sku}`);
-              return variant.variant_id;
-            }
-          }
-        }
+      const item = data.items[0];
+      if (item.variants && item.variants.length > 0) {
+        const variantId = item.variants[0].variant_id;
+        variantCache[sku] = variantId;
+        console.log(`✅ Found variant_id: ${variantId} for SKU: ${sku}`);
+        return variantId;
       }
-      // Log what was found but didn't match
-      const firstItem = data.items[0];
-      const firstSku = firstItem.variants?.[0]?.sku;
-      console.error(`❌ No exact SKU match. Searched: ${sku}, Found: ${firstItem.item_name} with SKU: ${firstSku}`);
     }
 
     console.error(`❌ No item found with SKU: ${sku}`);
@@ -116,11 +106,7 @@ serve(async (req) => {
     // Get variant_id by SKU
     const variantId = await getVariantIdBySku(timerConfig.sku, loyverseToken);
     if (!variantId) {
-      console.log(`⚠️ Skipping receipt - item with SKU ${timerConfig.sku} not found in Loyverse`);
-      return new Response(
-        JSON.stringify({ success: true, skipped: true, message: `Item with SKU ${timerConfig.sku} not found in Loyverse` }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      throw new Error(`Could not find Loyverse item with SKU: ${timerConfig.sku}`);
     }
 
     const price = amount || timerConfig.price;
