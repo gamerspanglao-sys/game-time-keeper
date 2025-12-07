@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { TimerCard } from '@/components/TimerCard';
 import { CurrentSessions } from '@/components/CurrentSessions';
-import { OvertimeStats } from '@/components/OvertimeStats';
+import { OvertimeResetButton } from '@/components/OvertimeResetButton';
+import { AlarmActivationBanner } from '@/components/AlarmActivationBanner';
 import { useSupabaseTimers } from '@/hooks/useSupabaseTimers';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useFullscreen } from '@/hooks/useFullscreen';
@@ -11,10 +13,11 @@ import { Layers, Gamepad, Crown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Index = () => {
-  const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration, adjustTime, isLoading } = useSupabaseTimers();
-  const { playConfirmSound, stopAlarm, notifyQueueNext } = useTimerAlerts();
+  const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration, adjustTime, isLoading, overtimeByTimer, totalOvertimeMinutes, refreshOvertime } = useSupabaseTimers();
+  const { playConfirmSound, stopAlarm, notifyQueueNext, playFinishedAlarm, ensureAudioContext } = useTimerAlerts();
   const { isFullscreen } = useFullscreen();
   const { getQueueForTimer, addToQueue, removeFromQueue } = useSupabaseQueue();
+  const [alarmActivated, setAlarmActivated] = useState(false);
   
   // Keep screen awake when any timer is running
   const hasActiveTimers = timers.some(t => t.status === 'running' || t.status === 'warning' || t.status === 'finished');
@@ -25,7 +28,24 @@ const Index = () => {
   const vipTimers = timers.filter(t => t.category === 'vip');
   
   // Check if any timer is in finished state for screen flash effect
-  const hasFinishedTimer = timers.some(t => t.status === 'finished');
+  const finishedTimers = timers.filter(t => t.status === 'finished');
+  const hasFinishedTimer = finishedTimers.length > 0;
+
+  // Handle alarm activation on user click
+  const handleAlarmActivation = () => {
+    ensureAudioContext();
+    setAlarmActivated(true);
+    finishedTimers.forEach(timer => {
+      playFinishedAlarm(timer.id, timer.name);
+    });
+  };
+
+  // Reset alarm activation state when no finished timers
+  useEffect(() => {
+    if (!hasFinishedTimer) {
+      setAlarmActivated(false);
+    }
+  }, [hasFinishedTimer]);
 
   const compact = isFullscreen;
 
@@ -49,11 +69,26 @@ const Index = () => {
         <div className="fixed inset-0 bg-destructive pointer-events-none z-50 screen-flash" />
       )}
       <div className={cn("max-w-7xl mx-auto", compact ? "space-y-4" : "space-y-6")}>
-        {/* Overtime Stats Widget - visible warning for workers */}
-        <OvertimeStats compact={compact} />
+        {/* Alarm activation banner - show when finished timers exist and alarm not yet activated */}
+        {hasFinishedTimer && !alarmActivated && (
+          <AlarmActivationBanner
+            timerNames={finishedTimers.map(t => t.name)}
+            onActivate={handleAlarmActivation}
+            compact={compact}
+          />
+        )}
+
+        {/* Overtime Reset Button */}
+        <div className="flex justify-end">
+          <OvertimeResetButton 
+            totalOvertimeMinutes={totalOvertimeMinutes} 
+            compact={compact}
+            onReset={refreshOvertime}
+          />
+        </div>
         
         {/* Current Sessions */}
-        <CurrentSessions timers={timers} compact={compact} onReset={resetTimer} />
+        <CurrentSessions timers={timers} compact={compact} onReset={resetTimer} overtimeByTimer={overtimeByTimer} />
 
         {/* Billiard Tables */}
         <section>

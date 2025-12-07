@@ -17,11 +17,12 @@ interface CurrentSessionsProps {
   timers: Timer[];
   compact?: boolean;
   onReset?: (timerId: string) => void;
+  overtimeByTimer?: Record<string, number>;
 }
 
 const ADMIN_PASSWORD = '8808';
 
-export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsProps) {
+export function CurrentSessions({ timers, compact, onReset, overtimeByTimer = {} }: CurrentSessionsProps) {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [selectedTimerId, setSelectedTimerId] = useState<string | null>(null);
@@ -78,6 +79,15 @@ export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsPro
       case 'playstation': return 'bg-[hsl(217,91%,60%)]/15 text-[hsl(217,91%,60%)]';
       case 'vip': return 'bg-[hsl(280,65%,60%)]/15 text-[hsl(280,65%,60%)]';
     }
+  };
+
+  const formatOvertimeDisplay = (minutes: number) => {
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return mins > 0 ? `+${hours}h ${mins}m` : `+${hours}h`;
+    }
+    return `+${minutes}m`;
   };
 
   const handleResetClick = (timerId: string) => {
@@ -139,6 +149,12 @@ export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsPro
                     getDotColor(timer)
                   )} />
                   <span className="font-medium text-foreground text-sm">{timer.name}</span>
+                  {/* Overtime badge */}
+                  {overtimeByTimer[timer.id] > 0 && (
+                    <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-destructive/15 text-destructive">
+                      {formatOvertimeDisplay(overtimeByTimer[timer.id])}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={cn(
