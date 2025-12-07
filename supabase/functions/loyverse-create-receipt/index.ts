@@ -10,19 +10,18 @@ const corsHeaders = {
 const TIMER_CONFIG: Record<string, {
   sku: string;
   price: number;
-  item_name: string;
 }> = {
   // PlayStation
-  'ps-1': { sku: '10079', price: 100, item_name: 'PlayStation 1 - 1 hour' },
-  'ps-2': { sku: '10079', price: 100, item_name: 'PlayStation 2 - 1 hour' },
+  'ps-1': { sku: '10079', price: 100 },
+  'ps-2': { sku: '10079', price: 100 },
   // Billiard tables
-  'table-1': { sku: '10001', price: 100, item_name: 'Billiard Table 1 - 1 hour' },
-  'table-2': { sku: '10082', price: 100, item_name: 'Billiard Table 2 - 1 hour' },
-  'table-3': { sku: '10083', price: 100, item_name: 'Billiard Table 3 - 1 hour' },
+  'table-1': { sku: '10001', price: 100 },
+  'table-2': { sku: '10082', price: 100 },
+  'table-3': { sku: '10083', price: 100 },
   // VIP rooms
-  'vip-super': { sku: '10007', price: 400, item_name: 'VIP Super - 1 hour' },
-  'vip-medium': { sku: '10080', price: 300, item_name: 'VIP Medium - 1 hour' },
-  'vip-comfort': { sku: '10081', price: 250, item_name: 'VIP Comfort - 1 hour' },
+  'vip-super': { sku: '10007', price: 400 },
+  'vip-medium': { sku: '10080', price: 300 },
+  'vip-comfort': { sku: '10081', price: 250 },
 };
 
 const STORE_ID = '77f9b0db-9be9-4907-b4ec-9d68653f7a21';
@@ -34,46 +33,78 @@ const PAYMENT_TYPES: Record<string, string> = {
   'postpaid': '857329b2-12ee-474d-adc5-2b6755406989',
 };
 
-// Cache for variant IDs to avoid repeated API calls
-const variantCache: Record<string, string> = {};
+// Cache for variant data to avoid repeated API calls
+const variantCache: Record<string, { variant_id: string; item_name: string }> = {};
 
-async function getVariantIdBySku(sku: string, token: string): Promise<string | null> {
+// Fetch ALL items from Loyverse and find by exact SKU match
+async function findItemBySku(sku: string, token: string): Promise<{ variant_id: string; item_name: string } | null> {
   // Check cache first
   if (variantCache[sku]) {
-    console.log(`📦 Using cached variant_id for SKU ${sku}`);
+    console.log(`📦 Using cached data for SKU ${sku}: ${variantCache[sku].item_name}`);
     return variantCache[sku];
   }
 
-  console.log(`🔍 Searching for item with SKU: ${sku}`);
+  console.log(`🔍 Fetching all items to find SKU: ${sku}`);
   
   try {
-    const response = await fetch(`https://api.loyverse.com/v1.0/items?sku=${sku}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
+    // Fetch all items (Loyverse returns up to 250 per page)
+    let allItems: any[] = [];
+    let cursor: string | null = null;
+    
+    while (true) {
+      const fetchUrl: string = cursor 
+        ? `https://api.loyverse.com/v1.0/items?cursor=${cursor}&limit=250`
+        : `https://api.loyverse.com/v1.0/items?limit=250`;
+      
+      const fetchResponse: Response = await fetch(fetchUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
-    if (!response.ok) {
-      console.error(`❌ Failed to search items: ${response.status}`);
-      return null;
+      if (!fetchResponse.ok) {
+        console.error(`❌ Failed to fetch items: ${fetchResponse.status}`);
+        return null;
+      }
+
+      const fetchData: { items?: any[]; cursor?: string } = await fetchResponse.json();
+      allItems = allItems.concat(fetchData.items || []);
+      cursor = fetchData.cursor || null;
+      
+      console.log(`📦 Fetched ${fetchData.items?.length || 0} items, total: ${allItems.length}`);
+      
+      if (!cursor) break;
     }
 
-    const data = await response.json();
-    
-    if (data.items && data.items.length > 0) {
-      const item = data.items[0];
+    console.log(`📋 Total items in Loyverse: ${allItems.length}`);
+
+    // Find item with exact SKU match
+    for (const item of allItems) {
       if (item.variants && item.variants.length > 0) {
-        const variantId = item.variants[0].variant_id;
-        variantCache[sku] = variantId;
-        console.log(`✅ Found variant_id: ${variantId} for SKU: ${sku}`);
-        return variantId;
+        for (const variant of item.variants) {
+          if (variant.sku === sku) {
+            const result = {
+              variant_id: variant.variant_id,
+              item_name: item.item_name
+            };
+            variantCache[sku] = result;
+            console.log(`✅ Found item: "${item.item_name}" (variant_id: ${variant.variant_id}) for SKU: ${sku}`);
+            return result;
+          }
+        }
       }
     }
 
-    console.error(`❌ No item found with SKU: ${sku}`);
+    // Log all available SKUs for debugging
+    const availableSkus = allItems.flatMap(item => 
+      (item.variants || []).map((v: any) => `${v.sku} (${item.item_name})`)
+    ).filter(Boolean);
+    console.log(`📝 Available SKUs: ${availableSkus.slice(0, 20).join(', ')}...`);
+
+    console.error(`❌ No item found with exact SKU: ${sku}`);
     return null;
   } catch (error) {
-    console.error(`❌ Error searching for SKU ${sku}:`, error);
+    console.error(`❌ Error fetching items:`, error);
     return null;
   }
 }
@@ -98,15 +129,19 @@ serve(async (req) => {
     if (!timerConfig) {
       console.log(`⚠️ Timer ${timerId} not configured for Loyverse integration`);
       return new Response(
-        JSON.stringify({ success: false, message: `Timer ${timerId} not configured` }),
+        JSON.stringify({ success: true, skipped: true, message: `Timer ${timerId} not configured` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Get variant_id by SKU
-    const variantId = await getVariantIdBySku(timerConfig.sku, loyverseToken);
-    if (!variantId) {
-      throw new Error(`Could not find Loyverse item with SKU: ${timerConfig.sku}`);
+    // Find item by SKU (fetches all items and finds exact match)
+    const itemData = await findItemBySku(timerConfig.sku, loyverseToken);
+    if (!itemData) {
+      console.log(`⚠️ Skipping receipt - item with SKU ${timerConfig.sku} not found in Loyverse`);
+      return new Response(
+        JSON.stringify({ success: true, skipped: true, message: `Item with SKU ${timerConfig.sku} not found in Loyverse` }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const price = amount || timerConfig.price;
@@ -118,7 +153,7 @@ serve(async (req) => {
       receipt_type: 'SALE',
       line_items: [
         {
-          variant_id: variantId,
+          variant_id: itemData.variant_id,
           quantity: 1,
           price: price,
         }
@@ -129,7 +164,7 @@ serve(async (req) => {
           amount: price,
         }
       ],
-      note: `Timer: ${timerId}, Payment: ${paymentType}`,
+      note: `${itemData.item_name} - Timer: ${timerId}, Payment: ${paymentType}`,
     };
 
     console.log('📤 Sending receipt to Loyverse:', JSON.stringify(receiptData, null, 2));
@@ -152,7 +187,7 @@ serve(async (req) => {
 
     const receipt = JSON.parse(responseText);
 
-    console.log('✅ Receipt created:', receipt.receipt_number);
+    console.log(`✅ Receipt created: ${receipt.receipt_number} for "${itemData.item_name}"`);
 
     return new Response(
       JSON.stringify({
@@ -160,6 +195,7 @@ serve(async (req) => {
         receipt_number: receipt.receipt_number,
         receipt_id: receipt.id,
         total: receipt.total_money,
+        item_name: itemData.item_name,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
