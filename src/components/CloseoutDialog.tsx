@@ -9,13 +9,15 @@ import {
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, Trash2, Power, Banknote } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { calculatePrice, TIMER_PRICING } from '@/lib/timerUtils';
+import { TIMER_PRICING } from '@/lib/timerUtils';
 
 interface CloseoutDialogProps {
   isOpen: boolean;
   timerName: string;
   timerId: string;
   duration: number; // Total duration set (for billing)
+  paidAmount: number; // Amount already paid (prepaid)
+  unpaidAmount: number; // Amount to collect (postpaid)
   onComplete: () => void;
   onCancel: () => void;
   playConfirmSound: () => void;
@@ -29,6 +31,8 @@ export function CloseoutDialog({
   timerName,
   timerId,
   duration,
+  paidAmount,
+  unpaidAmount,
   onComplete, 
   onCancel,
   playConfirmSound,
@@ -36,9 +40,10 @@ export function CloseoutDialog({
 }: CloseoutDialogProps) {
   const [stage, setStage] = useState<CloseoutStage>('payment');
 
-  const price = calculatePrice(timerId, duration);
   const pricePerHour = TIMER_PRICING[timerId] || 100;
   const hours = Math.ceil(duration / (60 * 60 * 1000));
+  const totalPrice = hours * pricePerHour;
+  const toCollect = unpaidAmount;
 
   const handleConfirm = () => {
     playConfirmSound();
@@ -78,17 +83,35 @@ export function CloseoutDialog({
                 <span className="text-muted-foreground">Rate:</span>
                 <span className="font-mono text-foreground">{pricePerHour} ₱/hour</span>
               </div>
-              <div className="border-t border-border pt-2 mt-2">
-                <div className="flex justify-between text-2xl font-bold">
-                  <span className="text-primary">TOTAL:</span>
-                  <span className="text-primary">{price} ₱</span>
+              <div className="border-t border-border pt-2 mt-2 space-y-1">
+                <div className="flex justify-between text-lg">
+                  <span className="text-muted-foreground">TOTAL:</span>
+                  <span className="font-mono font-bold text-foreground">{totalPrice} ₱</span>
+                </div>
+                {paidAmount > 0 && (
+                  <div className="flex justify-between text-lg">
+                    <span className="text-success">Already paid:</span>
+                    <span className="font-mono text-success">-{paidAmount} ₱</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-2xl font-bold pt-2 border-t border-border">
+                  <span className={toCollect > 0 ? "text-warning" : "text-success"}>
+                    {toCollect > 0 ? 'TO COLLECT:' : 'PAID IN FULL'}
+                  </span>
+                  <span className={toCollect > 0 ? "text-warning" : "text-success"}>
+                    {toCollect > 0 ? `${toCollect} ₱` : '✓'}
+                  </span>
                 </div>
               </div>
             </div>
-            <p className="text-sm text-muted-foreground">Have you collected this payment from the customer?</p>
+            <p className="text-sm text-muted-foreground">
+              {toCollect > 0 
+                ? 'Have you collected this payment from the customer?' 
+                : 'Payment already collected. Proceed to cleanup.'}
+            </p>
           </div>
         ),
-        buttonText: 'Yes, Payment Collected',
+        buttonText: toCollect > 0 ? 'Yes, Payment Collected' : 'Continue',
         buttonClass: 'bg-primary hover:bg-primary/90 text-primary-foreground',
         bgClass: 'bg-primary/20',
       };
