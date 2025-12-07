@@ -1,10 +1,12 @@
 import { Layout } from '@/components/Layout';
 import { AdminGuard } from '@/components/AdminGuard';
-import { loadActivityLog, formatTimestamp, isWithinCurrentPeriod } from '@/lib/timerUtils';
-import { ScrollText, Play, Square, RotateCcw, Filter, Clock, AlertTriangle, Plus } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { formatTimestamp, isWithinCurrentPeriod } from '@/lib/timerUtils';
+import { ScrollText, Play, Square, RotateCcw, Filter, Clock, AlertTriangle, Plus, Loader2 } from 'lucide-react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { ActivityLogEntry } from '@/types/timer';
 
 const ActivityLog = () => {
   return (
@@ -16,7 +18,42 @@ const ActivityLog = () => {
 
 const ActivityLogContent = () => {
   const [showTodayOnly, setShowTodayOnly] = useState(true);
-  const allLogs = useMemo(() => loadActivityLog(), []);
+  const [allLogs, setAllLogs] = useState<ActivityLogEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadActivityLog = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('activity_log')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(500);
+      
+      if (error) {
+        console.error('Error loading activity log:', error);
+        return;
+      }
+
+      if (data) {
+        const log: ActivityLogEntry[] = data.map(entry => ({
+          id: entry.id,
+          timestamp: Number(entry.timestamp),
+          timerId: entry.timer_id,
+          timerName: entry.timer_name,
+          action: entry.action as ActivityLogEntry['action'],
+        }));
+        setAllLogs(log);
+      }
+    } catch (err) {
+      console.error('Error in loadActivityLog:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadActivityLog();
+  }, [loadActivityLog]);
 
   const logs = useMemo(() => {
     if (showTodayOnly) {
@@ -71,6 +108,19 @@ const ActivityLogContent = () => {
         return 'text-muted-foreground';
     }
   };
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Loading activity log...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

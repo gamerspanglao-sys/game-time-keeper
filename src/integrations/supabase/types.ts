@@ -14,7 +14,126 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activity_log: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          timer_id: string
+          timer_name: string
+          timestamp: number
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          timer_id: string
+          timer_name: string
+          timestamp: number
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          timer_id?: string
+          timer_name?: string
+          timestamp?: number
+        }
+        Relationships: []
+      }
+      daily_stats: {
+        Row: {
+          created_at: string
+          id: string
+          period_key: string
+          timer_stats: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          period_key: string
+          timer_stats?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          period_key?: string
+          timer_stats?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      queue: {
+        Row: {
+          added_at: number
+          created_at: string
+          customer_name: string
+          id: string
+          timer_id: string
+        }
+        Insert: {
+          added_at: number
+          created_at?: string
+          customer_name: string
+          id?: string
+          timer_id: string
+        }
+        Update: {
+          added_at?: number
+          created_at?: string
+          customer_name?: string
+          id?: string
+          timer_id?: string
+        }
+        Relationships: []
+      }
+      timers: {
+        Row: {
+          category: string
+          duration: number
+          elapsed_time: number
+          id: string
+          name: string
+          paid_amount: number
+          remaining_at_start: number | null
+          remaining_time: number
+          start_time: number | null
+          status: string
+          unpaid_amount: number
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          duration?: number
+          elapsed_time?: number
+          id: string
+          name: string
+          paid_amount?: number
+          remaining_at_start?: number | null
+          remaining_time?: number
+          start_time?: number | null
+          status?: string
+          unpaid_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          duration?: number
+          elapsed_time?: number
+          id?: string
+          name?: string
+          paid_amount?: number
+          remaining_at_start?: number | null
+          remaining_time?: number
+          start_time?: number | null
+          status?: string
+          unpaid_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

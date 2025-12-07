@@ -1,33 +1,45 @@
 import { Layout } from '@/components/Layout';
 import { TimerCard } from '@/components/TimerCard';
 import { CurrentSessions } from '@/components/CurrentSessions';
-import { useTimers } from '@/hooks/useTimers';
+import { useSupabaseTimers } from '@/hooks/useSupabaseTimers';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useFullscreen } from '@/hooks/useFullscreen';
-import { useQueue } from '@/hooks/useQueue';
+import { useSupabaseQueue } from '@/hooks/useSupabaseQueue';
 import { useWakeLock } from '@/hooks/useWakeLock';
-import { Layers, Gamepad, Crown } from 'lucide-react';
+import { Layers, Gamepad, Crown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Index = () => {
-  const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration, adjustTime } = useTimers();
+  const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration, adjustTime, isLoading } = useSupabaseTimers();
   const { playConfirmSound, stopAlarm, notifyQueueNext } = useTimerAlerts();
   const { isFullscreen } = useFullscreen();
-  const { getQueueForTimer, addToQueue, removeFromQueue } = useQueue();
+  const { getQueueForTimer, addToQueue, removeFromQueue } = useSupabaseQueue();
   
   // Keep screen awake when any timer is running
   const hasActiveTimers = timers.some(t => t.status === 'running' || t.status === 'warning' || t.status === 'finished');
   useWakeLock(hasActiveTimers);
 
-  const tableTimers = timers.filter(t => t.category === 'table');
+  const tableTimers = timers.filter(t => t.category === 'billiard');
   const playstationTimers = timers.filter(t => t.category === 'playstation');
   const vipTimers = timers.filter(t => t.category === 'vip');
   
   // Check if any timer is in finished state for screen flash effect
   const hasFinishedTimer = timers.some(t => t.status === 'finished');
-  const hasWarningTimer = timers.some(t => t.status === 'warning');
 
   const compact = isFullscreen;
+
+  if (isLoading) {
+    return (
+      <Layout compact={compact}>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Loading timers...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout compact={compact}>

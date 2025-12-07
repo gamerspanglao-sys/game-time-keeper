@@ -1,6 +1,6 @@
 export type TimerStatus = 'idle' | 'running' | 'warning' | 'finished' | 'stopped';
 
-export type TimerCategory = 'table' | 'playstation' | 'vip';
+export type TimerCategory = 'billiard' | 'playstation' | 'vip';
 
 export interface Timer {
   id: string;
@@ -13,6 +13,8 @@ export interface Timer {
   elapsedTime: number; // for stats tracking
   remainingAtStart?: number; // remaining time when timer was started
   elapsedAtStart?: number; // elapsed time when timer was started
+  paidAmount: number; // prepaid amount in pesos
+  unpaidAmount: number; // postpaid amount in pesos
 }
 
 export interface ActivityLogEntry {
