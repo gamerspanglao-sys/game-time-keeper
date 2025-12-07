@@ -19,6 +19,8 @@ export function useSupabaseTimers() {
   const [timers, setTimers] = useState<Timer[]>(DEFAULT_TIMERS);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [overtimeByTimer, setOvertimeByTimer] = useState<Record<string, number>>({});
+  const [totalOvertimeMinutes, setTotalOvertimeMinutes] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const warnedTimersRef = useRef<Set<string>>(new Set());
   const finishedTimersRef = useRef<Set<string>>(new Set());
@@ -104,6 +106,41 @@ export function useSupabaseTimers() {
       }
     } catch (err) {
       console.error('Error in loadActivityLog:', err);
+    }
+  }, []);
+
+  // Load overtime data
+  const loadOvertimeData = useCallback(async () => {
+    const periodKey = getDailyPeriodKey();
+    
+    try {
+      const { data } = await supabase
+        .from('daily_stats')
+        .select('timer_stats')
+        .eq('period_key', periodKey)
+        .maybeSingle();
+
+      if (data?.timer_stats) {
+        const stats = data.timer_stats as Record<string, any>;
+        const overtimeEntries = stats.overtime || [];
+        
+        // Aggregate overtime by timer
+        const byTimer: Record<string, number> = {};
+        let total = 0;
+        
+        overtimeEntries.forEach((entry: { timerId: string; overtimeMinutes: number }) => {
+          byTimer[entry.timerId] = (byTimer[entry.timerId] || 0) + entry.overtimeMinutes;
+          total += entry.overtimeMinutes;
+        });
+        
+        setOvertimeByTimer(byTimer);
+        setTotalOvertimeMinutes(total);
+      } else {
+        setOvertimeByTimer({});
+        setTotalOvertimeMinutes(0);
+      }
+    } catch (err) {
+      console.error('Error loading overtime data:', err);
     }
   }, []);
 
@@ -230,7 +267,8 @@ export function useSupabaseTimers() {
   useEffect(() => {
     loadTimers();
     loadActivityLog();
-  }, [loadTimers, loadActivityLog]);
+    loadOvertimeData();
+  }, [loadTimers, loadActivityLog, loadOvertimeData]);
 
   // Play alarm for finished timers on load
   useEffect(() => {
@@ -558,5 +596,8 @@ export function useSupabaseTimers() {
     resetTimer,
     adjustTime,
     getActiveTimers,
+    overtimeByTimer,
+    totalOvertimeMinutes,
+    refreshOvertime: loadOvertimeData,
   };
 }
