@@ -27,23 +27,16 @@ export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsPro
   const [selectedTimerId, setSelectedTimerId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  // Show active timers AND stopped timers with overtime (negative remainingTime)
+  // Show only active timers (running, warning, finished)
   const activeTimers = timers.filter(t => 
     t.status === 'running' || 
     t.status === 'warning' || 
-    t.status === 'finished' ||
-    (t.status === 'stopped' && t.remainingTime < 0)
+    t.status === 'finished'
   );
 
   if (compact && activeTimers.length === 0) return null;
 
-  const isOvertime = (timer: Timer) => timer.remainingTime < 0;
-
   const getSessionStyle = (timer: Timer) => {
-    // Stopped with overtime - show as overtime warning
-    if (timer.status === 'stopped' && timer.remainingTime < 0) {
-      return 'bg-destructive/20 border-destructive/70';
-    }
     switch (timer.status) {
       case 'running': return 'bg-success/5 border-success/30';
       case 'warning': return 'bg-warning/10 border-warning/50';
@@ -53,9 +46,6 @@ export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsPro
   };
 
   const getDotColor = (timer: Timer) => {
-    if (timer.status === 'stopped' && timer.remainingTime < 0) {
-      return 'bg-destructive';
-    }
     switch (timer.status) {
       case 'running': return 'bg-success';
       case 'warning': return 'bg-warning';
@@ -145,16 +135,10 @@ export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsPro
                     {getCategoryIcon(timer.category)}
                   </span>
                   <div className={cn(
-                    'w-2 h-2 rounded-full',
-                    getDotColor(timer),
-                    timer.status !== 'stopped' && 'animate-pulse'
+                    'w-2 h-2 rounded-full animate-pulse',
+                    getDotColor(timer)
                   )} />
                   <span className="font-medium text-foreground text-sm">{timer.name}</span>
-                  {timer.status === 'stopped' && timer.remainingTime < 0 && (
-                    <span className="text-xs bg-destructive/20 text-destructive px-1.5 py-0.5 rounded font-medium">
-                      OVERTIME
-                    </span>
-                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={cn(
@@ -164,8 +148,8 @@ export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsPro
                   )}>
                     {formatTime(timer.remainingTime)}
                   </span>
-                  {/* Reset button for finished or stopped overtime timers */}
-                  {(timer.status === 'finished' || (timer.status === 'stopped' && timer.remainingTime < 0)) && onReset && (
+                  {/* Reset button for finished timers */}
+                  {timer.status === 'finished' && onReset && (
                     <Button
                       variant="ghost"
                       size="sm"

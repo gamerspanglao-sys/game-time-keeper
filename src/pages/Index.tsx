@@ -1,6 +1,7 @@
 import { Layout } from '@/components/Layout';
 import { TimerCard } from '@/components/TimerCard';
 import { CurrentSessions } from '@/components/CurrentSessions';
+import { OvertimeStats } from '@/components/OvertimeStats';
 import { useSupabaseTimers } from '@/hooks/useSupabaseTimers';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useFullscreen } from '@/hooks/useFullscreen';
@@ -48,6 +49,9 @@ const Index = () => {
         <div className="fixed inset-0 bg-destructive pointer-events-none z-50 screen-flash" />
       )}
       <div className={cn("max-w-7xl mx-auto", compact ? "space-y-4" : "space-y-6")}>
+        {/* Overtime Stats Widget - visible warning for workers */}
+        <OvertimeStats compact={compact} />
+        
         {/* Current Sessions */}
         <CurrentSessions timers={timers} compact={compact} onReset={resetTimer} />
 
