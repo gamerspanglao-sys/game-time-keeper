@@ -270,17 +270,17 @@ export function useSupabaseTimers() {
     loadOvertimeData();
   }, [loadTimers, loadActivityLog, loadOvertimeData]);
 
-  // Track finished timers for alarm (but don't auto-play - browser blocks it)
-  // The AlarmActivationBanner in Index.tsx handles user interaction to play alarm
+  // Auto-play alarm for finished timers on load (will work after first user interaction)
   useEffect(() => {
     if (!isLoading) {
       timers.forEach(timer => {
-        if (timer.status === 'finished') {
+        if (timer.status === 'finished' && !finishedTimersRef.current.has(timer.id)) {
           finishedTimersRef.current.add(timer.id);
+          playFinishedAlarm(timer.id, timer.name);
         }
       });
     }
-  }, [isLoading, timers]);
+  }, [isLoading, timers, playFinishedAlarm]);
 
   // Subscribe to realtime updates
   useEffect(() => {
