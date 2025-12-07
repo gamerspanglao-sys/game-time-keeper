@@ -7,6 +7,7 @@ import { Play, Square, RotateCcw, Plus, Users, Circle, Gamepad2, Crown, Pencil, 
 import { cn } from '@/lib/utils';
 import { CloseoutDialog } from './CloseoutDialog';
 import { QueueDialog } from './QueueDialog';
+import { PaymentTypeDialog } from './PaymentTypeDialog';
 import { QueueEntry } from '@/types/queue';
 import {
   Dialog,
@@ -20,9 +21,9 @@ const ADMIN_PASSWORD = '8808';
 
 interface TimerCardProps {
   timer: Timer;
-  onStart: (id: string) => void;
+  onStart: (id: string, paymentType: 'prepaid' | 'postpaid') => void;
   onStop: (id: string) => void;
-  onExtend: (id: string) => void;
+  onExtend: (id: string, additionalMinutes?: number, paymentType?: 'prepaid' | 'postpaid') => void;
   onReset: (id: string) => void;
   onSetDuration: (id: string, minutes: number) => void;
   onAdjustTime: (id: string, minutes: number) => void;
@@ -51,10 +52,12 @@ export function TimerCard({
   onAddToQueue,
   onRemoveFromQueue
 }: TimerCardProps) {
-  const { id, name, status, remainingTime, duration, category } = timer;
+  const { id, name, status, remainingTime, duration, category, paidAmount, unpaidAmount } = timer;
   const [showCloseout, setShowCloseout] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showExtendPaymentDialog, setShowExtendPaymentDialog] = useState(false);
   const [adjustPassword, setAdjustPassword] = useState('');
   const [adjustMinutes, setAdjustMinutes] = useState(10);
   const [passwordError, setPasswordError] = useState(false);
@@ -263,7 +266,7 @@ export function TimerCard({
             <Button 
               variant="success" 
               size={compact ? "default" : "lg"}
-              onClick={() => onStart(id)}
+              onClick={() => setShowPaymentDialog(true)}
               className="flex-1"
             >
               <Play className="w-5 h-5" />
@@ -285,7 +288,7 @@ export function TimerCard({
               <Button 
                 variant="timer" 
                 size={compact ? "default" : "lg"}
-                onClick={() => onExtend(id)}
+                onClick={() => setShowExtendPaymentDialog(true)}
                 className="flex-1"
               >
                 <Plus className="w-5 h-5" />
@@ -308,12 +311,41 @@ export function TimerCard({
         </div>
       </div>
 
+      {/* Payment Type Dialog for Start */}
+      <PaymentTypeDialog
+        isOpen={showPaymentDialog}
+        timerName={name}
+        timerId={id}
+        durationMinutes={Math.ceil(duration / (60 * 1000))}
+        onSelect={(type) => {
+          setShowPaymentDialog(false);
+          onStart(id, type);
+        }}
+        onCancel={() => setShowPaymentDialog(false)}
+      />
+
+      {/* Payment Type Dialog for Extend */}
+      <PaymentTypeDialog
+        isOpen={showExtendPaymentDialog}
+        timerName={name}
+        timerId={id}
+        durationMinutes={60}
+        isExtension={true}
+        onSelect={(type) => {
+          setShowExtendPaymentDialog(false);
+          onExtend(id, 60, type);
+        }}
+        onCancel={() => setShowExtendPaymentDialog(false)}
+      />
+
       {/* Closeout Dialog */}
       <CloseoutDialog
         isOpen={showCloseout}
         timerName={name}
         timerId={id}
         duration={duration}
+        paidAmount={paidAmount}
+        unpaidAmount={unpaidAmount}
         onComplete={handleCloseoutComplete}
         onCancel={handleCloseoutCancel}
         playConfirmSound={playConfirmSound}
