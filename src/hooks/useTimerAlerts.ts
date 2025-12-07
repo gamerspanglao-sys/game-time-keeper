@@ -149,10 +149,16 @@ export function useTimerAlerts() {
     const playBeep = () => {
       try {
         const audioContext = ensureAudioContext();
-        console.log('🔊 Playing alarm beep, context state:', audioContext.state);
         
-        // Play loud alarm pattern
-        const playTone = (freq: number, startTime: number, duration: number) => {
+        // Ensure context is running
+        if (audioContext.state === 'suspended') {
+          audioContext.resume();
+        }
+        
+        const now = audioContext.currentTime;
+        
+        // Play loud alarm - simple and reliable
+        const playTone = (freq: number, delay: number) => {
           const oscillator = audioContext.createOscillator();
           const gainNode = audioContext.createGain();
           
@@ -162,18 +168,24 @@ export function useTimerAlerts() {
           oscillator.frequency.value = freq;
           oscillator.type = 'square';
           
-          gainNode.gain.setValueAtTime(0.8, audioContext.currentTime + startTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + duration);
+          // Set gain immediately, then fade
+          gainNode.gain.value = 1.0;
           
-          oscillator.start(audioContext.currentTime + startTime);
-          oscillator.stop(audioContext.currentTime + startTime + duration);
+          const startTime = now + delay;
+          oscillator.start(startTime);
+          
+          // Fade out
+          gainNode.gain.setValueAtTime(1.0, startTime);
+          gainNode.gain.linearRampToValueAtTime(0, startTime + 0.15);
+          
+          oscillator.stop(startTime + 0.2);
         };
         
-        // Urgent alarm pattern: high-low-high-low (louder)
-        playTone(1200, 0, 0.15);
-        playTone(800, 0.2, 0.15);
-        playTone(1200, 0.4, 0.15);
-        playTone(800, 0.6, 0.15);
+        // Urgent alarm: high-low-high-low
+        playTone(1200, 0);
+        playTone(800, 0.2);
+        playTone(1200, 0.4);
+        playTone(800, 0.6);
         
         // Vibrate on mobile
         if ('vibrate' in navigator) {
