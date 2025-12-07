@@ -14,7 +14,7 @@ export const TIMER_PRICING: Record<string, number> = {
   'ps-1': 100,
   'ps-2': 100,
   'vip-super': 350,
-  'vip-medium': 250,
+  'vip-medium': 300,
   'vip-comfort': 250,
 };
 
