@@ -1,14 +1,32 @@
+import { useState } from 'react';
 import { Timer } from '@/types/timer';
 import { formatTime } from '@/lib/timerUtils';
-import { Activity, Clock, Circle, Gamepad2, Crown } from 'lucide-react';
+import { Activity, Clock, Circle, Gamepad2, Crown, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 
 interface CurrentSessionsProps {
   timers: Timer[];
   compact?: boolean;
+  onReset?: (timerId: string) => void;
 }
 
-export function CurrentSessions({ timers, compact }: CurrentSessionsProps) {
+const ADMIN_PASSWORD = '8808';
+
+export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsProps) {
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [selectedTimerId, setSelectedTimerId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
   const activeTimers = timers.filter(t => t.status === 'running' || t.status === 'warning' || t.status === 'finished');
 
   if (compact && activeTimers.length === 0) return null;
@@ -31,7 +49,8 @@ export function CurrentSessions({ timers, compact }: CurrentSessionsProps) {
     }
   };
 
-  const getTextColor = (status: Timer['status']) => {
+  const getTextColor = (status: Timer['status'], remainingTime: number) => {
+    if (remainingTime < 0) return 'text-destructive';
     switch (status) {
       case 'running': return 'text-success';
       case 'warning': return 'text-warning';
@@ -56,55 +75,123 @@ export function CurrentSessions({ timers, compact }: CurrentSessionsProps) {
     }
   };
 
+  const handleResetClick = (timerId: string) => {
+    setSelectedTimerId(timerId);
+    setPassword('');
+    setError('');
+    setPasswordDialogOpen(true);
+  };
+
+  const handlePasswordSubmit = () => {
+    if (password === ADMIN_PASSWORD) {
+      if (selectedTimerId && onReset) {
+        onReset(selectedTimerId);
+      }
+      setPasswordDialogOpen(false);
+      setPassword('');
+      setError('');
+    } else {
+      setError('Wrong password');
+    }
+  };
+
   return (
-    <div className={cn("gaming-card", compact && "p-4")}>
-      <div className="flex items-center gap-3 mb-4">
-        <div className={cn("rounded-lg bg-primary/10 border border-primary/20", compact ? "p-1.5" : "p-2")}>
-          <Activity className={cn("text-primary", compact ? "w-4 h-4" : "w-5 h-5")} />
+    <>
+      <div className={cn("gaming-card", compact && "p-4")}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className={cn("rounded-lg bg-primary/10 border border-primary/20", compact ? "p-1.5" : "p-2")}>
+            <Activity className={cn("text-primary", compact ? "w-4 h-4" : "w-5 h-5")} />
+          </div>
+          <h2 className={cn("font-semibold text-foreground", compact ? "text-base" : "text-xl")}>Current Sessions</h2>
+          {activeTimers.length > 0 && (
+            <span className="ml-auto px-2 py-0.5 rounded-full bg-primary/10 text-primary text-sm font-medium">
+              {activeTimers.length}
+            </span>
+          )}
         </div>
-        <h2 className={cn("font-semibold text-foreground", compact ? "text-base" : "text-xl")}>Current Sessions</h2>
-        {activeTimers.length > 0 && (
-          <span className="ml-auto px-2 py-0.5 rounded-full bg-primary/10 text-primary text-sm font-medium">
-            {activeTimers.length}
-          </span>
+
+        {activeTimers.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
+            <Clock className="w-10 h-10 mb-2 opacity-50" />
+            <p className="text-sm">No active sessions</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {activeTimers.map(timer => (
+              <div
+                key={timer.id}
+                className={cn(
+                  'flex items-center justify-between p-3 rounded-lg border transition-all',
+                  getSessionStyle(timer.status)
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <span className={cn("p-1 rounded", getCategoryBadgeClass(timer.category))}>
+                    {getCategoryIcon(timer.category)}
+                  </span>
+                  <div className={cn(
+                    'w-2 h-2 rounded-full animate-pulse',
+                    getDotColor(timer.status)
+                  )} />
+                  <span className="font-medium text-foreground text-sm">{timer.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    'font-mono text-lg font-semibold',
+                    getTextColor(timer.status, timer.remainingTime),
+                    timer.remainingTime < 0 && 'animate-pulse'
+                  )}>
+                    {formatTime(timer.remainingTime)}
+                  </span>
+                  {timer.status === 'finished' && onReset && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleResetClick(timer.id)}
+                      className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
-      {activeTimers.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
-          <Clock className="w-10 h-10 mb-2 opacity-50" />
-          <p className="text-sm">No active sessions</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {activeTimers.map(timer => (
-            <div
-              key={timer.id}
-              className={cn(
-                'flex items-center justify-between p-3 rounded-lg border transition-all',
-                getSessionStyle(timer.status)
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <span className={cn("p-1 rounded", getCategoryBadgeClass(timer.category))}>
-                  {getCategoryIcon(timer.category)}
-                </span>
-                <div className={cn(
-                  'w-2 h-2 rounded-full animate-pulse',
-                  getDotColor(timer.status)
-                )} />
-                <span className="font-medium text-foreground text-sm">{timer.name}</span>
-              </div>
-              <span className={cn(
-                'font-mono text-lg font-semibold',
-                getTextColor(timer.status)
-              )}>
-                {formatTime(timer.remainingTime)}
-              </span>
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Admin Password Required</DialogTitle>
+            <DialogDescription>
+              Enter admin password to reset this timer
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              type="password"
+              placeholder="Enter password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setError('');
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
+              autoFocus
+            />
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setPasswordDialogOpen(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handlePasswordSubmit} className="flex-1">
+                Confirm
+              </Button>
             </div>
-          ))}
-        </div>
-      )}
-    </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

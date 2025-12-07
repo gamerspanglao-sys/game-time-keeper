@@ -344,6 +344,7 @@ export function TimerCard({
         timerName={name}
         timerId={id}
         duration={duration}
+        remainingTime={remainingTime}
         paidAmount={paidAmount}
         unpaidAmount={unpaidAmount}
         onComplete={handleCloseoutComplete}

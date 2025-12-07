@@ -7,15 +7,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Trash2, Power, Banknote } from 'lucide-react';
+import { CheckCircle2, Trash2, Power, Banknote, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { TIMER_PRICING } from '@/lib/timerUtils';
+import { TIMER_PRICING, formatTime } from '@/lib/timerUtils';
 
 interface CloseoutDialogProps {
   isOpen: boolean;
   timerName: string;
   timerId: string;
   duration: number; // Total duration set (for billing)
+  remainingTime: number; // Current remaining time (can be negative for overtime)
   paidAmount: number; // Amount already paid (prepaid)
   unpaidAmount: number; // Amount to collect (postpaid)
   onComplete: () => void;
@@ -31,6 +32,7 @@ export function CloseoutDialog({
   timerName,
   timerId,
   duration,
+  remainingTime,
   paidAmount,
   unpaidAmount,
   onComplete, 
@@ -42,8 +44,15 @@ export function CloseoutDialog({
 
   const pricePerHour = TIMER_PRICING[timerId] || 100;
   const hours = Math.ceil(duration / (60 * 60 * 1000));
-  const totalPrice = hours * pricePerHour;
-  const toCollect = unpaidAmount;
+  const basePrice = hours * pricePerHour;
+  
+  // Calculate overtime charge if remainingTime is negative
+  const overtimeMs = remainingTime < 0 ? Math.abs(remainingTime) : 0;
+  const overtimeHours = overtimeMs > 0 ? Math.ceil(overtimeMs / (60 * 60 * 1000)) : 0;
+  const overtimeCharge = overtimeHours * pricePerHour;
+  
+  const totalPrice = basePrice + overtimeCharge;
+  const toCollect = unpaidAmount + overtimeCharge;
 
   const handleConfirm = () => {
     playConfirmSound();
@@ -83,6 +92,29 @@ export function CloseoutDialog({
                 <span className="text-muted-foreground">Rate:</span>
                 <span className="font-mono text-foreground">{pricePerHour} ₱/hour</span>
               </div>
+              <div className="flex justify-between text-lg">
+                <span className="text-muted-foreground">Base price:</span>
+                <span className="font-mono text-foreground">{basePrice} ₱</span>
+              </div>
+              
+              {/* Overtime section */}
+              {overtimeMs > 0 && (
+                <div className="border-t border-border pt-2 mt-2 space-y-1">
+                  <div className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span className="font-semibold">OVERTIME</span>
+                  </div>
+                  <div className="flex justify-between text-lg">
+                    <span className="text-destructive">Overtime played:</span>
+                    <span className="font-mono font-bold text-destructive">{formatTime(overtimeMs)}</span>
+                  </div>
+                  <div className="flex justify-between text-lg">
+                    <span className="text-destructive">Overtime charge:</span>
+                    <span className="font-mono font-bold text-destructive">+{overtimeCharge} ₱</span>
+                  </div>
+                </div>
+              )}
+              
               <div className="border-t border-border pt-2 mt-2 space-y-1">
                 <div className="flex justify-between text-lg">
                   <span className="text-muted-foreground">TOTAL:</span>

@@ -21,6 +21,7 @@ export function useSupabaseTimers() {
   const [isLoading, setIsLoading] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const warnedTimersRef = useRef<Set<string>>(new Set());
+  const finishedTimersRef = useRef<Set<string>>(new Set());
   const { playWarningBeep, playFinishedAlarm, stopAlarm } = useTimerAlerts();
 
   // Load timers from database
@@ -51,17 +52,18 @@ export function useSupabaseTimers() {
           unpaidAmount: t.unpaid_amount || 0,
         }));
 
-        // Recalculate running timers
+        // Recalculate running/warning/finished timers
         const now = Date.now();
         const adjustedTimers = loadedTimers.map(timer => {
-          if ((timer.status === 'running' || timer.status === 'warning') && timer.startTime && timer.remainingAtStart !== undefined) {
+          if ((timer.status === 'running' || timer.status === 'warning' || timer.status === 'finished') && timer.startTime && timer.remainingAtStart !== undefined) {
             const elapsedSinceStart = now - timer.startTime;
-            const newRemaining = Math.max(0, timer.remainingAtStart - elapsedSinceStart);
+            const newRemaining = timer.remainingAtStart - elapsedSinceStart; // Allow negative
             return {
               ...timer,
               remainingTime: newRemaining,
               status: newRemaining <= 0 ? 'finished' as TimerStatus : 
-                      newRemaining <= WARNING_THRESHOLD ? 'warning' as TimerStatus : timer.status
+                      newRemaining <= WARNING_THRESHOLD ? 'warning' as TimerStatus : 
+                      timer.status === 'finished' ? 'running' as TimerStatus : timer.status
             };
           }
           return timer;
@@ -206,6 +208,18 @@ export function useSupabaseTimers() {
     loadActivityLog();
   }, [loadTimers, loadActivityLog]);
 
+  // Play alarm for finished timers on load
+  useEffect(() => {
+    if (!isLoading) {
+      timers.forEach(timer => {
+        if (timer.status === 'finished' && !finishedTimersRef.current.has(timer.id)) {
+          finishedTimersRef.current.add(timer.id);
+          playFinishedAlarm(timer.id, timer.name);
+        }
+      });
+    }
+  }, [isLoading, timers, playFinishedAlarm]);
+
   // Subscribe to realtime updates
   useEffect(() => {
     const channel = supabase
@@ -231,30 +245,41 @@ export function useSupabaseTimers() {
       const now = Date.now();
       
       setTimers(prevTimers => {
-        const hasRunning = prevTimers.some(t => t.status === 'running' || t.status === 'warning');
-        if (!hasRunning) return prevTimers;
+        const hasActive = prevTimers.some(t => t.status === 'running' || t.status === 'warning' || t.status === 'finished');
+        if (!hasActive) return prevTimers;
 
         const updated = prevTimers.map(timer => {
-          if ((timer.status === 'running' || timer.status === 'warning') && timer.startTime && timer.remainingAtStart !== undefined) {
+          if ((timer.status === 'running' || timer.status === 'warning' || timer.status === 'finished') && timer.startTime && timer.remainingAtStart !== undefined) {
             const elapsedSinceStart = now - timer.startTime;
-            const newRemaining = Math.max(0, timer.remainingAtStart - elapsedSinceStart);
+            const newRemaining = timer.remainingAtStart - elapsedSinceStart; // Allow negative
             const newElapsed = (timer.elapsedAtStart || 0) + elapsedSinceStart;
             
-            // Timer finished
-            if (newRemaining <= 0) {
-              playFinishedAlarm(timer.id, timer.name);
-              addActivityLogEntry(timer.id, timer.name, 'finished');
-              updateDailyStats(timer.id, newElapsed);
+            // Timer just crossed zero - trigger finished once
+            if (newRemaining <= 0 && timer.status !== 'finished') {
+              if (!finishedTimersRef.current.has(timer.id)) {
+                finishedTimersRef.current.add(timer.id);
+                playFinishedAlarm(timer.id, timer.name);
+                addActivityLogEntry(timer.id, timer.name, 'finished');
+              }
               warnedTimersRef.current.delete(timer.id);
               
               const finishedTimer = {
                 ...timer,
-                remainingTime: 0,
+                remainingTime: newRemaining,
                 elapsedTime: newElapsed,
                 status: 'finished' as const,
               };
               saveTimer(finishedTimer);
               return finishedTimer;
+            }
+            
+            // Already finished - keep counting into negative
+            if (timer.status === 'finished') {
+              return {
+                ...timer,
+                remainingTime: newRemaining,
+                elapsedTime: newElapsed,
+              };
             }
             
             // Warning at 5 minutes
@@ -411,6 +436,7 @@ export function useSupabaseTimers() {
 
       stopAlarm(timerId);
       warnedTimersRef.current.delete(timerId);
+      finishedTimersRef.current.delete(timerId);
 
       addActivityLogEntry(timerId, timer.name, 'reset');
 
