@@ -116,7 +116,11 @@ serve(async (req) => {
     // Get variant_id by SKU
     const variantId = await getVariantIdBySku(timerConfig.sku, loyverseToken);
     if (!variantId) {
-      throw new Error(`Could not find Loyverse item with SKU: ${timerConfig.sku}`);
+      console.log(`⚠️ Skipping receipt - item with SKU ${timerConfig.sku} not found in Loyverse`);
+      return new Response(
+        JSON.stringify({ success: true, skipped: true, message: `Item with SKU ${timerConfig.sku} not found in Loyverse` }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const price = amount || timerConfig.price;
