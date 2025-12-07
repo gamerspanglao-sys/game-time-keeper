@@ -32,8 +32,8 @@ export interface DailyStats {
   };
 }
 
-// Preset durations in minutes (1h, 2h, 3h)
-export const DURATION_PRESETS = [60, 120, 180];
+// Preset durations in minutes (only 1h)
+export const DURATION_PRESETS = [60];
 
 // Warning threshold - 5 minutes in ms
 export const WARNING_THRESHOLD = 5 * 60 * 1000;
