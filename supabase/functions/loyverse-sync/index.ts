@@ -45,7 +45,7 @@ serve(async (req) => {
     console.log(`🔍 Fetching receipts since ${twoMinutesAgo}`);
 
     const receiptsResponse = await fetch(
-      `https://api.loyverse.com/v1/receipts?created_at_min=${encodeURIComponent(twoMinutesAgo)}&limit=50`,
+      `https://api.loyverse.com/v1.0/receipts?created_at_min=${encodeURIComponent(twoMinutesAgo)}&limit=50`,
       {
         headers: {
           'Authorization': `Bearer ${loyverseToken}`,
