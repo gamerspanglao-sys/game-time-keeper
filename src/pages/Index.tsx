@@ -35,10 +35,6 @@ const Index = () => {
       {hasFinishedTimer && (
         <div className="fixed inset-0 bg-destructive pointer-events-none z-50 screen-flash" />
       )}
-      {hasWarningTimer && !hasFinishedTimer && (
-        <div className="fixed inset-0 bg-warning pointer-events-none z-50 opacity-0 animate-pulse" 
-             style={{ animationDuration: '1s' }} />
-      )}
       <div className={cn("max-w-7xl mx-auto", compact ? "space-y-4" : "space-y-6")}>
         {/* Current Sessions */}
         <CurrentSessions timers={timers} compact={compact} />
