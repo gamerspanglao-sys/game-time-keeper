@@ -167,7 +167,7 @@ export function useSupabaseTimers() {
   }, []);
 
   // Update daily stats
-  const updateDailyStats = useCallback(async (timerId: string, elapsedTime: number) => {
+  const updateDailyStats = useCallback(async (timerId: string, elapsedTime: number, overtimeMinutes?: number, timerName?: string) => {
     const periodKey = getDailyPeriodKey();
     
     try {
@@ -179,8 +179,21 @@ export function useSupabaseTimers() {
         .maybeSingle();
 
       if (existing) {
-        const timerStats = existing.timer_stats as Record<string, number> || {};
+        const timerStats = existing.timer_stats as Record<string, any> || {};
         timerStats[timerId] = (timerStats[timerId] || 0) + elapsedTime;
+        
+        // Add overtime if present
+        if (overtimeMinutes && overtimeMinutes > 0 && timerName) {
+          if (!timerStats.overtime) {
+            timerStats.overtime = [];
+          }
+          timerStats.overtime.push({
+            timerId,
+            timerName,
+            overtimeMinutes,
+            timestamp: Date.now()
+          });
+        }
         
         await supabase
           .from('daily_stats')
@@ -190,11 +203,22 @@ export function useSupabaseTimers() {
           })
           .eq('period_key', periodKey);
       } else {
+        const initialStats: Record<string, any> = { [timerId]: elapsedTime };
+        
+        if (overtimeMinutes && overtimeMinutes > 0 && timerName) {
+          initialStats.overtime = [{
+            timerId,
+            timerName,
+            overtimeMinutes,
+            timestamp: Date.now()
+          }];
+        }
+        
         await supabase
           .from('daily_stats')
           .insert({
             period_key: periodKey,
-            timer_stats: { [timerId]: elapsedTime },
+            timer_stats: initialStats,
           });
       }
     } catch (err) {
@@ -373,9 +397,13 @@ export function useSupabaseTimers() {
 
       stopAlarm(timerId);
       warnedTimersRef.current.delete(timerId);
+      finishedTimersRef.current.delete(timerId);
       
       addActivityLogEntry(timerId, timer.name, 'stopped');
-      updateDailyStats(timerId, timer.elapsedTime);
+      
+      // Calculate overtime if timer went negative
+      const overtimeMinutes = timer.remainingTime < 0 ? Math.ceil(Math.abs(timer.remainingTime) / 60000) : 0;
+      updateDailyStats(timerId, timer.elapsedTime, overtimeMinutes, timer.name);
 
       const updated = prevTimers.map(t =>
         t.id === timerId
@@ -397,6 +425,7 @@ export function useSupabaseTimers() {
 
       stopAlarm(timerId);
       warnedTimersRef.current.delete(timerId);
+      finishedTimersRef.current.delete(timerId); // Clear so alarm can play again when timer finishes
       
       const additionalMs = additionalMinutes * 60 * 1000;
       addActivityLogEntry(timerId, timer.name, 'extended');
