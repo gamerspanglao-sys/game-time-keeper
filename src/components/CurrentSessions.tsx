@@ -42,7 +42,7 @@ export function CurrentSessions({ timers, compact }: CurrentSessionsProps) {
 
   const getCategoryIcon = (category: Timer['category']) => {
     switch (category) {
-      case 'table': return <Circle className="w-3.5 h-3.5" />;
+      case 'billiard': return <Circle className="w-3.5 h-3.5" />;
       case 'playstation': return <Gamepad2 className="w-3.5 h-3.5" />;
       case 'vip': return <Crown className="w-3.5 h-3.5" />;
     }
@@ -50,7 +50,7 @@ export function CurrentSessions({ timers, compact }: CurrentSessionsProps) {
 
   const getCategoryBadgeClass = (category: Timer['category']) => {
     switch (category) {
-      case 'table': return 'bg-success/15 text-success';
+      case 'billiard': return 'bg-success/15 text-success';
       case 'playstation': return 'bg-[hsl(217,91%,60%)]/15 text-[hsl(217,91%,60%)]';
       case 'vip': return 'bg-[hsl(280,65%,60%)]/15 text-[hsl(280,65%,60%)]';
     }

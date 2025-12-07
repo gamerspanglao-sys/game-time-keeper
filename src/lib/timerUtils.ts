@@ -11,22 +11,22 @@ export const TIMER_PRICING: Record<string, number> = {
   'table-1': 100,
   'table-2': 100,
   'table-3': 100,
-  'playstation-1': 100,
-  'playstation-2': 100,
+  'ps-1': 100,
+  'ps-2': 100,
   'vip-super': 350,
   'vip-medium': 250,
   'vip-comfort': 250,
 };
 
 export const DEFAULT_TIMERS: Timer[] = [
-  { id: 'table-1', name: 'Table 1', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
-  { id: 'table-2', name: 'Table 2', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
-  { id: 'table-3', name: 'Table 3', category: 'table', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
-  { id: 'playstation-1', name: 'PlayStation 1', category: 'playstation', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
-  { id: 'playstation-2', name: 'PlayStation 2', category: 'playstation', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
-  { id: 'vip-super', name: 'VIP Super', category: 'vip', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
-  { id: 'vip-medium', name: 'VIP Medium', category: 'vip', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
-  { id: 'vip-comfort', name: 'VIP Comfort', category: 'vip', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0 },
+  { id: 'table-1', name: 'Table 1', category: 'billiard', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0, paidAmount: 0, unpaidAmount: 0 },
+  { id: 'table-2', name: 'Table 2', category: 'billiard', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0, paidAmount: 0, unpaidAmount: 0 },
+  { id: 'table-3', name: 'Table 3', category: 'billiard', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0, paidAmount: 0, unpaidAmount: 0 },
+  { id: 'ps-1', name: 'PlayStation 1', category: 'playstation', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0, paidAmount: 0, unpaidAmount: 0 },
+  { id: 'ps-2', name: 'PlayStation 2', category: 'playstation', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0, paidAmount: 0, unpaidAmount: 0 },
+  { id: 'vip-super', name: 'VIP Super', category: 'vip', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0, paidAmount: 0, unpaidAmount: 0 },
+  { id: 'vip-medium', name: 'VIP Medium', category: 'vip', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0, paidAmount: 0, unpaidAmount: 0 },
+  { id: 'vip-comfort', name: 'VIP Comfort', category: 'vip', status: 'idle', startTime: null, duration: 60 * 60 * 1000, remainingTime: 60 * 60 * 1000, elapsedTime: 0, paidAmount: 0, unpaidAmount: 0 },
 ];
 
 // Force refresh timers when structure changes

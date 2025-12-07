@@ -90,7 +90,7 @@ export function TimerCard({
 
   const getCategoryIcon = () => {
     switch (category) {
-      case 'table': return <Circle className="w-4 h-4" />;
+      case 'billiard': return <Circle className="w-4 h-4" />;
       case 'playstation': return <Gamepad2 className="w-4 h-4" />;
       case 'vip': return <Crown className="w-4 h-4" />;
     }
@@ -98,7 +98,7 @@ export function TimerCard({
 
   const getCategoryClass = () => {
     switch (category) {
-      case 'table': return 'gaming-card-table';
+      case 'billiard': return 'gaming-card-table';
       case 'playstation': return 'gaming-card-playstation';
       case 'vip': return 'gaming-card-vip';
     }
@@ -106,7 +106,7 @@ export function TimerCard({
 
   const getCategoryBadgeClass = () => {
     switch (category) {
-      case 'table': return 'category-badge-table';
+      case 'billiard': return 'category-badge-table';
       case 'playstation': return 'category-badge-playstation';
       case 'vip': return 'category-badge-vip';
     }
