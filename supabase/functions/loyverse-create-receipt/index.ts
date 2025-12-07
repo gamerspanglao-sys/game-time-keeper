@@ -13,15 +13,32 @@ const TIMER_CONFIG: Record<string, {
   price: number;
   item_name: string;
 }> = {
+  // PlayStation - using same Loyverse item
   'ps-1': {
     variant_id: '5d5b60bf-4562-42ed-a2c6-95dd5788034c',
     price: 100,
     item_name: 'PlayStation 1 - 1 hour',
   },
   'ps-2': {
-    variant_id: '5d5b60bf-4562-42ed-a2c6-95dd5788034c', // Same item for now, update when you have PS2 item
+    variant_id: '5d5b60bf-4562-42ed-a2c6-95dd5788034c',
     price: 100,
     item_name: 'PlayStation 2 - 1 hour',
+  },
+  // Billiard - using same Loyverse item for all tables
+  'table-1': {
+    variant_id: '5d5b60bf-4562-42ed-a2c6-95dd5788034c', // TODO: Update when Billiard item created
+    price: 100,
+    item_name: 'Table 1 - 1 hour',
+  },
+  'table-2': {
+    variant_id: '5d5b60bf-4562-42ed-a2c6-95dd5788034c',
+    price: 100,
+    item_name: 'Table 2 - 1 hour',
+  },
+  'table-3': {
+    variant_id: '5d5b60bf-4562-42ed-a2c6-95dd5788034c',
+    price: 100,
+    item_name: 'Table 3 - 1 hour',
   },
 };
 

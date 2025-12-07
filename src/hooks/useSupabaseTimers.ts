@@ -425,9 +425,10 @@ export function useSupabaseTimers() {
     // Save to database
     saveTimer(updatedTimer);
 
-    // Create receipt in Loyverse for PlayStation timers (test: ps-2)
-    if (timerId === 'ps-2') {
-      console.log('🎮 Creating Loyverse receipt for PlayStation 2...');
+    // Create receipt in Loyverse for PlayStation and Billiard timers
+    const loyverseTimers = ['ps-1', 'ps-2', 'table-1', 'table-2', 'table-3'];
+    if (loyverseTimers.includes(timerId)) {
+      console.log(`🎮 Creating Loyverse receipt for ${timer.name}...`);
       try {
         const { data, error } = await supabase.functions.invoke('loyverse-create-receipt', {
           body: { timerId, paymentType, amount: price }
@@ -471,45 +472,58 @@ export function useSupabaseTimers() {
     });
   }, [stopAlarm, addActivityLogEntry, updateDailyStats, saveTimer]);
 
-  const extendTimer = useCallback((timerId: string, additionalMinutes: number = 60, paymentType: 'prepaid' | 'postpaid' = 'postpaid') => {
-    setTimers(prevTimers => {
-      const timer = prevTimers.find(t => t.id === timerId);
-      if (!timer || (timer.status !== 'running' && timer.status !== 'warning' && timer.status !== 'finished')) return prevTimers;
+  const extendTimer = useCallback(async (timerId: string, additionalMinutes: number = 60, paymentType: 'prepaid' | 'postpaid' = 'postpaid') => {
+    const timer = timers.find(t => t.id === timerId);
+    if (!timer || (timer.status !== 'running' && timer.status !== 'warning' && timer.status !== 'finished')) return;
 
-      stopAlarm(timerId);
-      warnedTimersRef.current.delete(timerId);
-      finishedTimersRef.current.delete(timerId); // Clear so alarm can play again when timer finishes
-      
-      const additionalMs = additionalMinutes * 60 * 1000;
-      addActivityLogEntry(timerId, timer.name, 'extended');
+    stopAlarm(timerId);
+    warnedTimersRef.current.delete(timerId);
+    finishedTimersRef.current.delete(timerId);
+    
+    const additionalMs = additionalMinutes * 60 * 1000;
+    addActivityLogEntry(timerId, timer.name, 'extended');
 
-      // Calculate additional price
-      const pricePerHour = TIMER_PRICING[timer.id] || 100;
-      const additionalPrice = Math.ceil(additionalMinutes / 60) * pricePerHour;
+    // Calculate additional price
+    const pricePerHour = TIMER_PRICING[timer.id] || 100;
+    const additionalPrice = Math.ceil(additionalMinutes / 60) * pricePerHour;
 
-      const newRemaining = timer.remainingTime + additionalMs;
-      const updated = prevTimers.map(t =>
-        t.id === timerId
-          ? { 
-              ...t, 
-              status: 'running' as const, 
-              remainingTime: newRemaining,
-              duration: t.duration + additionalMs,
-              startTime: Date.now(),
-              remainingAtStart: newRemaining,
-              elapsedAtStart: t.elapsedTime,
-              paidAmount: paymentType === 'prepaid' ? t.paidAmount + additionalPrice : t.paidAmount,
-              unpaidAmount: paymentType === 'postpaid' ? t.unpaidAmount + additionalPrice : t.unpaidAmount,
-            }
-          : t
-      );
+    const newRemaining = timer.remainingTime + additionalMs;
+    const updatedTimer: Timer = {
+      ...timer,
+      status: 'running' as const,
+      remainingTime: newRemaining,
+      duration: timer.duration + additionalMs,
+      startTime: Date.now(),
+      remainingAtStart: newRemaining,
+      elapsedAtStart: timer.elapsedTime,
+      paidAmount: paymentType === 'prepaid' ? timer.paidAmount + additionalPrice : timer.paidAmount,
+      unpaidAmount: paymentType === 'postpaid' ? timer.unpaidAmount + additionalPrice : timer.unpaidAmount,
+    };
 
-      const updatedTimer = updated.find(t => t.id === timerId);
-      if (updatedTimer) saveTimer(updatedTimer);
+    setTimers(prevTimers =>
+      prevTimers.map(t => t.id === timerId ? updatedTimer : t)
+    );
 
-      return updated;
-    });
-  }, [stopAlarm, addActivityLogEntry, saveTimer]);
+    saveTimer(updatedTimer);
+
+    // Create receipt in Loyverse for PlayStation and Billiard timers
+    const loyverseTimers = ['ps-1', 'ps-2', 'table-1', 'table-2', 'table-3'];
+    if (loyverseTimers.includes(timerId)) {
+      console.log(`🎮 Creating Loyverse receipt for ${timer.name} extension...`);
+      try {
+        const { data, error } = await supabase.functions.invoke('loyverse-create-receipt', {
+          body: { timerId, paymentType, amount: additionalPrice }
+        });
+        if (error) {
+          console.error('❌ Loyverse receipt error:', error);
+        } else {
+          console.log('✅ Loyverse receipt created:', data);
+        }
+      } catch (err) {
+        console.error('❌ Failed to create Loyverse receipt:', err);
+      }
+    }
+  }, [timers, stopAlarm, addActivityLogEntry, saveTimer]);
 
   const resetTimer = useCallback((timerId: string) => {
     setTimers(prevTimers => {
