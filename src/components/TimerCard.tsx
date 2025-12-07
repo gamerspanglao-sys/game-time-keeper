@@ -164,9 +164,8 @@ export function TimerCard({
       notifyQueueNext(name, queue[0].name);
     }
     
+    // Only stop timer, don't reset - keep negative time visible for accountability
     onStop(id);
-    // Reset timer to idle state after closeout
-    setTimeout(() => onReset(id), 100);
   };
 
   const handleCloseoutCancel = () => {

@@ -27,12 +27,24 @@ export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsPro
   const [selectedTimerId, setSelectedTimerId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  const activeTimers = timers.filter(t => t.status === 'running' || t.status === 'warning' || t.status === 'finished');
+  // Show active timers AND stopped timers with overtime (negative remainingTime)
+  const activeTimers = timers.filter(t => 
+    t.status === 'running' || 
+    t.status === 'warning' || 
+    t.status === 'finished' ||
+    (t.status === 'stopped' && t.remainingTime < 0)
+  );
 
   if (compact && activeTimers.length === 0) return null;
 
-  const getSessionStyle = (status: Timer['status']) => {
-    switch (status) {
+  const isOvertime = (timer: Timer) => timer.remainingTime < 0;
+
+  const getSessionStyle = (timer: Timer) => {
+    // Stopped with overtime - show as overtime warning
+    if (timer.status === 'stopped' && timer.remainingTime < 0) {
+      return 'bg-destructive/20 border-destructive/70';
+    }
+    switch (timer.status) {
       case 'running': return 'bg-success/5 border-success/30';
       case 'warning': return 'bg-warning/10 border-warning/50';
       case 'finished': return 'bg-destructive/10 border-destructive/50';
@@ -40,8 +52,11 @@ export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsPro
     }
   };
 
-  const getDotColor = (status: Timer['status']) => {
-    switch (status) {
+  const getDotColor = (timer: Timer) => {
+    if (timer.status === 'stopped' && timer.remainingTime < 0) {
+      return 'bg-destructive';
+    }
+    switch (timer.status) {
       case 'running': return 'bg-success';
       case 'warning': return 'bg-warning';
       case 'finished': return 'bg-destructive';
@@ -122,7 +137,7 @@ export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsPro
                 key={timer.id}
                 className={cn(
                   'flex items-center justify-between p-3 rounded-lg border transition-all',
-                  getSessionStyle(timer.status)
+                  getSessionStyle(timer)
                 )}
               >
                 <div className="flex items-center gap-2">
@@ -130,10 +145,16 @@ export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsPro
                     {getCategoryIcon(timer.category)}
                   </span>
                   <div className={cn(
-                    'w-2 h-2 rounded-full animate-pulse',
-                    getDotColor(timer.status)
+                    'w-2 h-2 rounded-full',
+                    getDotColor(timer),
+                    timer.status !== 'stopped' && 'animate-pulse'
                   )} />
                   <span className="font-medium text-foreground text-sm">{timer.name}</span>
+                  {timer.status === 'stopped' && timer.remainingTime < 0 && (
+                    <span className="text-xs bg-destructive/20 text-destructive px-1.5 py-0.5 rounded font-medium">
+                      OVERTIME
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={cn(
@@ -143,7 +164,8 @@ export function CurrentSessions({ timers, compact, onReset }: CurrentSessionsPro
                   )}>
                     {formatTime(timer.remainingTime)}
                   </span>
-                  {timer.status === 'finished' && onReset && (
+                  {/* Reset button for finished or stopped overtime timers */}
+                  {(timer.status === 'finished' || (timer.status === 'stopped' && timer.remainingTime < 0)) && onReset && (
                     <Button
                       variant="ghost"
                       size="sm"
