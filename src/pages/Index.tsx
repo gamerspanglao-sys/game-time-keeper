@@ -49,7 +49,7 @@ const Index = () => {
       )}
       <div className={cn("max-w-7xl mx-auto", compact ? "space-y-4" : "space-y-6")}>
         {/* Current Sessions */}
-        <CurrentSessions timers={timers} compact={compact} />
+        <CurrentSessions timers={timers} compact={compact} onReset={resetTimer} />
 
         {/* Billiard Tables */}
         <section>
