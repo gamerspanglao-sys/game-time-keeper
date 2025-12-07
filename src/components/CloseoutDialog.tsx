@@ -43,13 +43,14 @@ export function CloseoutDialog({
   const [stage, setStage] = useState<CloseoutStage>('payment');
 
   const pricePerHour = TIMER_PRICING[timerId] || 100;
+  const pricePerMinute = pricePerHour / 60;
   const hours = Math.ceil(duration / (60 * 60 * 1000));
   const basePrice = hours * pricePerHour;
   
-  // Calculate overtime charge if remainingTime is negative
+  // Calculate overtime charge by minutes (not hours)
   const overtimeMs = remainingTime < 0 ? Math.abs(remainingTime) : 0;
-  const overtimeHours = overtimeMs > 0 ? Math.ceil(overtimeMs / (60 * 60 * 1000)) : 0;
-  const overtimeCharge = overtimeHours * pricePerHour;
+  const overtimeMinutes = overtimeMs > 0 ? Math.ceil(overtimeMs / 60000) : 0;
+  const overtimeCharge = Math.round(overtimeMinutes * pricePerMinute);
   
   const totalPrice = basePrice + overtimeCharge;
   const toCollect = unpaidAmount + overtimeCharge;
@@ -109,7 +110,7 @@ export function CloseoutDialog({
                     <span className="font-mono font-bold text-destructive">{formatTime(overtimeMs)}</span>
                   </div>
                   <div className="flex justify-between text-lg">
-                    <span className="text-destructive">Overtime charge:</span>
+                    <span className="text-destructive">Overtime ({overtimeMinutes} min × {pricePerMinute.toFixed(1)}₱):</span>
                     <span className="font-mono font-bold text-destructive">+{overtimeCharge} ₱</span>
                   </div>
                 </div>
