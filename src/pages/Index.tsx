@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { TimerCard } from '@/components/TimerCard';
 import { CurrentSessions } from '@/components/CurrentSessions';
-import { OvertimeResetButton } from '@/components/OvertimeResetButton';
+import { OvertimeStats } from '@/components/OvertimeStats';
 import { AlarmActivationBanner } from '@/components/AlarmActivationBanner';
 import { useSupabaseTimers } from '@/hooks/useSupabaseTimers';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
@@ -13,7 +13,7 @@ import { Layers, Gamepad, Crown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Index = () => {
-  const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration, adjustTime, isLoading, overtimeByTimer, totalOvertimeMinutes, refreshOvertime } = useSupabaseTimers();
+  const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration, adjustTime, isLoading } = useSupabaseTimers();
   const { playConfirmSound, stopAlarm, notifyQueueNext, playFinishedAlarm, ensureAudioContext } = useTimerAlerts();
   const { isFullscreen } = useFullscreen();
   const { getQueueForTimer, addToQueue, removeFromQueue } = useSupabaseQueue();
@@ -77,18 +77,9 @@ const Index = () => {
             compact={compact}
           />
         )}
-
-        {/* Overtime Reset Button */}
-        <div className="flex justify-end">
-          <OvertimeResetButton 
-            totalOvertimeMinutes={totalOvertimeMinutes} 
-            compact={compact}
-            onReset={refreshOvertime}
-          />
-        </div>
         
         {/* Current Sessions */}
-        <CurrentSessions timers={timers} compact={compact} onReset={resetTimer} overtimeByTimer={overtimeByTimer} />
+        <CurrentSessions timers={timers} compact={compact} onReset={resetTimer} />
 
         {/* Billiard Tables */}
         <section>
@@ -176,6 +167,9 @@ const Index = () => {
             ))}
           </div>
         </section>
+
+        {/* Overtime Stats - at the bottom */}
+        <OvertimeStats compact={compact} />
       </div>
     </Layout>
   );
