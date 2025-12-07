@@ -78,8 +78,10 @@ export function useTimerAlerts() {
   }, []);
 
   const playWarningBeep = useCallback((timerName?: string) => {
+    console.log('⚠️ playWarningBeep called for:', timerName, 'audioContext state:', audioContextRef.current?.state);
     try {
       const audioContext = ensureAudioContext();
+      console.log('🔊 Playing warning beep, context state:', audioContext.state);
       
       // Play 3 beeps for warning
       for (let i = 0; i < 3; i++) {
@@ -119,7 +121,12 @@ export function useTimerAlerts() {
   }, [ensureAudioContext, sendNotification]);
 
   const playFinishedAlarm = useCallback((timerId: string, timerName?: string) => {
-    if (activeAlarmsRef.current.has(timerId)) return;
+    console.log('🔔 playFinishedAlarm called for:', timerName, 'audioContext state:', audioContextRef.current?.state);
+    
+    if (activeAlarmsRef.current.has(timerId)) {
+      console.log('Alarm already active for:', timerId);
+      return;
+    }
     
     activeAlarmsRef.current.add(timerId);
     
@@ -142,6 +149,7 @@ export function useTimerAlerts() {
     const playBeep = () => {
       try {
         const audioContext = ensureAudioContext();
+        console.log('🔊 Playing alarm beep, context state:', audioContext.state);
         
         // Play loud alarm pattern
         const playTone = (freq: number, startTime: number, duration: number) => {
