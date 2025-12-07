@@ -28,7 +28,8 @@ export function useSupabaseTimers() {
     try {
       const { data, error } = await supabase
         .from('timers')
-        .select('*');
+        .select('*')
+        .order('id', { ascending: true });
       
       if (error) {
         console.error('Error loading timers:', error);
