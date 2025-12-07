@@ -1,14 +1,22 @@
 import { Layout } from '@/components/Layout';
 import { AdminGuard } from '@/components/AdminGuard';
 import { formatTime, getDailyPeriodKey, DEFAULT_TIMERS } from '@/lib/timerUtils';
-import { BarChart3, Clock, Calendar, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { BarChart3, Clock, Calendar, ChevronLeft, ChevronRight, Loader2, AlertTriangle } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 
+interface OvertimeEntry {
+  timerId: string;
+  timerName: string;
+  overtimeMinutes: number;
+  timestamp: number;
+}
+
 interface DayStats {
   period_key: string;
-  timer_stats: Record<string, number>;
+  timer_stats: Record<string, any>;
+  overtime?: OvertimeEntry[];
 }
 
 const DailyStats = () => {
@@ -38,10 +46,14 @@ const DailyStatsContent = () => {
       }
 
       if (data) {
-        const stats: DayStats[] = data.map(d => ({
-          period_key: d.period_key,
-          timer_stats: d.timer_stats as Record<string, number> || {},
-        }));
+        const stats: DayStats[] = data.map(d => {
+          const timerStats = d.timer_stats as Record<string, any> || {};
+          return {
+            period_key: d.period_key,
+            timer_stats: timerStats,
+            overtime: timerStats.overtime as OvertimeEntry[] || [],
+          };
+        });
         setAllStats(stats);
       }
     } catch (err) {
@@ -72,7 +84,30 @@ const DailyStatsContent = () => {
 
   const getTotalTime = () => {
     if (!currentStats) return 0;
-    return Object.values(currentStats.timer_stats).reduce((acc, time) => acc + time, 0);
+    return Object.entries(currentStats.timer_stats)
+      .filter(([key]) => key !== 'overtime')
+      .reduce((acc, [_, time]) => acc + (typeof time === 'number' ? time : 0), 0);
+  };
+
+  const getTotalOvertime = () => {
+    if (!currentStats?.overtime) return 0;
+    return currentStats.overtime.reduce((acc, entry) => acc + entry.overtimeMinutes, 0);
+  };
+
+  const formatMinutes = (minutes: number) => {
+    const hrs = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hrs > 0) {
+      return `${hrs}h ${mins}m`;
+    }
+    return `${mins}m`;
+  };
+
+  const formatTimestamp = (timestamp: number) => {
+    return new Date(timestamp).toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
   };
 
   const canGoNewer = selectedIndex > 0;
@@ -139,6 +174,50 @@ const DailyStatsContent = () => {
           </div>
         </div>
 
+        {/* Overtime Section */}
+        {currentStats?.overtime && currentStats.overtime.length > 0 && (
+          <div className="gaming-card border-destructive/50 bg-destructive/5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-destructive/20 border border-destructive/30">
+                <AlertTriangle className="w-5 h-5 text-destructive" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-destructive">Overtime Records</h2>
+                <p className="text-sm text-destructive/70">Sessions that exceeded booked time</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 mb-4">
+              {currentStats.overtime.map((entry, index) => (
+                <div
+                  key={`${entry.timerId}-${index}`}
+                  className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20"
+                >
+                  <div className="flex items-center gap-3">
+                    <Clock className="w-4 h-4 text-destructive" />
+                    <div>
+                      <span className="font-medium">{entry.timerName}</span>
+                      <span className="text-xs text-muted-foreground ml-2">
+                        at {formatTimestamp(entry.timestamp)}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="font-mono font-bold text-destructive">
+                    +{formatMinutes(entry.overtimeMinutes)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-3 border-t border-destructive/20 flex justify-between items-center">
+              <span className="font-semibold text-destructive">TOTAL OVERTIME:</span>
+              <span className="font-mono text-2xl font-bold text-destructive">
+                +{formatMinutes(getTotalOvertime())}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Stats Grid */}
         {allStats.length === 0 ? (
           <div className="gaming-card flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -149,7 +228,9 @@ const DailyStatsContent = () => {
         ) : (
           <div className="grid gap-4">
             {DEFAULT_TIMERS.map(timer => {
-              const time = currentStats?.timer_stats[timer.id] || 0;
+              const time = typeof currentStats?.timer_stats[timer.id] === 'number' 
+                ? currentStats.timer_stats[timer.id] 
+                : 0;
               const totalTime = getTotalTime();
               const percentage = totalTime > 0 ? (time / totalTime) * 100 : 0;
 
