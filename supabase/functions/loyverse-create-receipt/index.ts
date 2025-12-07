@@ -6,40 +6,23 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Configuration for PlayStation 1 timer (ps-1)
-// TODO: Extend this mapping for other timers
+// Timer configuration with Loyverse SKUs and prices
 const TIMER_CONFIG: Record<string, {
-  variant_id: string;
+  sku: string;
   price: number;
   item_name: string;
 }> = {
-  // PlayStation - using same Loyverse item
-  'ps-1': {
-    variant_id: '5d5b60bf-4562-42ed-a2c6-95dd5788034c',
-    price: 100,
-    item_name: 'PlayStation 1 - 1 hour',
-  },
-  'ps-2': {
-    variant_id: '5d5b60bf-4562-42ed-a2c6-95dd5788034c',
-    price: 100,
-    item_name: 'PlayStation 2 - 1 hour',
-  },
-  // Billiard - using same Loyverse item for all tables
-  'table-1': {
-    variant_id: '5d5b60bf-4562-42ed-a2c6-95dd5788034c', // TODO: Update when Billiard item created
-    price: 100,
-    item_name: 'Table 1 - 1 hour',
-  },
-  'table-2': {
-    variant_id: '5d5b60bf-4562-42ed-a2c6-95dd5788034c',
-    price: 100,
-    item_name: 'Table 2 - 1 hour',
-  },
-  'table-3': {
-    variant_id: '5d5b60bf-4562-42ed-a2c6-95dd5788034c',
-    price: 100,
-    item_name: 'Table 3 - 1 hour',
-  },
+  // PlayStation
+  'ps-1': { sku: '10079', price: 100, item_name: 'PlayStation 1 - 1 hour' },
+  'ps-2': { sku: '10079', price: 100, item_name: 'PlayStation 2 - 1 hour' },
+  // Billiard tables
+  'table-1': { sku: '10001', price: 100, item_name: 'Billiard Table 1 - 1 hour' },
+  'table-2': { sku: '10082', price: 100, item_name: 'Billiard Table 2 - 1 hour' },
+  'table-3': { sku: '10083', price: 100, item_name: 'Billiard Table 3 - 1 hour' },
+  // VIP rooms
+  'vip-super': { sku: '10007', price: 400, item_name: 'VIP Super - 1 hour' },
+  'vip-medium': { sku: '10080', price: 300, item_name: 'VIP Medium - 1 hour' },
+  'vip-comfort': { sku: '10081', price: 250, item_name: 'VIP Comfort - 1 hour' },
 };
 
 const STORE_ID = '77f9b0db-9be9-4907-b4ec-9d68653f7a21';
@@ -47,12 +30,55 @@ const STORE_ID = '77f9b0db-9be9-4907-b4ec-9d68653f7a21';
 const PAYMENT_TYPES: Record<string, string> = {
   'cash': '857329b2-12ee-474d-adc5-2b6755406989',
   'gcash': 'a119edcb-3495-4bd1-a8a1-66508749fcbe',
-  'prepaid': '857329b2-12ee-474d-adc5-2b6755406989', // Default to cash for prepaid
-  'postpaid': '857329b2-12ee-474d-adc5-2b6755406989', // Default to cash for postpaid
+  'prepaid': '857329b2-12ee-474d-adc5-2b6755406989',
+  'postpaid': '857329b2-12ee-474d-adc5-2b6755406989',
 };
 
+// Cache for variant IDs to avoid repeated API calls
+const variantCache: Record<string, string> = {};
+
+async function getVariantIdBySku(sku: string, token: string): Promise<string | null> {
+  // Check cache first
+  if (variantCache[sku]) {
+    console.log(`📦 Using cached variant_id for SKU ${sku}`);
+    return variantCache[sku];
+  }
+
+  console.log(`🔍 Searching for item with SKU: ${sku}`);
+  
+  try {
+    const response = await fetch(`https://api.loyverse.com/v1.0/items?sku=${sku}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`❌ Failed to search items: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    
+    if (data.items && data.items.length > 0) {
+      const item = data.items[0];
+      if (item.variants && item.variants.length > 0) {
+        const variantId = item.variants[0].variant_id;
+        variantCache[sku] = variantId;
+        console.log(`✅ Found variant_id: ${variantId} for SKU: ${sku}`);
+        return variantId;
+      }
+    }
+
+    console.error(`❌ No item found with SKU: ${sku}`);
+    return null;
+  } catch (error) {
+    console.error(`❌ Error searching for SKU ${sku}:`, error);
+    return null;
+  }
+}
+
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -68,7 +94,6 @@ serve(async (req) => {
 
     console.log(`📝 Creating receipt for timer: ${timerId}, payment: ${paymentType}`);
 
-    // Get timer configuration
     const timerConfig = TIMER_CONFIG[timerId];
     if (!timerConfig) {
       console.log(`⚠️ Timer ${timerId} not configured for Loyverse integration`);
@@ -78,17 +103,22 @@ serve(async (req) => {
       );
     }
 
+    // Get variant_id by SKU
+    const variantId = await getVariantIdBySku(timerConfig.sku, loyverseToken);
+    if (!variantId) {
+      throw new Error(`Could not find Loyverse item with SKU: ${timerConfig.sku}`);
+    }
+
     const price = amount || timerConfig.price;
     const paymentTypeId = PAYMENT_TYPES[paymentType] || PAYMENT_TYPES['cash'];
 
-    // Create receipt
     const receiptData = {
       store_id: STORE_ID,
       source: 'Gaming Timer App',
       receipt_type: 'SALE',
       line_items: [
         {
-          variant_id: timerConfig.variant_id,
+          variant_id: variantId,
           quantity: 1,
           price: price,
         }

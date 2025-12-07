@@ -425,8 +425,8 @@ export function useSupabaseTimers() {
     // Save to database
     saveTimer(updatedTimer);
 
-    // Create receipt in Loyverse for PlayStation and Billiard timers
-    const loyverseTimers = ['ps-1', 'ps-2', 'table-1', 'table-2', 'table-3'];
+    // Create receipt in Loyverse for all timers
+    const loyverseTimers = ['ps-1', 'ps-2', 'table-1', 'table-2', 'table-3', 'vip-super', 'vip-medium', 'vip-comfort'];
     if (loyverseTimers.includes(timerId)) {
       console.log(`🎮 Creating Loyverse receipt for ${timer.name}...`);
       try {
@@ -506,8 +506,8 @@ export function useSupabaseTimers() {
 
     saveTimer(updatedTimer);
 
-    // Create receipt in Loyverse for PlayStation and Billiard timers
-    const loyverseTimers = ['ps-1', 'ps-2', 'table-1', 'table-2', 'table-3'];
+    // Create receipt in Loyverse for all timer extensions
+    const loyverseTimers = ['ps-1', 'ps-2', 'table-1', 'table-2', 'table-3', 'vip-super', 'vip-medium', 'vip-comfort'];
     if (loyverseTimers.includes(timerId)) {
       console.log(`🎮 Creating Loyverse receipt for ${timer.name} extension...`);
       try {

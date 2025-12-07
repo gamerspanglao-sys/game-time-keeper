@@ -13,7 +13,7 @@ export const TIMER_PRICING: Record<string, number> = {
   'table-3': 100,
   'ps-1': 100,
   'ps-2': 100,
-  'vip-super': 350,
+  'vip-super': 400,
   'vip-medium': 300,
   'vip-comfort': 250,
 };
