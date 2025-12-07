@@ -395,38 +395,53 @@ export function useSupabaseTimers() {
     );
   }, [saveTimer]);
 
-  const startTimer = useCallback((timerId: string, paymentType: 'prepaid' | 'postpaid' = 'postpaid') => {
-    setTimers(prevTimers => {
-      const timer = prevTimers.find(t => t.id === timerId);
-      if (!timer || timer.status === 'running' || timer.status === 'warning') return prevTimers;
+  const startTimer = useCallback(async (timerId: string, paymentType: 'prepaid' | 'postpaid' = 'postpaid') => {
+    // Get current timer state
+    const timer = timers.find(t => t.id === timerId);
+    if (!timer || timer.status === 'running' || timer.status === 'warning') return;
 
-      addActivityLogEntry(timerId, timer.name, 'started');
+    addActivityLogEntry(timerId, timer.name, 'started');
 
-      // Calculate price for this duration
-      const pricePerHour = TIMER_PRICING[timer.id] || 100;
-      const hours = Math.ceil(timer.duration / (60 * 60 * 1000));
-      const price = hours * pricePerHour;
+    // Calculate price for this duration
+    const pricePerHour = TIMER_PRICING[timer.id] || 100;
+    const hours = Math.ceil(timer.duration / (60 * 60 * 1000));
+    const price = hours * pricePerHour;
 
-      const updated = prevTimers.map(t =>
-        t.id === timerId
-          ? { 
-              ...t, 
-              status: 'running' as const, 
-              startTime: Date.now(),
-              remainingAtStart: t.remainingTime,
-              elapsedAtStart: t.elapsedTime,
-              paidAmount: paymentType === 'prepaid' ? price : 0,
-              unpaidAmount: paymentType === 'postpaid' ? price : 0,
-            }
-          : t
-      );
+    const updatedTimer: Timer = {
+      ...timer,
+      status: 'running' as const,
+      startTime: Date.now(),
+      remainingAtStart: timer.remainingTime,
+      elapsedAtStart: timer.elapsedTime,
+      paidAmount: paymentType === 'prepaid' ? price : 0,
+      unpaidAmount: paymentType === 'postpaid' ? price : 0,
+    };
 
-      const updatedTimer = updated.find(t => t.id === timerId);
-      if (updatedTimer) saveTimer(updatedTimer);
+    // Update local state
+    setTimers(prevTimers =>
+      prevTimers.map(t => t.id === timerId ? updatedTimer : t)
+    );
 
-      return updated;
-    });
-  }, [addActivityLogEntry, saveTimer]);
+    // Save to database
+    saveTimer(updatedTimer);
+
+    // Create receipt in Loyverse for PlayStation timers (test: ps-2)
+    if (timerId === 'ps-2') {
+      console.log('🎮 Creating Loyverse receipt for PlayStation 2...');
+      try {
+        const { data, error } = await supabase.functions.invoke('loyverse-create-receipt', {
+          body: { timerId, paymentType, amount: price }
+        });
+        if (error) {
+          console.error('❌ Loyverse receipt error:', error);
+        } else {
+          console.log('✅ Loyverse receipt created:', data);
+        }
+      } catch (err) {
+        console.error('❌ Failed to create Loyverse receipt:', err);
+      }
+    }
+  }, [timers, addActivityLogEntry, saveTimer]);
 
   const stopTimer = useCallback((timerId: string) => {
     setTimers(prevTimers => {

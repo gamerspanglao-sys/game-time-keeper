@@ -2,3 +2,9 @@ project_id = "njpscabswqgkujtevjim"
 
 [functions.loyverse-sync]
 verify_jwt = false
+
+[functions.loyverse-config]
+verify_jwt = false
+
+[functions.loyverse-create-receipt]
+verify_jwt = false
