@@ -21,7 +21,6 @@ interface QueueDialogProps {
   onRemoveFromQueue: (timerId: string, entryId: string) => void;
 }
 
-const CLEANUP_TIME_MS = 5 * 60 * 1000; // 5 minutes for cleanup
 const SESSION_DURATION_MS = 60 * 60 * 1000; // 1 hour default session
 
 export function QueueDialog({
@@ -52,9 +51,9 @@ export function QueueDialog({
   // Calculate estimated start time for each person in queue
   const getEstimatedStartTime = (index: number) => {
     const now = Date.now();
-    // First person: remaining time on current session + cleanup
-    // Others: add 1 hour session + cleanup for each person ahead
-    const waitTime = remainingTime + CLEANUP_TIME_MS + (index * (SESSION_DURATION_MS + CLEANUP_TIME_MS));
+    // First person: remaining time on current session
+    // Others: add 1 hour session for each person ahead
+    const waitTime = remainingTime + (index * SESSION_DURATION_MS);
     return new Date(now + waitTime);
   };
 

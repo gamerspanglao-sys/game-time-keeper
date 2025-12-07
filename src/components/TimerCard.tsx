@@ -7,6 +7,7 @@ import { Play, Square, RotateCcw, Plus, Users, Circle, Gamepad2, Crown, Pencil, 
 import { cn } from '@/lib/utils';
 import { CloseoutDialog } from './CloseoutDialog';
 import { QueueDialog } from './QueueDialog';
+import { QueueConfirmDialog } from './QueueConfirmDialog';
 import { PaymentTypeDialog } from './PaymentTypeDialog';
 import { QueueEntry } from '@/types/queue';
 import {
@@ -55,9 +56,11 @@ export function TimerCard({
   const { id, name, status, remainingTime, duration, category, paidAmount, unpaidAmount } = timer;
   const [showCloseout, setShowCloseout] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  const [showQueueConfirm, setShowQueueConfirm] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showExtendPaymentDialog, setShowExtendPaymentDialog] = useState(false);
+  const [pendingPaymentType, setPendingPaymentType] = useState<'prepaid' | 'postpaid' | null>(null);
   const [adjustPassword, setAdjustPassword] = useState('');
   const [adjustMinutes, setAdjustMinutes] = useState(10);
   const [passwordError, setPasswordError] = useState(false);
@@ -319,9 +322,41 @@ export function TimerCard({
         durationMinutes={Math.ceil(duration / (60 * 1000))}
         onSelect={(type) => {
           setShowPaymentDialog(false);
-          onStart(id, type);
+          // Check if there's someone in queue
+          if (queue.length > 0) {
+            setPendingPaymentType(type);
+            setShowQueueConfirm(true);
+          } else {
+            onStart(id, type);
+          }
         }}
         onCancel={() => setShowPaymentDialog(false)}
+      />
+
+      {/* Queue Confirmation Dialog */}
+      <QueueConfirmDialog
+        isOpen={showQueueConfirm}
+        timerName={name}
+        personName={queue[0]?.name || ''}
+        onConfirm={() => {
+          // Remove person from queue and start timer
+          if (queue[0]) {
+            onRemoveFromQueue(id, queue[0].id);
+          }
+          if (pendingPaymentType) {
+            onStart(id, pendingPaymentType);
+          }
+          setShowQueueConfirm(false);
+          setPendingPaymentType(null);
+        }}
+        onDeny={() => {
+          // Just start timer without removing from queue
+          if (pendingPaymentType) {
+            onStart(id, pendingPaymentType);
+          }
+          setShowQueueConfirm(false);
+          setPendingPaymentType(null);
+        }}
       />
 
       {/* Payment Type Dialog for Extend */}
