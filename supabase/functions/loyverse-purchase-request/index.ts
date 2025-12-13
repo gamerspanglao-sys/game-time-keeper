@@ -450,6 +450,9 @@ serve(async (req) => {
     if (!hasSanMiguel1L && towerSalesSanMiguel > 0) {
       const variantId = findVariantIdByName('san miguel 1');
       itemSales['San Miguel 1L (from towers)'] = { name: 'San Miguel 1L (from towers)', variantId, quantity: 0 };
+      console.log(`✅ Created synthetic San Miguel 1L entry (${towerSalesSanMiguel} towers sold)`);
+    } else {
+      console.log(`⏭️ San Miguel 1L: exists=${hasSanMiguel1L}, towers=${towerSalesSanMiguel}`);
     }
     
     // Check if 1L San Miguel Light exists in sales
