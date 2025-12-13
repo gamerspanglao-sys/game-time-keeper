@@ -204,7 +204,21 @@ serve(async (req) => {
 
     // Calculate 3 days period (user requested shorter average)
     const ANALYSIS_DAYS = 3;
-    const DELIVERY_BUFFER_DAYS = 2; // Order tomorrow, delivery day after tomorrow
+    
+    // Calculate delivery buffer considering Sunday (no deliveries)
+    // Order today → delivery in 2 days, but if delivery falls on Sunday → +1 day
+    const today = new Date();
+    const orderDay = new Date(today);
+    orderDay.setDate(orderDay.getDate() + 1); // Order tomorrow
+    const deliveryDay = new Date(orderDay);
+    deliveryDay.setDate(deliveryDay.getDate() + 1); // Delivery day after tomorrow
+    
+    // If delivery falls on Sunday (day 0), add one more day
+    let DELIVERY_BUFFER_DAYS = 2;
+    if (deliveryDay.getDay() === 0) {
+      DELIVERY_BUFFER_DAYS = 3; // Skip Sunday
+      console.log('📅 Delivery falls on Sunday, adding extra day buffer');
+    }
     
     const endDate = new Date();
     const startDate = new Date();
@@ -368,12 +382,31 @@ serve(async (req) => {
         }
       }
       
-      // Add basket consumption to 0.5L Red Horse
-      if (data.name.toLowerCase().includes('red horse') && 
-          (data.name.toLowerCase().includes('0,5') || data.name.toLowerCase().includes('500') || data.name.toLowerCase().includes('0.5'))) {
-        extraQty = basketSales * 5; // Each basket = 5 x 0.5L bottles
+      // Add basket consumption: each basket = 5x Red Horse 0.5L + 5x San Miguel + 5x San Miguel Light
+      const nameLower = data.name.toLowerCase();
+      
+      // Red Horse 0.5L from baskets
+      if (nameLower.includes('red horse') && 
+          (nameLower.includes('0,5') || nameLower.includes('500') || nameLower.includes('0.5'))) {
+        extraQty = basketSales * 5;
         if (basketSales > 0) {
           note = `+${basketSales} baskets (${extraQty} x 0.5L)`;
+        }
+      }
+      
+      // San Miguel (regular) from baskets
+      if (nameLower.includes('san miguel') && !nameLower.includes('light') && !nameLower.includes('premium')) {
+        extraQty = basketSales * 5;
+        if (basketSales > 0) {
+          note = `+${basketSales} baskets (${extraQty} bottles)`;
+        }
+      }
+      
+      // San Miguel Light from baskets
+      if (nameLower.includes('san miguel') && nameLower.includes('light')) {
+        extraQty = basketSales * 5;
+        if (basketSales > 0) {
+          note = `+${basketSales} baskets (${extraQty} bottles)`;
         }
       }
       
