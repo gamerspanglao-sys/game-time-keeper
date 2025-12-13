@@ -8,6 +8,7 @@ import DailyStats from "./pages/DailyStats";
 import ActivityLog from "./pages/ActivityLog";
 import Tournaments from "./pages/Tournaments";
 import PaymentsReport from "./pages/PaymentsReport";
+import PurchaseRequests from "./pages/PurchaseRequests";
 import NotFound from "./pages/NotFound";
 import { AdminGuard } from "./components/AdminGuard";
 import { Layout } from "./components/Layout";
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/log" element={<AdminGuard><ActivityLog /></AdminGuard>} />
           <Route path="/tournaments" element={<Tournaments />} />
           <Route path="/payments" element={<AdminGuard><Layout><PaymentsReport /></Layout></AdminGuard>} />
+          <Route path="/purchases" element={<AdminGuard><Layout><PurchaseRequests /></Layout></AdminGuard>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
