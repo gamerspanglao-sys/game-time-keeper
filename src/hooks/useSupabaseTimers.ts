@@ -21,10 +21,12 @@ export function useSupabaseTimers() {
   const [isLoading, setIsLoading] = useState(true);
   const [overtimeByTimer, setOvertimeByTimer] = useState<Record<string, number>>({});
   const [totalOvertimeMinutes, setTotalOvertimeMinutes] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [pausedTimers, setPausedTimers] = useState<Map<string, { remainingTime: number; status: string }>>(new Map());
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const warnedTimersRef = useRef<Set<string>>(new Set());
   const finishedTimersRef = useRef<Set<string>>(new Set());
-  const { playWarningBeep, playFinishedAlarm, stopAlarm } = useTimerAlerts();
+  const { playWarningBeep, playFinishedAlarm, stopAlarm, stopAllAlarms } = useTimerAlerts();
 
   // Load timers from database
   const loadTimers = useCallback(async () => {
@@ -614,6 +616,83 @@ export function useSupabaseTimers() {
     return timers.filter(t => t.status === 'running' || t.status === 'warning' || t.status === 'finished');
   }, [timers]);
 
+  // Pause all active timers (for power outages)
+  const pauseAllTimers = useCallback(async () => {
+    const activeTimers = timers.filter(t => t.status === 'running' || t.status === 'warning' || t.status === 'finished');
+    if (activeTimers.length === 0) return;
+
+    // Stop all alarms
+    stopAllAlarms();
+
+    // Save paused state for each timer
+    const pausedState = new Map<string, { remainingTime: number; status: string }>();
+    
+    setTimers(prevTimers => {
+      const updated = prevTimers.map(timer => {
+        if (timer.status === 'running' || timer.status === 'warning' || timer.status === 'finished') {
+          pausedState.set(timer.id, { 
+            remainingTime: timer.remainingTime, 
+            status: timer.status 
+          });
+          
+          const pausedTimer = {
+            ...timer,
+            status: 'stopped' as const,
+            startTime: null,
+          };
+          saveTimer(pausedTimer);
+          addActivityLogEntry(timer.id, timer.name, 'stopped');
+          return pausedTimer;
+        }
+        return timer;
+      });
+      return updated;
+    });
+
+    setPausedTimers(pausedState);
+    setIsPaused(true);
+  }, [timers, stopAllAlarms, saveTimer, addActivityLogEntry]);
+
+  // Resume all paused timers
+  const resumeAllTimers = useCallback(async () => {
+    if (!isPaused || pausedTimers.size === 0) return;
+
+    const now = Date.now();
+    
+    setTimers(prevTimers => {
+      const updated = prevTimers.map(timer => {
+        const pausedData = pausedTimers.get(timer.id);
+        if (pausedData && timer.status === 'stopped') {
+          const resumedTimer = {
+            ...timer,
+            status: pausedData.status as Timer['status'],
+            startTime: now,
+            remainingAtStart: pausedData.remainingTime,
+            remainingTime: pausedData.remainingTime,
+          };
+          saveTimer(resumedTimer);
+          addActivityLogEntry(timer.id, timer.name, 'started');
+          
+          // Re-trigger warnings/alarms if needed
+          if (pausedData.status === 'warning') {
+            warnedTimersRef.current.add(timer.id);
+          }
+          if (pausedData.status === 'finished') {
+            finishedTimersRef.current.add(timer.id);
+            playFinishedAlarm(timer.id, timer.name);
+          }
+          
+          return resumedTimer;
+        }
+        return timer;
+      });
+      return updated;
+    });
+
+    setPausedTimers(new Map());
+    setIsPaused(false);
+  }, [isPaused, pausedTimers, saveTimer, addActivityLogEntry, playFinishedAlarm]);
+
   return {
     timers,
     activityLog,
@@ -628,5 +707,8 @@ export function useSupabaseTimers() {
     overtimeByTimer,
     totalOvertimeMinutes,
     refreshOvertime: loadOvertimeData,
+    isPaused,
+    pauseAllTimers,
+    resumeAllTimers,
   };
 }
