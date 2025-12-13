@@ -25,44 +25,52 @@ const CASE_SIZES: Record<string, number> = {
   'royal': 24,
 };
 
-// Items to EXCLUDE from purchase orders (services and non-stock items)
-const EXCLUDED_KEYWORDS = [
-  'billiard', 'playstation', 'vip super', 'vip medium', 'vip comfort',
-  'ps-1', 'ps-2', 'ps5', 'vr', 'table-1', 'table-2', 'table-3', 'timer', 'hour',
-  'hookah', 'cigarette', 'gloves', 'headphones', 'pizza', 'pepperoni', 'meatlovers',
-  '4cheese', 'cropics', 'mexican', 'vip 70', 'charge per bottle',
-];
+// ============ INCLUSION LIST (explicit whitelist) ============
+// Based on user answers: all beer, all Tanduay + other spirits, all soft drinks
 
-function isExcluded(itemName: string): boolean {
-  const name = itemName.toLowerCase();
-  return EXCLUDED_KEYWORDS.some((keyword) => name.includes(keyword));
-}
-
-// Categorize items for grouping in UI
-function getCategory(itemName: string): string {
+function isIncluded(itemName: string): boolean {
   const name = itemName.toLowerCase();
   
-  // Beer - Red Horse, San Miguel variants, Heineken, generic "beer"
+  // ==== BEER (all brands) ====
   if (
     name.includes('red horse') ||
     name.includes('san miguel') ||
     name.includes('heineken') ||
     name.includes('henniken') ||
-    name.includes(' beer') || // space to avoid "beer pong" etc.
-    name.includes('пиво')
+    name.includes('beer') ||
+    name.includes('pilsen') ||
+    name.includes('pale') ||
+    name.includes('light') // San Miguel Light
   ) {
-    return 'beer';
+    return true;
   }
-
-  // Spirits - Tanduay (user explicitly asked for this)
-  if (name.includes('tanduay')) return 'spirits';
-
-  // Cocktails - Smirnoff Mule, mixed drinks, rum coke
-  if (name.includes('mule') || name.includes('smirnoff') || name.includes('rum coke')) {
-    return 'cocktails';
+  
+  // ==== SPIRITS (Tanduay + others like Absolut, Gin, Soju, Tequila) ====
+  if (
+    name.includes('tanduay') ||
+    name.includes('absolut') ||
+    name.includes('gin') ||
+    name.includes('soju') ||
+    name.includes('tequila') ||
+    name.includes('vodka') ||
+    name.includes('whiskey') ||
+    name.includes('whisky') ||
+    name.includes('brandy') ||
+    name.includes('rum') // plain rum bottles, not Rum Coke
+  ) {
+    return true;
   }
-
-  // Soft drinks - Water, Coke/Cola, Sprite, Royal, Tonic, Soda, Juice, Lemonade, Pepsi
+  
+  // ==== COCKTAILS (Smirnoff Mule, Rum Coke, etc.) ====
+  if (
+    name.includes('mule') ||
+    name.includes('smirnoff') ||
+    name.includes('rum coke')
+  ) {
+    return true;
+  }
+  
+  // ==== SOFT DRINKS (all sizes - bottles, cans, big 1.75L, water, juices) ====
   if (
     name.includes('water') ||
     name.includes('coca cola') ||
@@ -77,13 +85,61 @@ function getCategory(itemName: string): string {
     name.includes('juce') ||
     name.includes('lemonade') ||
     name.includes('pepsi') ||
+    name.includes('fanta') ||
     name.includes('zero') ||
-    name.includes('fanta')
+    name.includes('iced tea') ||
+    name.includes('ice tea') ||
+    name.includes('nestea') ||
+    name.includes('7up') ||
+    name.includes('mountain dew') ||
+    name.includes('schweppes')
   ) {
-    return 'soft';
+    return true;
   }
+  
+  return false;
+}
 
-  return 'other';
+function getCategory(itemName: string): string {
+  const name = itemName.toLowerCase();
+  
+  // Beer
+  if (
+    name.includes('red horse') ||
+    name.includes('san miguel') ||
+    name.includes('heineken') ||
+    name.includes('henniken') ||
+    name.includes('beer') ||
+    name.includes('pilsen') ||
+    name.includes('pale') ||
+    name.includes('light')
+  ) {
+    return 'beer';
+  }
+  
+  // Spirits
+  if (
+    name.includes('tanduay') ||
+    name.includes('absolut') ||
+    name.includes('gin') ||
+    name.includes('soju') ||
+    name.includes('tequila') ||
+    name.includes('vodka') ||
+    name.includes('whiskey') ||
+    name.includes('whisky') ||
+    name.includes('brandy') ||
+    name.includes('rum')
+  ) {
+    return 'spirits';
+  }
+  
+  // Cocktails
+  if (name.includes('mule') || name.includes('smirnoff') || name.includes('rum coke')) {
+    return 'cocktails';
+  }
+  
+  // Soft drinks
+  return 'soft';
 }
 
 function isTower(itemName: string): boolean {
@@ -101,12 +157,17 @@ function getCaseSize(itemName: string): number {
     if (name.includes(key)) return size;
   }
   
-  if (name.includes('red horse') && (name.includes('0,5') || name.includes('500') || name.includes('0.5'))) {
-    return 12;
+  // Red Horse sizes
+  if (name.includes('red horse')) {
+    if (name.includes('0,5') || name.includes('500') || name.includes('0.5')) return 12;
+    if (name.includes('1l') || name.includes('1 l') || name.includes('1000')) return 6;
   }
-  if (name.includes('red horse') && (name.includes('1l') || name.includes('1 l') || name.includes('1000'))) {
+  
+  // Big bottles (1.5L, 1.75L, 2L) - typically 6-8 per case
+  if (name.includes('1.5') || name.includes('1,5') || name.includes('1.75') || name.includes('1,75') || name.includes('2l') || name.includes('2 l')) {
     return 6;
   }
+  
   if (name.includes('san miguel')) return 24;
   if (name.includes('tanduay')) return 12;
   if (name.includes('water')) return 12;
@@ -273,8 +334,8 @@ serve(async (req) => {
           continue;
         }
         
-        // Skip clearly excluded service / non-stock items
-        if (isExcluded(itemName)) continue;
+        // Only include items from our whitelist (beer, spirits, cocktails, soft drinks)
+        if (!isIncluded(itemName)) continue;
         
         const key = itemName; // Group by name
         if (!itemSales[key]) {
