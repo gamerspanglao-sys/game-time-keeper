@@ -20,6 +20,7 @@ interface PurchaseItem {
   caseSize: number;
   casesToOrder: number;
   category: string;
+  supplier?: string;
   note?: string;
 }
 
@@ -30,6 +31,14 @@ interface PurchaseData {
   basketSales?: number;
   recommendations: PurchaseItem[];
 }
+
+const SUPPLIER_CONFIG: Record<string, { label: string; color: string }> = {
+  'San Miguel': { label: 'San Miguel (Beer)', color: 'bg-amber-500/20 text-amber-500 border-amber-500/30' },
+  'Spirits Supplier': { label: 'Spirits & Cocktails', color: 'bg-orange-500/20 text-orange-500 border-orange-500/30' },
+  'Cocktails Supplier': { label: 'Cocktails', color: 'bg-pink-500/20 text-pink-500 border-pink-500/30' },
+  'Soft Drinks Supplier': { label: 'Soft Drinks', color: 'bg-blue-500/20 text-blue-500 border-blue-500/30' },
+  'Other': { label: 'Other', color: 'bg-muted text-muted-foreground border-muted' },
+};
 
 const CATEGORY_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
   'beer': { label: 'Beer', icon: Beer, color: 'bg-amber-500/20 text-amber-500' },
@@ -102,10 +111,11 @@ export default function PurchaseRequests() {
   const totalUnits = filteredRecommendations.reduce((sum, item) => sum + item.toOrder, 0);
   const totalCases = filteredRecommendations.reduce((sum, item) => sum + item.casesToOrder, 0);
 
-  // Group by category
-  const groupedItems = filteredRecommendations.reduce((acc, item) => {
-    if (!acc[item.category]) acc[item.category] = [];
-    acc[item.category].push(item);
+  // Group by supplier
+  const groupedBySupplier = filteredRecommendations.reduce((acc, item) => {
+    const supplier = item.supplier || 'Other';
+    if (!acc[supplier]) acc[supplier] = [];
+    acc[supplier].push(item);
     return acc;
   }, {} as Record<string, PurchaseItem[]>);
 
@@ -192,62 +202,71 @@ export default function PurchaseRequests() {
             </Card>
           </div>
 
-          {Object.entries(groupedItems).map(([category, items]) => {
-            const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG['other'];
-            const CategoryIcon = config.icon;
+          {Object.entries(groupedBySupplier).map(([supplier, items]) => {
+            const supplierConfig = SUPPLIER_CONFIG[supplier] || SUPPLIER_CONFIG['Other'];
+            const typedItems = items as PurchaseItem[];
             
             return (
-              <Card key={category}>
+              <Card key={supplier} className={cn("border", supplierConfig.color.split(' ')[2])}>
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2">
-                    <CategoryIcon className="h-5 w-5" />
-                    {config.label}
-                    <Badge variant="secondary">{items.length} items</Badge>
+                    <Badge className={supplierConfig.color}>{supplierConfig.label}</Badge>
+                    <span className="text-muted-foreground text-sm font-normal">
+                      {typedItems.length} items
+                    </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {items.map((item, index) => (
-                      <div
-                        key={index}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-muted/50 gap-2"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium">{item.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            Sold: <span className="font-medium text-foreground">{item.totalQuantity}</span> (7d)
-                            {item.note && <span className="text-primary ml-1">{item.note}</span>}
-                            {' • '}
-                            Avg: <span className="font-medium text-foreground">{item.avgPerDay}</span>/day
-                            {' • '}
-                            Stock: <span className={cn(
-                              "font-medium",
-                              item.inStock >= item.recommendedQty ? "text-success" : item.inStock > 0 ? "text-warning" : "text-destructive"
-                            )}>{item.inStock}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-center min-w-[60px]">
-                            <div className="text-xs text-muted-foreground">NEED</div>
-                            <div className="text-lg font-bold text-primary">{item.toOrder}</div>
-                          </div>
-                          {item.caseSize > 1 && (
-                            <div className="text-center min-w-[80px]">
-                              <div className="text-xs text-muted-foreground">CASES ({item.caseSize})</div>
-                              <div className="text-lg font-bold">{item.casesToOrder}</div>
+                    {typedItems.map((item, index) => {
+                      const categoryConfig = CATEGORY_CONFIG[item.category] || CATEGORY_CONFIG['other'];
+                      return (
+                        <div
+                          key={index}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-muted/50 gap-2"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium flex items-center gap-2">
+                              {item.name}
+                              <Badge variant="outline" className={cn("text-xs", categoryConfig.color)}>
+                                {categoryConfig.label}
+                              </Badge>
                             </div>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
-                            onClick={() => removeItem(item.name)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
+                            <div className="text-sm text-muted-foreground">
+                              Sold: <span className="font-medium text-foreground">{item.totalQuantity}</span> (3d)
+                              {item.note && <span className="text-primary ml-1">{item.note}</span>}
+                              {' • '}
+                              Avg: <span className="font-medium text-foreground">{item.avgPerDay}</span>/day
+                              {' • '}
+                              Stock: <span className={cn(
+                                "font-medium",
+                                item.inStock >= item.recommendedQty ? "text-success" : item.inStock > 0 ? "text-warning" : "text-destructive"
+                              )}>{item.inStock}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="text-center min-w-[60px]">
+                              <div className="text-xs text-muted-foreground">NEED</div>
+                              <div className="text-lg font-bold text-primary">{item.toOrder}</div>
+                            </div>
+                            {item.caseSize > 1 && (
+                              <div className="text-center min-w-[80px]">
+                                <div className="text-xs text-muted-foreground">CASES ({item.caseSize})</div>
+                                <div className="text-lg font-bold">{item.casesToOrder}</div>
+                              </div>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                              onClick={() => removeItem(item.name)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
