@@ -1,18 +1,31 @@
 import { NavLink } from 'react-router-dom';
-import { Timer, BarChart3, ScrollText, Gamepad2, Maximize, Minimize, Trophy } from 'lucide-react';
+import { Timer, BarChart3, ScrollText, Gamepad2, Maximize, Minimize, Trophy, Pause, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFullscreen } from '@/hooks/useFullscreen';
+import { GlobalPauseButton } from './GlobalPauseButton';
 
 interface NavigationProps {
   compact?: boolean;
+  isPaused?: boolean;
+  activeTimersCount?: number;
+  onPauseAll?: () => void;
+  onResumeAll?: () => void;
 }
 
-export function Navigation({ compact }: NavigationProps) {
+export function Navigation({ compact, isPaused = false, activeTimersCount = 0, onPauseAll, onResumeAll }: NavigationProps) {
   const { isFullscreen, toggleFullscreen } = useFullscreen();
 
   if (compact) {
     return (
       <nav className="fixed top-4 right-4 z-50 flex gap-2">
+        {(activeTimersCount > 0 || isPaused) && onPauseAll && onResumeAll && (
+          <GlobalPauseButton
+            isPaused={isPaused}
+            activeTimersCount={activeTimersCount}
+            onPauseAll={onPauseAll}
+            onResumeAll={onResumeAll}
+          />
+        )}
         <button
           onClick={toggleFullscreen}
           className="p-2 rounded-lg bg-card/90 backdrop-blur border border-border hover:border-primary/30 transition-all"
@@ -52,6 +65,18 @@ export function Navigation({ compact }: NavigationProps) {
           )}
         </button>
       </div>
+
+      {/* Global Pause Button - Desktop */}
+      {(activeTimersCount > 0 || isPaused) && onPauseAll && onResumeAll && (
+        <div className="hidden md:block px-3 py-3 border-b border-border">
+          <GlobalPauseButton
+            isPaused={isPaused}
+            activeTimersCount={activeTimersCount}
+            onPauseAll={onPauseAll}
+            onResumeAll={onResumeAll}
+          />
+        </div>
+      )}
 
       {/* Navigation Links */}
       <div className="flex md:flex-col md:p-3 md:gap-1">
