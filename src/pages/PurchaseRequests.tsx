@@ -49,9 +49,10 @@ export default function PurchaseRequests() {
     setRemovedItems(new Set());
     
     try {
-      // Auto calculate: last 30 days, 5:00 AM to 5:00 AM
+      // Loyverse free plan limit: only last 30 days
+      // Use last 28 days to be safe
       const endDate = new Date();
-      const startDate = subDays(endDate, 30);
+      const startDate = subDays(endDate, 28);
       
       const startDateTime = new Date(startDate);
       startDateTime.setHours(5, 0, 0, 0);

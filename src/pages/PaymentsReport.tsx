@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format, setHours, setMinutes, setSeconds, addDays } from 'date-fns';
+import { format, setHours, setMinutes, setSeconds, addDays, subDays, differenceInDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,8 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { CalendarIcon, Download, RefreshCw, Banknote, CreditCard, Receipt, TrendingUp, RotateCcw, DollarSign, Coins } from 'lucide-react';
+import { CalendarIcon, Download, RefreshCw, Banknote, CreditCard, Receipt, TrendingUp, RotateCcw, DollarSign, Coins, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Payment {
@@ -58,7 +59,16 @@ export default function PaymentsReport() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Check if date is within 30 days limit
+  const maxPastDate = subDays(new Date(), 30);
+  const isStartDateTooOld = startDate < maxPastDate;
+
   const fetchPayments = async () => {
+    if (isStartDateTooOld) {
+      toast.error('Loyverse free plan only allows data from last 30 days');
+      return;
+    }
+    
     setIsLoading(true);
     try {
       // Parse start and end times
@@ -92,9 +102,13 @@ export default function PaymentsReport() {
       } else {
         throw new Error(data.error);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching payments:', error);
-      toast.error('Failed to load payments');
+      if (error.message?.includes('402') || error.message?.includes('31 days')) {
+        toast.error('Loyverse limit: only last 30 days available on free plan');
+      } else {
+        toast.error('Failed to load payments');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -157,8 +171,17 @@ export default function PaymentsReport() {
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Payments Report</h1>
-          <p className="text-muted-foreground">Loyverse sales, refunds & profit data</p>
+          <p className="text-muted-foreground">Loyverse sales, refunds & profit data (last 30 days only)</p>
         </div>
+
+        {isStartDateTooOld && (
+          <Alert variant="destructive" className="py-2">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Start date is older than 30 days. Loyverse free plan only allows data from the last 30 days.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="flex flex-wrap items-end gap-3">
           {/* Start Date Picker */}
