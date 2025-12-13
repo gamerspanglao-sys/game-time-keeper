@@ -10,13 +10,15 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { CalendarIcon, Download, RefreshCw, Banknote, CreditCard, Receipt, TrendingUp, TrendingDown, RotateCcw } from 'lucide-react';
+import { CalendarIcon, Download, RefreshCw, Banknote, CreditCard, Receipt, TrendingUp, RotateCcw, DollarSign, Coins } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Payment {
   id: string;
   date: string;
   total: number;
+  cost: number;
+  profit: number;
   payments: Array<{
     type: string;
     typeId: string;
@@ -27,6 +29,8 @@ interface Payment {
     quantity: number;
     price: number;
     total: number;
+    cost: number;
+    totalCost: number;
   }>;
   note: string;
   source: string;
@@ -40,11 +44,14 @@ interface Summary {
   totalAmount: number;
   totalRefundAmount: number;
   netAmount: number;
+  totalCost: number;
+  totalProfit: number;
   byPaymentType: Record<string, { count: number; amount: number; refundCount: number; refundAmount: number }>;
 }
 
 export default function PaymentsReport() {
-  const [date, setDate] = useState<Date>(new Date());
+  const [startDate, setStartDate] = useState<Date>(new Date());
+  const [endDate, setEndDate] = useState<Date>(new Date());
   const [startTime, setStartTime] = useState('05:00');
   const [endTime, setEndTime] = useState('05:00');
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -59,16 +66,20 @@ export default function PaymentsReport() {
       const [endHour, endMin] = endTime.split(':').map(Number);
       
       // Create start date with specified time
-      let startDate = setSeconds(setMinutes(setHours(date, startHour), startMin), 0);
+      let start = setSeconds(setMinutes(setHours(startDate, startHour), startMin), 0);
       
-      // Create end date - if end time is <= start time, it's the next day
-      let endDate = setSeconds(setMinutes(setHours(date, endHour), endMin), 59);
-      if (endHour < startHour || (endHour === startHour && endMin <= startMin)) {
-        endDate = addDays(endDate, 1);
+      // Create end date with specified time
+      let end = setSeconds(setMinutes(setHours(endDate, endHour), endMin), 59);
+      
+      // If end time is <= start time on same date, add a day to end
+      if (startDate.toDateString() === endDate.toDateString()) {
+        if (endHour < startHour || (endHour === startHour && endMin <= startMin)) {
+          end = addDays(end, 1);
+        }
       }
 
       const { data, error } = await supabase.functions.invoke('loyverse-payments', {
-        body: { startDate: startDate.toISOString(), endDate: endDate.toISOString() },
+        body: { startDate: start.toISOString(), endDate: end.toISOString() },
       });
 
       if (error) throw error;
@@ -110,7 +121,7 @@ export default function PaymentsReport() {
       return;
     }
 
-    const headers = ['Receipt #', 'Date', 'Time', 'Type', 'Items', 'Payment Type', 'Amount', 'Source'];
+    const headers = ['Receipt #', 'Date', 'Time', 'Type', 'Items', 'Payment Type', 'Amount', 'Cost', 'Profit', 'Source'];
     const rows = payments.map(p => {
       const paymentDate = new Date(p.date);
       const itemsStr = p.items.map(i => `${i.name} x${i.quantity}`).join('; ');
@@ -123,6 +134,8 @@ export default function PaymentsReport() {
         itemsStr,
         paymentTypes,
         p.total.toFixed(2),
+        p.cost.toFixed(2),
+        p.profit.toFixed(2),
         p.source || 'POS',
       ];
     });
@@ -132,7 +145,7 @@ export default function PaymentsReport() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `payments_${format(date, 'yyyy-MM-dd')}.csv`;
+    link.download = `payments_${format(startDate, 'yyyy-MM-dd')}_${format(endDate, 'yyyy-MM-dd')}.csv`;
     link.click();
     URL.revokeObjectURL(url);
     toast.success('Report exported');
@@ -144,25 +157,25 @@ export default function PaymentsReport() {
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Payments Report</h1>
-          <p className="text-muted-foreground">Loyverse sales & refunds data</p>
+          <p className="text-muted-foreground">Loyverse sales, refunds & profit data</p>
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
-          {/* Date Picker */}
+          {/* Start Date Picker */}
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Date</Label>
+            <Label className="text-xs text-muted-foreground">From Date</Label>
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="w-[160px] justify-start text-left font-normal">
+                <Button variant="outline" className="w-[140px] justify-start text-left font-normal">
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {format(date, 'dd MMM yyyy')}
+                  {format(startDate, 'dd MMM yyyy')}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
-                  selected={date}
-                  onSelect={(d) => d && setDate(d)}
+                  selected={startDate}
+                  onSelect={(d) => d && setStartDate(d)}
                   initialFocus
                   className="pointer-events-auto"
                 />
@@ -170,9 +183,9 @@ export default function PaymentsReport() {
             </Popover>
           </div>
 
-          {/* Time Range */}
+          {/* Start Time */}
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">From</Label>
+            <Label className="text-xs text-muted-foreground">Time</Label>
             <Input
               type="time"
               value={startTime}
@@ -180,8 +193,32 @@ export default function PaymentsReport() {
               className="w-[100px]"
             />
           </div>
+
+          {/* End Date Picker */}
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">To (next day if &lt; From)</Label>
+            <Label className="text-xs text-muted-foreground">To Date</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-[140px] justify-start text-left font-normal">
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {format(endDate, 'dd MMM yyyy')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={endDate}
+                  onSelect={(d) => d && setEndDate(d)}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* End Time */}
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Time</Label>
             <Input
               type="time"
               value={endTime}
@@ -204,7 +241,7 @@ export default function PaymentsReport() {
 
       {/* Summary Cards */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
@@ -226,7 +263,7 @@ export default function PaymentsReport() {
                   <TrendingUp className="w-5 h-5 text-success" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Total Sales</p>
+                  <p className="text-xs text-muted-foreground">Revenue</p>
                   <p className="text-xl font-bold">₱{summary.totalAmount.toLocaleString()}</p>
                 </div>
               </div>
@@ -247,15 +284,29 @@ export default function PaymentsReport() {
             </CardContent>
           </Card>
 
-          <Card className="border-primary/30">
+          <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <TrendingUp className="w-5 h-5 text-primary" />
+                <div className="p-2 rounded-lg bg-muted">
+                  <Coins className="w-5 h-5 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Net Total</p>
-                  <p className="text-xl font-bold text-primary">₱{summary.netAmount.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Cost</p>
+                  <p className="text-xl font-bold text-muted-foreground">₱{summary.totalCost.toLocaleString()}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-success/30">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-success/10">
+                  <DollarSign className="w-5 h-5 text-success" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Profit</p>
+                  <p className="text-xl font-bold text-success">₱{summary.totalProfit.toLocaleString()}</p>
                 </div>
               </div>
             </CardContent>
@@ -319,7 +370,7 @@ export default function PaymentsReport() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-sm font-medium">#{payment.id}</span>
                       <span className="text-xs text-muted-foreground">
-                        {format(new Date(payment.date), 'HH:mm')}
+                        {format(new Date(payment.date), 'dd MMM HH:mm')}
                       </span>
                       {payment.isRefund && (
                         <Badge variant="destructive" className="text-xs">
@@ -337,6 +388,7 @@ export default function PaymentsReport() {
                       {payment.items.map((item, i) => (
                         <span key={i}>
                           {item.name} x{item.quantity}
+                          {item.cost > 0 && <span className="text-xs ml-1">(cost: ₱{item.totalCost})</span>}
                           {i < payment.items.length - 1 && ', '}
                         </span>
                       ))}
@@ -355,13 +407,18 @@ export default function PaymentsReport() {
                         </Badge>
                       ))}
                     </div>
-                    <div className="text-right min-w-[80px]">
+                    <div className="text-right min-w-[100px]">
                       <p className={cn(
                         "font-bold text-lg",
                         payment.isRefund && "text-destructive"
                       )}>
                         {payment.isRefund ? '-' : ''}₱{Math.abs(payment.total).toLocaleString()}
                       </p>
+                      {payment.cost > 0 && (
+                        <p className="text-xs text-success">
+                          +₱{payment.profit.toLocaleString()} profit
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -378,7 +435,7 @@ export default function PaymentsReport() {
             <Receipt className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium text-foreground mb-2">No data loaded</h3>
             <p className="text-muted-foreground mb-4">
-              Select date and time range, then click "Load" to fetch data from Loyverse
+              Select date range and time, then click "Load" to fetch data from Loyverse
             </p>
             <Button onClick={fetchPayments}>
               <RefreshCw className="w-4 h-4 mr-2" />

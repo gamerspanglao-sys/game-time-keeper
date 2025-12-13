@@ -79,6 +79,9 @@ serve(async (req) => {
     }
 
     // Process receipts to extract payment information
+    let totalCost = 0;
+    let totalRevenue = 0;
+
     const payments = allReceipts.map((receipt: any) => {
       const paymentDetails = (receipt.payments || []).map((p: any) => ({
         type: paymentTypesMap[p.payment_type_id] || 'Unknown',
@@ -86,20 +89,37 @@ serve(async (req) => {
         amount: p.money_amount || 0,
       }));
 
-      const items = (receipt.line_items || []).map((item: any) => ({
-        name: item.item_name,
-        quantity: item.quantity,
-        price: item.price,
-        total: item.total_money,
-      }));
+      let itemCost = 0;
+      const items = (receipt.line_items || []).map((item: any) => {
+        const cost = (item.cost || 0) * item.quantity;
+        itemCost += cost;
+        return {
+          name: item.item_name,
+          quantity: item.quantity,
+          price: item.price,
+          total: item.total_money,
+          cost: item.cost || 0,
+          totalCost: cost,
+        };
+      });
 
       // Determine if it's a refund
       const isRefund = receipt.receipt_type === 'REFUND';
+      
+      if (!isRefund) {
+        totalCost += itemCost;
+        totalRevenue += receipt.total_money;
+      } else {
+        totalCost -= itemCost;
+        totalRevenue -= Math.abs(receipt.total_money);
+      }
 
       return {
         id: receipt.receipt_number,
         date: receipt.created_at,
         total: isRefund ? -Math.abs(receipt.total_money) : receipt.total_money,
+        cost: isRefund ? -itemCost : itemCost,
+        profit: isRefund ? -(receipt.total_money - itemCost) : (receipt.total_money - itemCost),
         payments: paymentDetails,
         items,
         note: receipt.note,
@@ -113,13 +133,15 @@ serve(async (req) => {
     const sales = payments.filter((p: any) => !p.isRefund);
     const refunds = payments.filter((p: any) => p.isRefund);
 
-    // Calculate summary
+    // Calculate summary with profit
     const summary = {
       totalReceipts: sales.length,
       totalRefunds: refunds.length,
       totalAmount: sales.reduce((sum: number, p: any) => sum + p.total, 0),
       totalRefundAmount: refunds.reduce((sum: number, p: any) => sum + Math.abs(p.total), 0),
       netAmount: payments.reduce((sum: number, p: any) => sum + p.total, 0),
+      totalCost,
+      totalProfit: totalRevenue - totalCost,
       byPaymentType: {} as Record<string, { count: number; amount: number; refundCount: number; refundAmount: number }>,
     };
 
