@@ -8,3 +8,12 @@ verify_jwt = false
 
 [functions.loyverse-create-receipt]
 verify_jwt = false
+
+[functions.loyverse-purchase-request]
+verify_jwt = false
+
+[functions.loyverse-payments]
+verify_jwt = false
+
+[functions.telegram-notify]
+verify_jwt = false
