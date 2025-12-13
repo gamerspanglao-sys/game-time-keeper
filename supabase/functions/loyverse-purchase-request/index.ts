@@ -419,7 +419,50 @@ serve(async (req) => {
       }
     }
 
-    // Step 5: Calculate recommendations
+    // Step 5: Create synthetic entries for 1L beers if towers were sold but no direct 1L sales exist
+    // This ensures 1L positions appear in recommendations based on tower consumption
+    
+    // Find variant IDs for 1L beers from existing inventory/items data
+    const findVariantIdByName = (searchName: string): string => {
+      for (const [variantId, name] of Object.entries(variantToName)) {
+        if (name.toLowerCase().includes(searchName)) {
+          return variantId;
+        }
+      }
+      return '';
+    };
+    
+    // Check if 1L Red Horse exists in sales, if not and towers sold, create synthetic entry
+    const hasRedHorse1L = Object.keys(itemSales).some(k => {
+      const n = k.toLowerCase();
+      return n.includes('red horse') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr'));
+    });
+    if (!hasRedHorse1L && towerSalesRedHorse > 0) {
+      const variantId = findVariantIdByName('red horse') && findVariantIdByName('1l') ? findVariantIdByName('red horse 1') : '';
+      itemSales['Red Horse 1L (from towers)'] = { name: 'Red Horse 1L (from towers)', variantId, quantity: 0 };
+    }
+    
+    // Check if 1L San Miguel exists in sales
+    const hasSanMiguel1L = Object.keys(itemSales).some(k => {
+      const n = k.toLowerCase();
+      return n.includes('san miguel') && !n.includes('light') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr'));
+    });
+    if (!hasSanMiguel1L && towerSalesSanMiguel > 0) {
+      const variantId = findVariantIdByName('san miguel 1');
+      itemSales['San Miguel 1L (from towers)'] = { name: 'San Miguel 1L (from towers)', variantId, quantity: 0 };
+    }
+    
+    // Check if 1L San Miguel Light exists in sales
+    const hasLight1L = Object.keys(itemSales).some(k => {
+      const n = k.toLowerCase();
+      return n.includes('san miguel') && n.includes('light') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr'));
+    });
+    if (!hasLight1L && towerSalesLight > 0) {
+      const variantId = findVariantIdByName('light 1');
+      itemSales['San Miguel Light 1L (from towers)'] = { name: 'San Miguel Light 1L (from towers)', variantId, quantity: 0 };
+    }
+
+    // Step 6: Calculate recommendations
     const recommendations: SalesItem[] = [];
     
     // Calculate avg per day for proportional extra consumption
@@ -437,28 +480,28 @@ serve(async (req) => {
       
       // Add tower consumption to 1L Red Horse (each tower = 2 x 1L bottles)
       if (nameLower.includes('red horse') && 
-          (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr'))) {
+          (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr') || nameLower.includes('from towers'))) {
         extraPerDay = towersRedHorsePerDay * 2; // Each Red Horse tower = 2 x 1L bottles per day
         if (towerSalesRedHorse > 0) {
-          note = `+${Math.round(extraPerDay * 10) / 10}/day from RH towers`;
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from RH towers (${towerSalesRedHorse} sold)`;
         }
       }
       
       // Add tower consumption to 1L San Miguel (each tower = 2 x 1L bottles)
-      if (nameLower.includes('san miguel') && !nameLower.includes('light') && !nameLower.includes('premium') &&
-          (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr'))) {
+      if (nameLower.includes('san miguel') && !nameLower.includes('light') &&
+          (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr') || nameLower.includes('from towers'))) {
         extraPerDay = towersSanMiguelPerDay * 2; // Each SM tower = 2 x 1L bottles per day
         if (towerSalesSanMiguel > 0) {
-          note = `+${Math.round(extraPerDay * 10) / 10}/day from SM towers`;
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from SM towers (${towerSalesSanMiguel} sold)`;
         }
       }
       
       // Add tower consumption to 1L San Miguel Light (each tower = 2 x 1L bottles)
-      if (nameLower.includes('san miguel') && nameLower.includes('light') &&
-          (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr'))) {
+      if (nameLower.includes('light') &&
+          (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr') || nameLower.includes('from towers'))) {
         extraPerDay = towersLightPerDay * 2; // Each Light tower = 2 x 1L bottles per day
         if (towerSalesLight > 0) {
-          note = `+${Math.round(extraPerDay * 10) / 10}/day from Light towers`;
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from Light towers (${towerSalesLight} sold)`;
         }
       }
       
