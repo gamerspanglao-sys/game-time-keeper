@@ -481,9 +481,14 @@ serve(async (req) => {
       let note = '';
       const nameLower = data.name.toLowerCase();
       
+      // Check if this is a 1L beer position (including synthetic "from towers" entries)
+      const is1LBeer = nameLower.includes('1l') || nameLower.includes('1 l') || 
+                       nameLower.includes('1000') || nameLower.includes('litr') || 
+                       nameLower.includes('from towers') || nameLower.includes('super');
+      
       // Add tower consumption to 1L Red Horse (each tower = 2 x 1L bottles)
-      if (nameLower.includes('red horse') && 
-          (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr') || nameLower.includes('from towers'))) {
+      // Also includes "Red Horse Super" which is the 1L version
+      if (nameLower.includes('red horse') && is1LBeer) {
         extraPerDay = towersRedHorsePerDay * 2; // Each Red Horse tower = 2 x 1L bottles per day
         if (towerSalesRedHorse > 0) {
           note = `+${Math.round(extraPerDay * 10) / 10}/day from RH towers (${towerSalesRedHorse} sold)`;
@@ -491,17 +496,16 @@ serve(async (req) => {
       }
       
       // Add tower consumption to 1L San Miguel (each tower = 2 x 1L bottles)
-      if (nameLower.includes('san miguel') && !nameLower.includes('light') &&
-          (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr') || nameLower.includes('from towers'))) {
+      if (nameLower.includes('san miguel') && !nameLower.includes('light') && is1LBeer) {
         extraPerDay = towersSanMiguelPerDay * 2; // Each SM tower = 2 x 1L bottles per day
         if (towerSalesSanMiguel > 0) {
           note = `+${Math.round(extraPerDay * 10) / 10}/day from SM towers (${towerSalesSanMiguel} sold)`;
+          console.log(`🔍 SM 1L match: name="${data.name}", extraPerDay=${extraPerDay}`);
         }
       }
       
       // Add tower consumption to 1L San Miguel Light (each tower = 2 x 1L bottles)
-      if (nameLower.includes('light') &&
-          (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr') || nameLower.includes('from towers'))) {
+      if (nameLower.includes('light') && is1LBeer) {
         extraPerDay = towersLightPerDay * 2; // Each Light tower = 2 x 1L bottles per day
         if (towerSalesLight > 0) {
           note = `+${Math.round(extraPerDay * 10) / 10}/day from Light towers (${towerSalesLight} sold)`;
