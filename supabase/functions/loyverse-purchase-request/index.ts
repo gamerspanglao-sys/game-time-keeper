@@ -25,16 +25,36 @@ const CASE_SIZES: Record<string, number> = {
   'royal': 24,
 };
 
-// Items to EXCLUDE from purchase orders (services only)
-const EXCLUDED_KEYWORDS = [
-  'billiard', 'playstation', 'vip super', 'vip medium', 'vip comfort',
-  'ps-1', 'ps-2', 'table-1', 'table-2', 'table-3', 'timer', 'hour',
-  'sandwich', 'food', 'chips', 'ice', // Exclude non-drink items
-];
-
-function isExcluded(itemName: string): boolean {
+// Items to INCLUDE in purchase orders (only beer, spirits, cocktails, soft drinks)
+function getCategory(itemName: string): string | null {
   const name = itemName.toLowerCase();
-  return EXCLUDED_KEYWORDS.some(keyword => name.includes(keyword));
+  
+  // Beer - Red Horse, San Miguel variants, Heineken
+  if (name.includes('red horse') || name.includes('san miguel') || name.includes('heineken') ||
+      name.includes('pilsen') || name.includes('pale pilsen')) {
+    return 'beer';
+  }
+  
+  // Spirits - Tanduay
+  if (name.includes('tanduay')) return 'spirits';
+  
+  // Cocktails - Smirnoff Mule, mixed drinks
+  if (name.includes('mule') || name.includes('smirnoff')) return 'cocktails';
+  
+  // Soft drinks - Water, Coke, Sprite, Royal, Tonic, Soda, Juice, Rum Coke
+  if (name.includes('water') || name.includes('coca cola') || name.includes('coke') || 
+      name.includes('sprite') || name.includes('royal') || name.includes('tonic') || 
+      name.includes('soda') || name.includes('juice') || name.includes('juce') ||
+      name.includes('pepsi') || name.includes('rum coke')) {
+    return 'soft';
+  }
+  
+  // Return null for items that should NOT be included
+  return null;
+}
+
+function isIncluded(itemName: string): boolean {
+  return getCategory(itemName) !== null;
 }
 
 function isTower(itemName: string): boolean {
@@ -52,7 +72,6 @@ function getCaseSize(itemName: string): number {
     if (name.includes(key)) return size;
   }
   
-  // Generic detection
   if (name.includes('red horse') && (name.includes('0,5') || name.includes('500') || name.includes('0.5'))) {
     return 12;
   }
@@ -65,19 +84,7 @@ function getCaseSize(itemName: string): number {
   if (name.includes('mule') || name.includes('smirnoff')) return 24;
   if (name.includes('coke') || name.includes('sprite') || name.includes('royal')) return 24;
   
-  return 12; // Default
-}
-
-function getCategory(itemName: string): string {
-  const name = itemName.toLowerCase();
-  if (name.includes('red horse') || name.includes('san miguel') || name.includes('beer') || 
-      name.includes('pilsen') || name.includes('pale') || name.includes('light')) {
-    return 'beer';
-  }
-  if (name.includes('tanduay')) return 'spirits';
-  if (name.includes('mule') || name.includes('smirnoff')) return 'cocktails';
-  if (name.includes('water') || name.includes('coke') || name.includes('sprite') || name.includes('royal')) return 'soft';
-  return 'other';
+  return 12;
 }
 
 interface SalesItem {
@@ -225,9 +232,6 @@ serve(async (req) => {
         const itemName = lineItem.item_name || 'Unknown';
         const qty = lineItem.quantity || 0;
         
-        // Skip excluded items (services)
-        if (isExcluded(itemName)) continue;
-        
         // Count towers separately (each tower = 2 x 1L bottles)
         if (isTower(itemName)) {
           towerSales += qty;
@@ -239,6 +243,9 @@ serve(async (req) => {
           basketSales += qty;
           continue;
         }
+        
+        // Only include beer, spirits, cocktails, soft drinks
+        if (!isIncluded(itemName)) continue;
         
         const key = itemName; // Group by name
         if (!itemSales[key]) {
@@ -285,7 +292,7 @@ serve(async (req) => {
       const toOrder = Math.max(0, recommendedQty - inStock);
       const caseSize = getCaseSize(data.name);
       const casesToOrder = caseSize > 1 ? Math.ceil(toOrder / caseSize) : toOrder;
-      const category = getCategory(data.name);
+      const category = getCategory(data.name) || 'other';
       
       if (totalQty > 0) {
         recommendations.push({
