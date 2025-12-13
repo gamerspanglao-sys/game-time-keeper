@@ -78,18 +78,34 @@ export default function PurchaseRequests() {
     setRemovedItems(prev => new Set([...prev, itemName]));
   };
 
+  // Clean up product names (remove "from towers", "from baskets" suffixes)
+  const cleanProductName = (name: string) => {
+    return name
+      .replace(/\s*\(from towers\)/gi, '')
+      .replace(/\s*\(from baskets\)/gi, '')
+      .trim();
+  };
+
   // Filter based on toggle: show all or only items needing order
-  const filteredRecommendations = data?.recommendations.filter(
-    item => !removedItems.has(item.name) && (showAllItems || item.toOrder > 0)
-  ) || [];
+  const filteredRecommendations = data?.recommendations
+    .filter(item => !removedItems.has(item.name) && (showAllItems || item.toOrder > 0))
+    .sort((a, b) => {
+      // Sort by: category, then by toOrder descending, then by name
+      const categoryOrder = ['beer', 'spirits', 'cocktails', 'soft', 'other'];
+      const catA = categoryOrder.indexOf(a.category);
+      const catB = categoryOrder.indexOf(b.category);
+      if (catA !== catB) return catA - catB;
+      if (b.toOrder !== a.toOrder) return b.toOrder - a.toOrder;
+      return cleanProductName(a.name).localeCompare(cleanProductName(b.name));
+    }) || [];
 
   const exportToCSV = () => {
     if (!data) return;
 
-    const headers = ['Item', 'Category', 'Sold (7d)', 'Avg/Day', 'In Stock', 'Need', 'Case Size', 'Cases'];
+    const headers = ['Item', 'Supplier', 'Sold (3d)', 'Avg/Day', 'In Stock', 'Need', 'Case Size', 'Cases'];
     const rows = filteredRecommendations.map(item => [
-      item.name,
-      CATEGORY_CONFIG[item.category]?.label || item.category,
+      cleanProductName(item.name),
+      item.supplier || 'Other',
       item.totalQuantity,
       item.avgPerDay,
       item.inStock,
@@ -111,44 +127,59 @@ export default function PurchaseRequests() {
   const totalUnits = filteredRecommendations.reduce((sum, item) => sum + item.toOrder, 0);
   const totalCases = filteredRecommendations.reduce((sum, item) => sum + item.casesToOrder, 0);
 
-  // Group by supplier
+  // Group by supplier with proper sorting
+  const supplierOrder = ['San Miguel', 'Spirits Supplier', 'Cocktails Supplier', 'Soft Drinks Supplier', 'Other'];
   const groupedBySupplier = filteredRecommendations.reduce((acc, item) => {
     const supplier = item.supplier || 'Other';
     if (!acc[supplier]) acc[supplier] = [];
     acc[supplier].push(item);
     return acc;
   }, {} as Record<string, PurchaseItem[]>);
+  
+  const sortedSuppliers = Object.keys(groupedBySupplier).sort((a, b) => {
+    return supplierOrder.indexOf(a) - supplierOrder.indexOf(b);
+  });
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Purchase Order</h1>
-          <p className="text-sm text-muted-foreground">Based on 7-day sales vs current stock</p>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            Purchase Order
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Based on {data?.period.days || 3}-day sales analysis
+          </p>
         </div>
         
-        <div className="flex flex-wrap gap-4 items-center">
-          <Button onClick={fetchPurchaseData} disabled={loading} size="lg">
+        <div className="flex flex-wrap gap-3 items-center">
+          <Button 
+            onClick={fetchPurchaseData} 
+            disabled={loading} 
+            size="lg"
+            className="shadow-lg hover:shadow-xl transition-shadow"
+          >
             {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShoppingCart className="h-4 w-4 mr-2" />}
             Generate Order
           </Button>
 
           {data && filteredRecommendations.length > 0 && (
-            <Button variant="outline" onClick={exportToCSV}>
+            <Button variant="outline" onClick={exportToCSV} className="shadow-sm">
               <Download className="h-4 w-4 mr-2" />
-              Export
+              Export CSV
             </Button>
           )}
           
           {data && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
               <Switch 
                 id="show-all" 
                 checked={showAllItems} 
                 onCheckedChange={setShowAllItems}
               />
-              <Label htmlFor="show-all" className="text-sm">
-                {showAllItems ? "All items" : "Only need order"}
+              <Label htmlFor="show-all" className="text-sm cursor-pointer">
+                {showAllItems ? "All items" : "Need order only"}
               </Label>
             </div>
           )}
@@ -157,116 +188,155 @@ export default function PurchaseRequests() {
 
       {data && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="bg-gradient-to-br from-card to-muted/30 border-0 shadow-md">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Analysis</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Analysis Period
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{data.period.days} days</p>
-                <p className="text-xs text-muted-foreground">+{data.period.deliveryBuffer || 2} days delivery</p>
-                {(data.towerSales || 0) > 0 && (
-                  <p className="text-xs text-primary">🗼 Towers: {data.towerSales} (×2L)</p>
-                )}
-                {(data.basketSales || 0) > 0 && (
-                  <p className="text-xs text-primary">🧺 Baskets: {data.basketSales}</p>
-                )}
+                <p className="text-3xl font-bold">{data.period.days} <span className="text-lg font-normal text-muted-foreground">days</span></p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  +{data.period.deliveryBuffer || 2} days buffer
+                </p>
+                <div className="flex gap-3 mt-2 text-xs">
+                  {(data.towerSales || 0) > 0 && (
+                    <span className="text-amber-500">🗼 {data.towerSales} towers</span>
+                  )}
+                  {(data.basketSales || 0) > 0 && (
+                    <span className="text-amber-500">🧺 {data.basketSales} baskets</span>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="bg-gradient-to-br from-card to-muted/30 border-0 shadow-md">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Receipts</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Receipts Analyzed
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{data.totalReceipts.toLocaleString()}</p>
+                <p className="text-3xl font-bold">{data.totalReceipts.toLocaleString()}</p>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 shadow-md">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Units to Order</CardTitle>
+                <CardTitle className="text-xs font-medium text-primary uppercase tracking-wide">
+                  Units to Order
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-primary">{totalUnits}</p>
+                <p className="text-3xl font-bold text-primary">{totalUnits}</p>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="bg-gradient-to-br from-card to-muted/30 border-0 shadow-md">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Cases Total</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Cases Total
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{totalCases}</p>
+                <p className="text-3xl font-bold">{totalCases}</p>
               </CardContent>
             </Card>
           </div>
 
-          {Object.entries(groupedBySupplier).map(([supplier, items]) => {
+          {/* Supplier Groups */}
+
+          {sortedSuppliers.map((supplier) => {
+            const items = groupedBySupplier[supplier];
             const supplierConfig = SUPPLIER_CONFIG[supplier] || SUPPLIER_CONFIG['Other'];
             const typedItems = items as PurchaseItem[];
+            const supplierCases = typedItems.reduce((sum, item) => sum + item.casesToOrder, 0);
             
             return (
-              <Card key={supplier} className={cn("border", supplierConfig.color.split(' ')[2])}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2">
-                    <Badge className={supplierConfig.color}>{supplierConfig.label}</Badge>
-                    <span className="text-muted-foreground text-sm font-normal">
-                      {typedItems.length} items
-                    </span>
+              <Card key={supplier} className="shadow-md border-0 overflow-hidden">
+                <CardHeader className="pb-3 bg-gradient-to-r from-muted/50 to-transparent">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Badge className={cn("text-sm px-3 py-1", supplierConfig.color)}>
+                        {supplierConfig.label}
+                      </Badge>
+                      <span className="text-muted-foreground text-sm font-normal">
+                        {typedItems.length} items
+                      </span>
+                    </div>
+                    <div className="text-sm font-medium text-muted-foreground">
+                      {supplierCases} cases
+                    </div>
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {typedItems.map((item, index) => {
-                      const categoryConfig = CATEGORY_CONFIG[item.category] || CATEGORY_CONFIG['other'];
-                      return (
-                        <div
-                          key={index}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-muted/50 gap-2"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium flex items-center gap-2">
-                              {item.name}
-                              <Badge variant="outline" className={cn("text-xs", categoryConfig.color)}>
-                                {categoryConfig.label}
-                              </Badge>
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              Sold: <span className="font-medium text-foreground">{item.totalQuantity}</span> (3d)
-                              {item.note && <span className="text-primary ml-1">{item.note}</span>}
-                              {' • '}
+                <CardContent className="pt-4">
+                  <div className="space-y-3">
+                    {typedItems.map((item, index) => (
+                      <div
+                        key={index}
+                        className={cn(
+                          "flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl gap-3 transition-all",
+                          item.toOrder > 0 
+                            ? "bg-gradient-to-r from-primary/5 to-transparent border border-primary/10" 
+                            : "bg-muted/30"
+                        )}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-base">
+                            {cleanProductName(item.name)}
+                          </div>
+                          <div className="text-sm text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                            <span>
+                              Sold: <span className="font-medium text-foreground">{item.totalQuantity}</span>
+                            </span>
+                            <span>
                               Avg: <span className="font-medium text-foreground">{item.avgPerDay}</span>/day
-                              {' • '}
+                            </span>
+                            <span>
                               Stock: <span className={cn(
                                 "font-medium",
-                                item.inStock >= item.recommendedQty ? "text-success" : item.inStock > 0 ? "text-warning" : "text-destructive"
+                                item.inStock >= item.recommendedQty ? "text-green-500" : item.inStock > 0 ? "text-amber-500" : "text-red-500"
                               )}>{item.inStock}</span>
-                            </div>
+                            </span>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-center min-w-[60px]">
-                              <div className="text-xs text-muted-foreground">NEED</div>
-                              <div className="text-lg font-bold text-primary">{item.toOrder}</div>
+                          {item.note && (
+                            <div className="text-xs text-primary/80 mt-1 italic">
+                              {item.note}
                             </div>
-                            {item.caseSize > 1 && (
-                              <div className="text-center min-w-[80px]">
-                                <div className="text-xs text-muted-foreground">CASES ({item.caseSize})</div>
-                                <div className="text-lg font-bold">{item.casesToOrder}</div>
-                              </div>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
-                              onClick={() => removeItem(item.name)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
+                          )}
                         </div>
-                      );
-                    })}
+                        <div className="flex items-center gap-4">
+                          <div className={cn(
+                            "text-center px-4 py-2 rounded-lg min-w-[70px]",
+                            item.toOrder > 0 ? "bg-primary/10" : "bg-muted/50"
+                          )}>
+                            <div className="text-xs text-muted-foreground font-medium">NEED</div>
+                            <div className={cn(
+                              "text-xl font-bold",
+                              item.toOrder > 0 ? "text-primary" : "text-muted-foreground"
+                            )}>{item.toOrder}</div>
+                          </div>
+                          {item.caseSize > 1 && (
+                            <div className="text-center px-4 py-2 rounded-lg bg-muted/50 min-w-[90px]">
+                              <div className="text-xs text-muted-foreground font-medium">
+                                CASES <span className="opacity-60">({item.caseSize})</span>
+                              </div>
+                              <div className="text-xl font-bold">{item.casesToOrder}</div>
+                            </div>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 rounded-full"
+                            onClick={() => removeItem(item.name)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
