@@ -6,48 +6,97 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Case sizes for different product types
-const CASE_SIZES: Record<string, number> = {
-  'beer_liter': 6,      // Литровое пиво - 6 шт в ящике
-  'beer_small': 24,     // Остальное пиво - 24 шт
-  'water': 12,          // Вода - 12 шт
-  'soft_drink': 24,     // Софт дринки - 24 шт
-  'default': 12,        // По умолчанию
+// Product categories and case sizes
+const PRODUCT_CONFIG: Record<string, { caseSize: number; category: string }> = {
+  // Red Horse products
+  'red horse 0,5': { caseSize: 12, category: 'beer' },
+  'red horse 500': { caseSize: 12, category: 'beer' },
+  'red horse 1': { caseSize: 6, category: 'beer' },
+  'red horse 1l': { caseSize: 6, category: 'beer' },
+  'beer tower red horse': { caseSize: 1, category: 'beer' },  // Tower is 1 unit
+  'basket red horse': { caseSize: 1, category: 'beer' },      // Basket is 1 unit
+  
+  // San Miguel products
+  'san miguel light': { caseSize: 24, category: 'beer' },
+  'san miguel pale': { caseSize: 24, category: 'beer' },
+  'san miguel pilsen': { caseSize: 24, category: 'beer' },
+  
+  // Soft drinks / cocktails
+  'smirnoff mule': { caseSize: 24, category: 'drinks' },
+  'smirnoff': { caseSize: 24, category: 'drinks' },
+  
+  // Water
+  'water': { caseSize: 12, category: 'drinks' },
+  
+  // Ice - per bag/pack
+  'ice': { caseSize: 1, category: 'supplies' },
+  
+  // Chips/Snacks
+  'chips': { caseSize: 12, category: 'snacks' },
 };
 
-// Keywords to detect product type
-function detectProductType(itemName: string): string {
+// Items to EXCLUDE from purchase orders (services, not products)
+const EXCLUDED_ITEMS = [
+  'billiard',
+  'playstation',
+  'vip super',
+  'vip medium', 
+  'vip comfort',
+  'ps-1',
+  'ps-2',
+  'table-1',
+  'table-2',
+  'table-3',
+  'timer',
+  '1 hour',
+  'hour',
+];
+
+function getProductConfig(itemName: string): { caseSize: number; category: string } | null {
   const name = itemName.toLowerCase();
   
-  // Check for liter beer (1L, 1 liter, литр)
-  if ((name.includes('beer') || name.includes('пиво') || name.includes('red horse') || name.includes('san miguel')) && 
-      (name.includes('1l') || name.includes('1 l') || name.includes('литр') || name.includes('liter') || name.includes('1000'))) {
-    return 'beer_liter';
+  // Check if excluded
+  for (const excluded of EXCLUDED_ITEMS) {
+    if (name.includes(excluded)) {
+      return null;
+    }
   }
   
-  // Check for other beer
-  if (name.includes('beer') || name.includes('пиво') || name.includes('red horse') || name.includes('san miguel') || 
-      name.includes('pilsen') || name.includes('pale') || name.includes('tower') || name.includes('basket')) {
-    return 'beer_small';
+  // Try exact match first
+  for (const [key, config] of Object.entries(PRODUCT_CONFIG)) {
+    if (name.includes(key)) {
+      return config;
+    }
   }
   
-  // Check for water
-  if (name.includes('water') || name.includes('вода') || name.includes('mineral')) {
-    return 'water';
+  // Generic detection
+  if (name.includes('red horse') && (name.includes('0,5') || name.includes('500') || name.includes('0.5'))) {
+    return { caseSize: 12, category: 'beer' };
+  }
+  if (name.includes('red horse') && (name.includes('1l') || name.includes('1 l') || name.includes('liter'))) {
+    return { caseSize: 6, category: 'beer' };
+  }
+  if (name.includes('red horse') || name.includes('san miguel') || name.includes('beer') || name.includes('pilsen') || name.includes('pale')) {
+    return { caseSize: 24, category: 'beer' };
+  }
+  if (name.includes('water')) {
+    return { caseSize: 12, category: 'drinks' };
+  }
+  if (name.includes('mule') || name.includes('smirnoff') || name.includes('cocktail')) {
+    return { caseSize: 24, category: 'drinks' };
+  }
+  if (name.includes('chips') || name.includes('snack')) {
+    return { caseSize: 12, category: 'snacks' };
+  }
+  if (name.includes('ice')) {
+    return { caseSize: 1, category: 'supplies' };
+  }
+  if (name.includes('sandwich') || name.includes('food')) {
+    return { caseSize: 1, category: 'food' };
   }
   
-  // Check for soft drinks
-  if (name.includes('coke') || name.includes('cola') || name.includes('sprite') || name.includes('fanta') ||
-      name.includes('soda') || name.includes('juice') || name.includes('mule') || name.includes('smirnoff')) {
-    return 'soft_drink';
-  }
-  
-  return 'default';
-}
-
-function getCaseSize(itemName: string): number {
-  const productType = detectProductType(itemName);
-  return CASE_SIZES[productType] || CASE_SIZES['default'];
+  // Default - include but with case size 1
+  return { caseSize: 1, category: 'other' };
 }
 
 interface SalesItem {
@@ -55,10 +104,11 @@ interface SalesItem {
   totalQuantity: number;
   totalAmount: number;
   avgPerDay: number;
-  recommendedQty: number;  // With 20% buffer
+  recommendedQty: number;
   caseSize: number;
   casesToOrder: number;
-  productType: string;
+  unitsToOrder: number;
+  category: string;
 }
 
 serve(async (req) => {
@@ -125,6 +175,10 @@ serve(async (req) => {
       for (const lineItem of receipt.line_items || []) {
         const itemName = lineItem.item_name || 'Unknown';
         
+        // Skip excluded items
+        const config = getProductConfig(itemName);
+        if (!config) continue;
+        
         if (!itemSales[itemName]) {
           itemSales[itemName] = { quantity: 0, amount: 0 };
         }
@@ -134,32 +188,44 @@ serve(async (req) => {
       }
     }
 
-    // Calculate recommendations
+    // Calculate recommendations for NEXT DAY
     const recommendations: SalesItem[] = [];
     
     for (const [name, data] of Object.entries(itemSales)) {
-      const avgPerDay = data.quantity / daysDiff;
-      const recommendedQty = avgPerDay * 1.2; // +20% buffer
-      const caseSize = getCaseSize(name);
-      const casesToOrder = Math.ceil(recommendedQty / caseSize);
-      const productType = detectProductType(name);
+      const config = getProductConfig(name);
+      if (!config) continue;
       
-      recommendations.push({
-        name,
-        totalQuantity: data.quantity,
-        totalAmount: data.amount,
-        avgPerDay: Math.round(avgPerDay * 100) / 100,
-        recommendedQty: Math.round(recommendedQty * 100) / 100,
-        caseSize,
-        casesToOrder: Math.max(0, casesToOrder),
-        productType,
-      });
+      const avgPerDay = data.quantity / daysDiff;
+      const recommendedQty = Math.ceil(avgPerDay * 1.2); // +20% buffer, rounded up
+      const unitsToOrder = Math.max(1, recommendedQty); // At least 1 unit
+      const casesToOrder = Math.ceil(unitsToOrder / config.caseSize);
+      
+      // Only include items with actual sales
+      if (data.quantity > 0) {
+        recommendations.push({
+          name,
+          totalQuantity: data.quantity,
+          totalAmount: data.amount,
+          avgPerDay: Math.round(avgPerDay * 10) / 10,
+          recommendedQty,
+          caseSize: config.caseSize,
+          casesToOrder,
+          unitsToOrder,
+          category: config.category,
+        });
+      }
     }
 
-    // Sort by cases to order (descending)
-    recommendations.sort((a, b) => b.casesToOrder - a.casesToOrder);
+    // Sort by category then by units to order (descending)
+    recommendations.sort((a, b) => {
+      if (a.category !== b.category) {
+        const categoryOrder = ['beer', 'drinks', 'snacks', 'supplies', 'food', 'other'];
+        return categoryOrder.indexOf(a.category) - categoryOrder.indexOf(b.category);
+      }
+      return b.unitsToOrder - a.unitsToOrder;
+    });
 
-    console.log(`✅ Analyzed ${Object.keys(itemSales).length} items`);
+    console.log(`✅ Analyzed ${recommendations.length} products (excluded services)`);
 
     return new Response(JSON.stringify({
       success: true,

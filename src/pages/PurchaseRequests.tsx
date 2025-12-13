@@ -3,7 +3,7 @@ import { format, subDays } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Download, Package, TrendingUp, Loader2, ShoppingCart, X } from "lucide-react";
+import { Download, Package, TrendingUp, Loader2, ShoppingCart, X, Beer, Droplets, Cookie, Snowflake } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -16,7 +16,8 @@ interface PurchaseItem {
   recommendedQty: number;
   caseSize: number;
   casesToOrder: number;
-  productType: string;
+  unitsToOrder: number;
+  category: string;
 }
 
 interface PurchaseData {
@@ -29,20 +30,13 @@ interface PurchaseData {
   recommendations: PurchaseItem[];
 }
 
-const PRODUCT_TYPE_LABELS: Record<string, string> = {
-  'beer_liter': 'Beer (1L)',
-  'beer_small': 'Beer',
-  'water': 'Water',
-  'soft_drink': 'Soft Drinks',
-  'default': 'Other',
-};
-
-const PRODUCT_TYPE_COLORS: Record<string, string> = {
-  'beer_liter': 'bg-amber-500/20 text-amber-500',
-  'beer_small': 'bg-yellow-500/20 text-yellow-500',
-  'water': 'bg-blue-500/20 text-blue-500',
-  'soft_drink': 'bg-green-500/20 text-green-500',
-  'default': 'bg-muted text-muted-foreground',
+const CATEGORY_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
+  'beer': { label: 'Beer', icon: Beer, color: 'bg-amber-500/20 text-amber-500' },
+  'drinks': { label: 'Drinks', icon: Droplets, color: 'bg-blue-500/20 text-blue-500' },
+  'snacks': { label: 'Snacks', icon: Cookie, color: 'bg-orange-500/20 text-orange-500' },
+  'supplies': { label: 'Supplies', icon: Snowflake, color: 'bg-cyan-500/20 text-cyan-500' },
+  'food': { label: 'Food', icon: Cookie, color: 'bg-green-500/20 text-green-500' },
+  'other': { label: 'Other', icon: Package, color: 'bg-muted text-muted-foreground' },
 };
 
 export default function PurchaseRequests() {
@@ -77,7 +71,7 @@ export default function PurchaseRequests() {
       if (!response.success) throw new Error(response.error);
 
       setData(response);
-      toast.success(`Analyzed ${response.totalReceipts} receipts from last 30 days`);
+      toast.success(`Analyzed ${response.totalReceipts} receipts, ${response.recommendations.length} products`);
     } catch (error: any) {
       console.error('Error fetching purchase data:', error);
       toast.error(error.message || 'Failed to fetch data');
@@ -91,19 +85,19 @@ export default function PurchaseRequests() {
   };
 
   const filteredRecommendations = data?.recommendations.filter(
-    item => item.casesToOrder > 0 && !removedItems.has(item.name)
+    item => !removedItems.has(item.name)
   ) || [];
 
   const exportToCSV = () => {
     if (!data) return;
 
-    const headers = ['Item', 'Type', 'Total Sold', 'Avg/Day', 'Recommended', 'Case Size', 'Cases to Order'];
+    const headers = ['Item', 'Category', 'Sold (30d)', 'Avg/Day', 'Order Units', 'Case Size', 'Cases'];
     const rows = filteredRecommendations.map(item => [
       item.name,
-      PRODUCT_TYPE_LABELS[item.productType] || item.productType,
+      CATEGORY_CONFIG[item.category]?.label || item.category,
       item.totalQuantity,
       item.avgPerDay,
-      item.recommendedQty,
+      item.unitsToOrder,
       item.caseSize,
       item.casesToOrder,
     ]);
@@ -113,23 +107,33 @@ export default function PurchaseRequests() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `purchase-request-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `purchase-order-${format(new Date(), 'yyyy-MM-dd')}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
+  const totalUnits = filteredRecommendations.reduce((sum, item) => sum + item.unitsToOrder, 0);
   const totalCases = filteredRecommendations.reduce((sum, item) => sum + item.casesToOrder, 0);
-  const itemsToOrder = filteredRecommendations.length;
+
+  // Group by category
+  const groupedItems = filteredRecommendations.reduce((acc, item) => {
+    if (!acc[item.category]) acc[item.category] = [];
+    acc[item.category].push(item);
+    return acc;
+  }, {} as Record<string, PurchaseItem[]>);
 
   return (
     <div className="p-4 space-y-4">
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <h1 className="text-2xl font-bold">Purchase Requests</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Purchase Order</h1>
+          <p className="text-sm text-muted-foreground">Tomorrow's order based on 30-day average + 20%</p>
+        </div>
         
         <div className="flex flex-wrap gap-2 items-center">
-          <Button onClick={fetchPurchaseData} disabled={loading}>
+          <Button onClick={fetchPurchaseData} disabled={loading} size="lg">
             {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShoppingCart className="h-4 w-4 mr-2" />}
-            Generate (30 days)
+            Generate Order
           </Button>
 
           {data && filteredRecommendations.length > 0 && (
@@ -146,7 +150,7 @@ export default function PurchaseRequests() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Period</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Analysis Period</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-bold">{data.period.days} days</p>
@@ -155,94 +159,103 @@ export default function PurchaseRequests() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Receipts Analyzed</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Receipts</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{data.totalReceipts}</p>
+                <p className="text-2xl font-bold">{data.totalReceipts.toLocaleString()}</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Items to Order</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Units to Order</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{itemsToOrder}</p>
+                <p className="text-2xl font-bold text-primary">{totalUnits}</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total Cases</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Cases Total</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-primary">{totalCases}</p>
+                <p className="text-2xl font-bold">{totalCases}</p>
               </CardContent>
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Purchase Request (Avg + 20% buffer)
-                {removedItems.size > 0 && (
-                  <Badge variant="secondary" className="ml-2">
-                    {removedItems.size} removed
-                  </Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {filteredRecommendations.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-muted/50 gap-2"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium truncate">{item.name}</span>
-                        <Badge variant="outline" className={cn("text-xs", PRODUCT_TYPE_COLORS[item.productType])}>
-                          {PRODUCT_TYPE_LABELS[item.productType] || item.productType}
-                        </Badge>
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        Sold: {item.totalQuantity} • Avg/day: {item.avgPerDay} • Case: {item.caseSize}pcs
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <div className="text-sm text-muted-foreground">Recommended</div>
-                        <div className="font-medium">{item.recommendedQty} pcs</div>
-                      </div>
-                      <div className="text-right min-w-[80px]">
-                        <div className="text-xs text-muted-foreground">ORDER</div>
-                        <div className="text-xl font-bold text-primary">{item.casesToOrder} cases</div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => removeItem(item.name)}
+          {Object.entries(groupedItems).map(([category, items]) => {
+            const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG['other'];
+            const CategoryIcon = config.icon;
+            
+            return (
+              <Card key={category}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2">
+                    <CategoryIcon className="h-5 w-5" />
+                    {config.label}
+                    <Badge variant="secondary">{items.length} items</Badge>
+                    {removedItems.size > 0 && (
+                      <Badge variant="outline" className="ml-auto">
+                        {removedItems.size} removed
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {items.map((item, index) => (
+                      <div
+                        key={index}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-muted/50 gap-2"
                       >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium">{item.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            Sold: <span className="font-medium text-foreground">{item.totalQuantity}</span> in 30 days
+                            {' • '}
+                            Avg: <span className="font-medium text-foreground">{item.avgPerDay}</span>/day
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-center min-w-[60px]">
+                            <div className="text-xs text-muted-foreground">UNITS</div>
+                            <div className="text-lg font-bold">{item.unitsToOrder}</div>
+                          </div>
+                          {item.caseSize > 1 && (
+                            <div className="text-center min-w-[70px]">
+                              <div className="text-xs text-muted-foreground">CASES ({item.caseSize}pcs)</div>
+                              <div className="text-lg font-bold text-primary">{item.casesToOrder}</div>
+                            </div>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                            onClick={() => removeItem(item.name)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </CardContent>
+              </Card>
+            );
+          })}
 
-                {filteredRecommendations.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    {removedItems.size > 0 
-                      ? "All items removed. Click Generate to refresh the list."
-                      : "No items need ordering based on current sales data"
-                    }
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          {filteredRecommendations.length === 0 && (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                {removedItems.size > 0 
+                  ? "All items removed. Click Generate Order to refresh."
+                  : "No products to order based on sales data."
+                }
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
 
@@ -250,12 +263,12 @@ export default function PurchaseRequests() {
         <Card>
           <CardContent className="py-12 text-center">
             <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Generate Purchase Request</h3>
+            <h3 className="text-lg font-medium mb-2">Generate Purchase Order</h3>
             <p className="text-muted-foreground mb-4">
-              Click Generate to analyze sales from the last 30 days and create purchase recommendations.
+              Click Generate Order to analyze your last 30 days of sales and create tomorrow's purchase order.
             </p>
             <p className="text-sm text-muted-foreground">
-              Recommendations include a 20% buffer above average daily sales.
+              Order includes 20% buffer above daily average. You can remove items you don't need.
             </p>
           </CardContent>
         </Card>
