@@ -13,9 +13,13 @@ const CASE_SIZES: Record<string, number> = {
   'red horse 0.5': 12,
   'red horse 1': 6,
   'red horse 1l': 6,
-  'san miguel light': 24,
+  'red horse super': 6, // 1L bottles
+  'san miguel 1l': 6,   // 1L bottles
+  'san miguel light 1l': 6, // 1L bottles
+  'san miguel light': 24, // small bottles
   'san miguel pale': 24,
   'san miguel pilsen': 24,
+  'san miguel': 24,
   'tanduay': 12,
   'smirnoff mule': 24,
   'smirnoff': 24,
@@ -23,6 +27,9 @@ const CASE_SIZES: Record<string, number> = {
   'coke': 24,
   'sprite': 24,
   'royal': 24,
+  '1l': 6,  // generic 1L = 6 per case
+  'super': 6, // Red Horse Super = 1L = 6 per case
+  'litr': 6,
 };
 
 // ============ INCLUSION LIST (explicit whitelist) ============
