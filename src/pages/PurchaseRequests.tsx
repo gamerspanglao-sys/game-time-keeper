@@ -3,14 +3,13 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Download, Package, TrendingUp, Loader2, ShoppingCart, X, Beer, Droplets, Cookie, Snowflake } from "lucide-react";
+import { Download, Package, TrendingUp, Loader2, ShoppingCart, X, Beer, Droplets } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 interface PurchaseItem {
   name: string;
-  itemId: string;
   totalQuantity: number;
   avgPerDay: number;
   recommendedQty: number;
@@ -19,19 +18,22 @@ interface PurchaseItem {
   caseSize: number;
   casesToOrder: number;
   category: string;
+  note?: string;
 }
 
 interface PurchaseData {
   period: { days: number };
   totalReceipts: number;
+  towerSales?: number;
+  basketSales?: number;
   recommendations: PurchaseItem[];
 }
 
 const CATEGORY_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
   'beer': { label: 'Beer', icon: Beer, color: 'bg-amber-500/20 text-amber-500' },
-  'drinks': { label: 'Drinks', icon: Droplets, color: 'bg-blue-500/20 text-blue-500' },
-  'snacks': { label: 'Snacks', icon: Cookie, color: 'bg-orange-500/20 text-orange-500' },
-  'supplies': { label: 'Supplies', icon: Snowflake, color: 'bg-cyan-500/20 text-cyan-500' },
+  'spirits': { label: 'Spirits (Tanduay)', icon: Droplets, color: 'bg-orange-500/20 text-orange-500' },
+  'cocktails': { label: 'Cocktails', icon: Droplets, color: 'bg-pink-500/20 text-pink-500' },
+  'soft': { label: 'Soft Drinks', icon: Droplets, color: 'bg-blue-500/20 text-blue-500' },
   'other': { label: 'Other', icon: Package, color: 'bg-muted text-muted-foreground' },
 };
 
@@ -129,12 +131,18 @@ export default function PurchaseRequests() {
       {data && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
+          <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Period</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-bold">{data.period.days} days</p>
+                {(data.towerSales || 0) > 0 && (
+                  <p className="text-xs text-muted-foreground">Towers: {data.towerSales}</p>
+                )}
+                {(data.basketSales || 0) > 0 && (
+                  <p className="text-xs text-muted-foreground">Baskets: {data.basketSales}</p>
+                )}
               </CardContent>
             </Card>
 
@@ -190,12 +198,13 @@ export default function PurchaseRequests() {
                           <div className="font-medium">{item.name}</div>
                           <div className="text-sm text-muted-foreground">
                             Sold: <span className="font-medium text-foreground">{item.totalQuantity}</span> (7d)
+                            {item.note && <span className="text-primary ml-1">{item.note}</span>}
                             {' • '}
                             Avg: <span className="font-medium text-foreground">{item.avgPerDay}</span>/day
                             {' • '}
                             Stock: <span className={cn(
                               "font-medium",
-                              item.inStock > item.recommendedQty ? "text-success" : item.inStock > 0 ? "text-warning" : "text-destructive"
+                              item.inStock >= item.recommendedQty ? "text-success" : item.inStock > 0 ? "text-warning" : "text-destructive"
                             )}>{item.inStock}</span>
                           </div>
                         </div>
