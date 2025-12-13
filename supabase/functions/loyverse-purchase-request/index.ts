@@ -360,7 +360,10 @@ serve(async (req) => {
 
     // Step 4: Aggregate sales by item
     const itemSales: Record<string, { name: string; variantId: string; quantity: number }> = {};
-    let towerSales = 0; // Count tower sales to add to 1L beer
+    let towerSales = 0; // Total tower sales
+    let towerSalesRedHorse = 0; // Towers specifically Red Horse
+    let towerSalesSanMiguel = 0; // Towers specifically San Miguel
+    let towerSalesLight = 0; // Towers specifically San Miguel Light
     let basketSales = 0; // Total basket sales (all types)
     let basketSalesRedHorse = 0; // Baskets specifically with Red Horse
     let basketSalesSanMiguel = 0; // Baskets specifically with San Miguel
@@ -373,8 +376,16 @@ serve(async (req) => {
         const itemName = lineItem.item_name || 'Unknown';
         const qty = lineItem.quantity || 0;
         
-        // Count towers separately (each tower = 2 x 1L bottles)
+        // Count towers separately and split by beer type (each tower = 2 x 1L bottles)
         if (isTower(itemName)) {
+          const lower = itemName.toLowerCase();
+          if (lower.includes('red horse')) {
+            towerSalesRedHorse += qty;
+          } else if (lower.includes('light')) {
+            towerSalesLight += qty;
+          } else if (lower.includes('san miguel')) {
+            towerSalesSanMiguel += qty;
+          }
           towerSales += qty;
           continue;
         }
@@ -384,7 +395,7 @@ serve(async (req) => {
           const lower = itemName.toLowerCase();
           if (lower.includes('red horse')) {
             basketSalesRedHorse += qty;
-          } else if (lower.includes('san miguel') && lower.includes('light')) {
+          } else if (lower.includes('light')) {
             basketSalesLight += qty;
           } else if (lower.includes('san miguel')) {
             basketSalesSanMiguel += qty;
@@ -411,8 +422,10 @@ serve(async (req) => {
     // Step 5: Calculate recommendations
     const recommendations: SalesItem[] = [];
     
-    // Calculate avg baskets/towers per day for proportional extra consumption
-    const towersPerDay = towerSales / ANALYSIS_DAYS;
+    // Calculate avg per day for proportional extra consumption
+    const towersRedHorsePerDay = towerSalesRedHorse / ANALYSIS_DAYS;
+    const towersSanMiguelPerDay = towerSalesSanMiguel / ANALYSIS_DAYS;
+    const towersLightPerDay = towerSalesLight / ANALYSIS_DAYS;
     const basketsRedHorsePerDay = basketSalesRedHorse / ANALYSIS_DAYS;
     const basketsSanMiguelPerDay = basketSalesSanMiguel / ANALYSIS_DAYS;
     const basketsLightPerDay = basketSalesLight / ANALYSIS_DAYS;
@@ -422,12 +435,30 @@ serve(async (req) => {
       let note = '';
       const nameLower = data.name.toLowerCase();
       
-      // Add tower consumption to 1L Red Horse (each tower = 2L = 2 x 1L bottles)
+      // Add tower consumption to 1L Red Horse (each tower = 2 x 1L bottles)
       if (nameLower.includes('red horse') && 
           (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr'))) {
-        extraPerDay = towersPerDay * 2; // Each tower = 2 x 1L bottles per day
-        if (towerSales > 0) {
-          note = `+${Math.round(extraPerDay * 10) / 10}/day from towers`;
+        extraPerDay = towersRedHorsePerDay * 2; // Each Red Horse tower = 2 x 1L bottles per day
+        if (towerSalesRedHorse > 0) {
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from RH towers`;
+        }
+      }
+      
+      // Add tower consumption to 1L San Miguel (each tower = 2 x 1L bottles)
+      if (nameLower.includes('san miguel') && !nameLower.includes('light') && !nameLower.includes('premium') &&
+          (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr'))) {
+        extraPerDay = towersSanMiguelPerDay * 2; // Each SM tower = 2 x 1L bottles per day
+        if (towerSalesSanMiguel > 0) {
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from SM towers`;
+        }
+      }
+      
+      // Add tower consumption to 1L San Miguel Light (each tower = 2 x 1L bottles)
+      if (nameLower.includes('san miguel') && nameLower.includes('light') &&
+          (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr'))) {
+        extraPerDay = towersLightPerDay * 2; // Each Light tower = 2 x 1L bottles per day
+        if (towerSalesLight > 0) {
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from Light towers`;
         }
       }
       
@@ -497,7 +528,10 @@ serve(async (req) => {
 
     console.log(`✅ Analyzed ${recommendations.length} products`);
     console.log(
-      `🍺 Towers sold: ${towerSales}, Baskets RH: ${basketSalesRedHorse}, SM: ${basketSalesSanMiguel}, Light: ${basketSalesLight}, Total: ${basketSales}`,
+      `🍺 Towers RH: ${towerSalesRedHorse}, SM: ${towerSalesSanMiguel}, Light: ${towerSalesLight}, Total: ${towerSales}`,
+    );
+    console.log(
+      `🍺 Baskets RH: ${basketSalesRedHorse}, SM: ${basketSalesSanMiguel}, Light: ${basketSalesLight}, Total: ${basketSales}`,
     );
 
     return new Response(JSON.stringify({
@@ -505,6 +539,9 @@ serve(async (req) => {
       period: { days: ANALYSIS_DAYS, deliveryBuffer: DELIVERY_BUFFER_DAYS },
       totalReceipts: allReceipts.length,
       towerSales,
+      towerSalesRedHorse,
+      towerSalesSanMiguel,
+      towerSalesLight,
       basketSales,
       basketSalesRedHorse,
       basketSalesSanMiguel,
