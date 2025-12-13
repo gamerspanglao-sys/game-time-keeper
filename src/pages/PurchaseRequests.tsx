@@ -24,7 +24,7 @@ interface PurchaseItem {
 }
 
 interface PurchaseData {
-  period: { days: number };
+  period: { days: number; deliveryBuffer?: number };
   totalReceipts: number;
   towerSales?: number;
   basketSales?: number;
@@ -150,15 +150,16 @@ export default function PurchaseRequests() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Period</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Analysis</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-bold">{data.period.days} days</p>
+                <p className="text-xs text-muted-foreground">+{data.period.deliveryBuffer || 2} days delivery</p>
                 {(data.towerSales || 0) > 0 && (
-                  <p className="text-xs text-muted-foreground">Towers: {data.towerSales}</p>
+                  <p className="text-xs text-primary">🗼 Towers: {data.towerSales} (×2L)</p>
                 )}
                 {(data.basketSales || 0) > 0 && (
-                  <p className="text-xs text-muted-foreground">Baskets: {data.basketSales}</p>
+                  <p className="text-xs text-primary">🧺 Baskets: {data.basketSales}</p>
                 )}
               </CardContent>
             </Card>

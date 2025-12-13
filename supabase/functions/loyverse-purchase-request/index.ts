@@ -202,14 +202,17 @@ serve(async (req) => {
       throw new Error('LOYVERSE_ACCESS_TOKEN not configured');
     }
 
-    // Calculate 7 days period
+    // Calculate 3 days period (user requested shorter average)
+    const ANALYSIS_DAYS = 3;
+    const DELIVERY_BUFFER_DAYS = 2; // Order tomorrow, delivery day after tomorrow
+    
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 7);
+    startDate.setDate(startDate.getDate() - ANALYSIS_DAYS);
     startDate.setHours(5, 0, 0, 0);
     endDate.setHours(5, 0, 59, 999);
 
-    console.log(`📊 Analyzing sales from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    console.log(`📊 Analyzing sales from ${startDate.toISOString()} to ${endDate.toISOString()} (${ANALYSIS_DAYS} days + ${DELIVERY_BUFFER_DAYS} days delivery buffer)`);
 
     // Step 1: Fetch current inventory
     console.log('📦 Fetching inventory...');
@@ -351,33 +354,34 @@ serve(async (req) => {
 
     // Step 5: Calculate recommendations
     const recommendations: SalesItem[] = [];
-    const daysDiff = 7;
     
     for (const [key, data] of Object.entries(itemSales)) {
       let extraQty = 0;
       let note = '';
       
-      // Add tower consumption to 1L Red Horse
+      // Add tower consumption to 1L Red Horse (each tower = 2L = 2 x 1L bottles)
       if (data.name.toLowerCase().includes('red horse') && 
-          (data.name.toLowerCase().includes('1l') || data.name.toLowerCase().includes('1 l') || data.name.toLowerCase().includes('1000'))) {
-        extraQty = towerSales * 2; // Each tower = 2 bottles
+          (data.name.toLowerCase().includes('1l') || data.name.toLowerCase().includes('1 l') || data.name.toLowerCase().includes('1000') || data.name.toLowerCase().includes('litr'))) {
+        extraQty = towerSales * 2; // Each tower = 2L = 2 x 1L bottles
         if (towerSales > 0) {
-          note = `+${towerSales} towers (${extraQty} bottles)`;
+          note = `+${towerSales} towers (${extraQty} x 1L)`;
         }
       }
       
       // Add basket consumption to 0.5L Red Horse
       if (data.name.toLowerCase().includes('red horse') && 
           (data.name.toLowerCase().includes('0,5') || data.name.toLowerCase().includes('500') || data.name.toLowerCase().includes('0.5'))) {
-        extraQty = basketSales * 5; // Each basket = 5 bottles (estimate)
+        extraQty = basketSales * 5; // Each basket = 5 x 0.5L bottles
         if (basketSales > 0) {
-          note = `+${basketSales} baskets (${extraQty} bottles)`;
+          note = `+${basketSales} baskets (${extraQty} x 0.5L)`;
         }
       }
       
       const totalQty = data.quantity + extraQty;
-      const avgPerDay = totalQty / daysDiff;
-      const recommendedQty = Math.ceil(avgPerDay * 1.2); // +20% buffer
+      const avgPerDay = totalQty / ANALYSIS_DAYS;
+      // Recommended = avg per day * (1 day buffer + delivery days) with 20% safety margin
+      const daysToStock = 1 + DELIVERY_BUFFER_DAYS; // Today + delivery buffer
+      const recommendedQty = Math.ceil(avgPerDay * daysToStock * 1.2);
       const inStock = inventory[data.variantId] || 0;
       const toOrder = Math.max(0, recommendedQty - inStock);
       const caseSize = getCaseSize(data.name);
@@ -413,7 +417,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
-      period: { days: daysDiff },
+      period: { days: ANALYSIS_DAYS, deliveryBuffer: DELIVERY_BUFFER_DAYS },
       totalReceipts: allReceipts.length,
       towerSales,
       basketSales,
