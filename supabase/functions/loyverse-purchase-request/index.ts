@@ -31,12 +31,15 @@ const CASE_SIZES: Record<string, number> = {
 function isIncluded(itemName: string): boolean {
   const name = itemName.toLowerCase();
   
-  // ==== BEER (all brands) ====
+  // EXCLUDE Heineken
+  if (name.includes('heineken') || name.includes('henniken')) {
+    return false;
+  }
+  
+  // ==== BEER (all brands except Heineken) ====
   if (
     name.includes('red horse') ||
     name.includes('san miguel') ||
-    name.includes('heineken') ||
-    name.includes('henniken') ||
     name.includes('beer') ||
     name.includes('pilsen') ||
     name.includes('pale') ||
@@ -103,12 +106,15 @@ function isIncluded(itemName: string): boolean {
 function getCategory(itemName: string): string {
   const name = itemName.toLowerCase();
   
+  // Exclude Heineken
+  if (name.includes('heineken') || name.includes('henniken')) {
+    return 'other';
+  }
+  
   // Beer
   if (
     name.includes('red horse') ||
     name.includes('san miguel') ||
-    name.includes('heineken') ||
-    name.includes('henniken') ||
     name.includes('beer') ||
     name.includes('pilsen') ||
     name.includes('pale') ||
@@ -187,7 +193,23 @@ interface SalesItem {
   caseSize: number;
   casesToOrder: number;
   category: string;
+  supplier: string;
   note?: string;
+}
+
+function getSupplier(category: string): string {
+  switch (category) {
+    case 'beer':
+      return 'San Miguel';
+    case 'spirits':
+      return 'Spirits Supplier';
+    case 'cocktails':
+      return 'Cocktails Supplier';
+    case 'soft':
+      return 'Soft Drinks Supplier';
+    default:
+      return 'Other';
+  }
 }
 
 serve(async (req) => {
@@ -435,11 +457,12 @@ serve(async (req) => {
     // Check if 1L Red Horse exists in sales, if not and towers sold, create synthetic entry
     const hasRedHorse1L = Object.keys(itemSales).some(k => {
       const n = k.toLowerCase();
-      return n.includes('red horse') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr'));
+      return n.includes('red horse') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr') || n.includes('super'));
     });
     if (!hasRedHorse1L && towerSalesRedHorse > 0) {
       const variantId = findVariantIdByName('red horse') && findVariantIdByName('1l') ? findVariantIdByName('red horse 1') : '';
-      itemSales['Red Horse 1L (from towers)'] = { name: 'Red Horse 1L (from towers)', variantId, quantity: 0 };
+      itemSales['Red Horse Super 1L (from towers)'] = { name: 'Red Horse Super 1L (from towers)', variantId, quantity: 0 };
+      console.log(`✅ Created synthetic Red Horse Super 1L entry (${towerSalesRedHorse} towers sold)`);
     }
     
     // Check if 1L San Miguel exists in sales
@@ -549,6 +572,7 @@ serve(async (req) => {
       const caseSize = getCaseSize(data.name);
       const casesToOrder = caseSize > 1 ? Math.ceil(toOrder / caseSize) : toOrder;
       const category = getCategory(data.name) || 'other';
+      const supplier = getSupplier(category);
       
       const totalSold = data.quantity + Math.round(extraPerDay * ANALYSIS_DAYS);
       
@@ -563,6 +587,7 @@ serve(async (req) => {
           caseSize,
           casesToOrder,
           category,
+          supplier,
           note: note || undefined,
         });
       }
