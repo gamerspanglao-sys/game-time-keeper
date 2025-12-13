@@ -205,19 +205,50 @@ serve(async (req) => {
     // Calculate 3 days period (user requested shorter average)
     const ANALYSIS_DAYS = 3;
     
-    // Calculate delivery buffer considering Sunday (no deliveries)
-    // Order today → delivery in 2 days, but if delivery falls on Sunday → +1 day
+    // Orders are placed on Monday, Wednesday, Friday
+    // Delivery next day (except Sunday - no deliveries)
+    // Calculate days until next delivery based on current day
     const today = new Date();
-    const orderDay = new Date(today);
-    orderDay.setDate(orderDay.getDate() + 1); // Order tomorrow
-    const deliveryDay = new Date(orderDay);
-    deliveryDay.setDate(deliveryDay.getDate() + 1); // Delivery day after tomorrow
+    const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
     
-    // If delivery falls on Sunday (day 0), add one more day
-    let DELIVERY_BUFFER_DAYS = 2;
-    if (deliveryDay.getDay() === 0) {
-      DELIVERY_BUFFER_DAYS = 3; // Skip Sunday
-      console.log('📅 Delivery falls on Sunday, adding extra day buffer');
+    // Days until next delivery based on order schedule (Mon/Wed/Fri orders, next day delivery)
+    // Mon order → Tue delivery, Wed order → Thu delivery, Fri order → Sat delivery
+    // Need to stock until the NEXT delivery after that
+    let DELIVERY_BUFFER_DAYS: number;
+    let nextOrderDay: string;
+    
+    switch (dayOfWeek) {
+      case 0: // Sunday - next order Monday, delivery Tuesday
+        DELIVERY_BUFFER_DAYS = 2;
+        nextOrderDay = 'Monday';
+        break;
+      case 1: // Monday - order today, delivery Tuesday, need stock until Thursday (Wed delivery)
+        DELIVERY_BUFFER_DAYS = 2;
+        nextOrderDay = 'Monday (today)';
+        break;
+      case 2: // Tuesday - next order Wednesday, delivery Thursday
+        DELIVERY_BUFFER_DAYS = 2;
+        nextOrderDay = 'Wednesday';
+        break;
+      case 3: // Wednesday - order today, delivery Thursday, need stock until Saturday (Fri delivery)
+        DELIVERY_BUFFER_DAYS = 2;
+        nextOrderDay = 'Wednesday (today)';
+        break;
+      case 4: // Thursday - next order Friday, delivery Saturday
+        DELIVERY_BUFFER_DAYS = 2;
+        nextOrderDay = 'Friday';
+        break;
+      case 5: // Friday - order today, delivery Saturday, need stock until Tuesday (Mon delivery) - 3 days!
+        DELIVERY_BUFFER_DAYS = 3; // Sat, Sun, Mon → Tue
+        nextOrderDay = 'Friday (today)';
+        break;
+      case 6: // Saturday - next order Monday, delivery Tuesday
+        DELIVERY_BUFFER_DAYS = 3; // Sat, Sun, Mon → Tue
+        nextOrderDay = 'Monday';
+        break;
+      default:
+        DELIVERY_BUFFER_DAYS = 2;
+        nextOrderDay = 'unknown';
     }
     
     const endDate = new Date();
@@ -226,7 +257,7 @@ serve(async (req) => {
     startDate.setHours(5, 0, 0, 0);
     endDate.setHours(5, 0, 59, 999);
 
-    console.log(`📊 Analyzing sales from ${startDate.toISOString()} to ${endDate.toISOString()} (${ANALYSIS_DAYS} days + ${DELIVERY_BUFFER_DAYS} days delivery buffer)`);
+    console.log(`📊 Analyzing ${ANALYSIS_DAYS} days sales. Next order: ${nextOrderDay}, buffer: ${DELIVERY_BUFFER_DAYS} days`);
 
     // Step 1: Fetch current inventory
     console.log('📦 Fetching inventory...');
@@ -369,63 +400,69 @@ serve(async (req) => {
     // Step 5: Calculate recommendations
     const recommendations: SalesItem[] = [];
     
+    // Calculate avg baskets/towers per day for proportional extra consumption
+    const towersPerDay = towerSales / ANALYSIS_DAYS;
+    const basketsPerDay = basketSales / ANALYSIS_DAYS;
+    
     for (const [key, data] of Object.entries(itemSales)) {
-      let extraQty = 0;
+      let extraPerDay = 0;
       let note = '';
-      
-      // Add tower consumption to 1L Red Horse (each tower = 2L = 2 x 1L bottles)
-      if (data.name.toLowerCase().includes('red horse') && 
-          (data.name.toLowerCase().includes('1l') || data.name.toLowerCase().includes('1 l') || data.name.toLowerCase().includes('1000') || data.name.toLowerCase().includes('litr'))) {
-        extraQty = towerSales * 2; // Each tower = 2L = 2 x 1L bottles
-        if (towerSales > 0) {
-          note = `+${towerSales} towers (${extraQty} x 1L)`;
-        }
-      }
-      
-      // Add basket consumption: each basket = 5x Red Horse 0.5L + 5x San Miguel + 5x San Miguel Light
       const nameLower = data.name.toLowerCase();
       
-      // Red Horse 0.5L from baskets
+      // Add tower consumption to 1L Red Horse (each tower = 2L = 2 x 1L bottles)
+      if (nameLower.includes('red horse') && 
+          (nameLower.includes('1l') || nameLower.includes('1 l') || nameLower.includes('1000') || nameLower.includes('litr'))) {
+        extraPerDay = towersPerDay * 2; // Each tower = 2 x 1L bottles per day
+        if (towerSales > 0) {
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from towers`;
+        }
+      }
+      
+      // Red Horse 0.5L from baskets (5 per basket)
       if (nameLower.includes('red horse') && 
           (nameLower.includes('0,5') || nameLower.includes('500') || nameLower.includes('0.5'))) {
-        extraQty = basketSales * 5;
+        extraPerDay = basketsPerDay * 5;
         if (basketSales > 0) {
-          note = `+${basketSales} baskets (${extraQty} x 0.5L)`;
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from baskets`;
         }
       }
       
-      // San Miguel (regular) from baskets
+      // San Miguel (regular) from baskets (5 per basket)
       if (nameLower.includes('san miguel') && !nameLower.includes('light') && !nameLower.includes('premium')) {
-        extraQty = basketSales * 5;
+        extraPerDay = basketsPerDay * 5;
         if (basketSales > 0) {
-          note = `+${basketSales} baskets (${extraQty} bottles)`;
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from baskets`;
         }
       }
       
-      // San Miguel Light from baskets
+      // San Miguel Light from baskets (5 per basket)
       if (nameLower.includes('san miguel') && nameLower.includes('light')) {
-        extraQty = basketSales * 5;
+        extraPerDay = basketsPerDay * 5;
         if (basketSales > 0) {
-          note = `+${basketSales} baskets (${extraQty} bottles)`;
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from baskets`;
         }
       }
       
-      const totalQty = data.quantity + extraQty;
-      const avgPerDay = totalQty / ANALYSIS_DAYS;
-      // Recommended = avg per day * (1 day buffer + delivery days) with 20% safety margin
-      const daysToStock = 1 + DELIVERY_BUFFER_DAYS; // Today + delivery buffer
-      const recommendedQty = Math.ceil(avgPerDay * daysToStock * 1.2);
+      // Calculate average per day (direct sales + extra from baskets/towers)
+      const directAvgPerDay = data.quantity / ANALYSIS_DAYS;
+      const totalAvgPerDay = directAvgPerDay + extraPerDay;
+      
+      // Recommended = avg per day * days to stock * 1.2 safety margin
+      const daysToStock = 1 + DELIVERY_BUFFER_DAYS;
+      const recommendedQty = Math.ceil(totalAvgPerDay * daysToStock * 1.2);
       const inStock = inventory[data.variantId] || 0;
       const toOrder = Math.max(0, recommendedQty - inStock);
       const caseSize = getCaseSize(data.name);
       const casesToOrder = caseSize > 1 ? Math.ceil(toOrder / caseSize) : toOrder;
       const category = getCategory(data.name) || 'other';
       
-      if (totalQty > 0) {
+      const totalSold = data.quantity + Math.round(extraPerDay * ANALYSIS_DAYS);
+      
+      if (data.quantity > 0 || extraPerDay > 0) {
         recommendations.push({
           name: data.name,
-          totalQuantity: totalQty,
-          avgPerDay: Math.round(avgPerDay * 10) / 10,
+          totalQuantity: totalSold,
+          avgPerDay: Math.round(totalAvgPerDay * 10) / 10,
           recommendedQty,
           inStock,
           toOrder,
