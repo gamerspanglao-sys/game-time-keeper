@@ -390,7 +390,8 @@ serve(async (req) => {
     // Step 4: Aggregate sales by item
     const itemSales: Record<string, { name: string; variantId: string; quantity: number }> = {};
     let towerSales = 0; // Total tower sales
-    let towerSalesRedHorse = 0; // Towers specifically Red Horse
+    let towerSalesRedHorse = 0; // Towers specifically Red Horse (regular 1L)
+    let towerSalesRedHorseSuper = 0; // Towers specifically Red Horse Super 1L
     let towerSalesSanMiguel = 0; // Towers specifically San Miguel
     let towerSalesLight = 0; // Towers specifically San Miguel Light
     let basketSales = 0; // Total basket sales (all types)
@@ -408,7 +409,9 @@ serve(async (req) => {
         // Count towers separately and split by beer type (each tower = 2 x 1L bottles)
         if (isTower(itemName)) {
           const lower = itemName.toLowerCase();
-          if (lower.includes('red horse')) {
+          if (lower.includes('red horse') && lower.includes('super')) {
+            towerSalesRedHorseSuper += qty;
+          } else if (lower.includes('red horse')) {
             towerSalesRedHorse += qty;
           } else if (lower.includes('light')) {
             towerSalesLight += qty;
@@ -461,15 +464,24 @@ serve(async (req) => {
       return '';
     };
     
-    // Check if 1L Red Horse exists in sales, if not and towers sold, create synthetic entry
+    // Check if Red Horse 1L (regular) exists in sales
     const hasRedHorse1L = Object.keys(itemSales).some(k => {
       const n = k.toLowerCase();
-      return n.includes('red horse') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr') || n.includes('super'));
+      return n.includes('red horse') && !n.includes('super') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr'));
     });
     if (!hasRedHorse1L && towerSalesRedHorse > 0) {
-      const variantId = findVariantIdByName('red horse') && findVariantIdByName('1l') ? findVariantIdByName('red horse 1') : '';
-      itemSales['Red Horse Super 1L (from towers)'] = { name: 'Red Horse Super 1L (from towers)', variantId, quantity: 0 };
-      console.log(`✅ Created synthetic Red Horse Super 1L entry (${towerSalesRedHorse} towers sold)`);
+      itemSales['Red Horse 1L (from towers)'] = { name: 'Red Horse 1L (from towers)', variantId: '', quantity: 0 };
+      console.log(`✅ Created synthetic Red Horse 1L entry (${towerSalesRedHorse} towers sold)`);
+    }
+    
+    // Check if Red Horse Super 1L exists in sales
+    const hasRedHorseSuper1L = Object.keys(itemSales).some(k => {
+      const n = k.toLowerCase();
+      return n.includes('red horse') && n.includes('super');
+    });
+    if (!hasRedHorseSuper1L && towerSalesRedHorseSuper > 0) {
+      itemSales['Red Horse Super 1L (from towers)'] = { name: 'Red Horse Super 1L (from towers)', variantId: '', quantity: 0 };
+      console.log(`✅ Created synthetic Red Horse Super 1L entry (${towerSalesRedHorseSuper} towers sold)`);
     }
     
     // Check if 1L San Miguel exists in sales
@@ -478,21 +490,17 @@ serve(async (req) => {
       return n.includes('san miguel') && !n.includes('light') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr'));
     });
     if (!hasSanMiguel1L && towerSalesSanMiguel > 0) {
-      const variantId = findVariantIdByName('san miguel 1');
-      itemSales['San Miguel 1L (from towers)'] = { name: 'San Miguel 1L (from towers)', variantId, quantity: 0 };
+      itemSales['San Miguel 1L (from towers)'] = { name: 'San Miguel 1L (from towers)', variantId: '', quantity: 0 };
       console.log(`✅ Created synthetic San Miguel 1L entry (${towerSalesSanMiguel} towers sold)`);
-    } else {
-      console.log(`⏭️ San Miguel 1L: exists=${hasSanMiguel1L}, towers=${towerSalesSanMiguel}`);
     }
     
     // Check if 1L San Miguel Light exists in sales
     const hasLight1L = Object.keys(itemSales).some(k => {
       const n = k.toLowerCase();
-      return n.includes('san miguel') && n.includes('light') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr'));
+      return n.includes('light') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr'));
     });
     if (!hasLight1L && towerSalesLight > 0) {
-      const variantId = findVariantIdByName('light 1');
-      itemSales['San Miguel Light 1L (from towers)'] = { name: 'San Miguel Light 1L (from towers)', variantId, quantity: 0 };
+      itemSales['San Miguel Light 1L (from towers)'] = { name: 'San Miguel Light 1L (from towers)', variantId: '', quantity: 0 };
     }
 
     // Step 6: Calculate recommendations
@@ -500,6 +508,7 @@ serve(async (req) => {
     
     // Calculate avg per day for proportional extra consumption
     const towersRedHorsePerDay = towerSalesRedHorse / ANALYSIS_DAYS;
+    const towersRedHorseSuperPerDay = towerSalesRedHorseSuper / ANALYSIS_DAYS;
     const towersSanMiguelPerDay = towerSalesSanMiguel / ANALYSIS_DAYS;
     const towersLightPerDay = towerSalesLight / ANALYSIS_DAYS;
     const basketsRedHorsePerDay = basketSalesRedHorse / ANALYSIS_DAYS;
@@ -516,12 +525,19 @@ serve(async (req) => {
                        nameLower.includes('1000') || nameLower.includes('litr') || 
                        nameLower.includes('from towers') || nameLower.includes('super');
       
-      // Add tower consumption to 1L Red Horse (each tower = 2 x 1L bottles)
-      // Also includes "Red Horse Super" which is the 1L version
-      if (nameLower.includes('red horse') && is1LBeer) {
+      // Add tower consumption to Red Horse 1L (regular, not Super)
+      if (nameLower.includes('red horse') && !nameLower.includes('super') && is1LBeer) {
         extraPerDay = towersRedHorsePerDay * 2; // Each Red Horse tower = 2 x 1L bottles per day
         if (towerSalesRedHorse > 0) {
           note = `+${Math.round(extraPerDay * 10) / 10}/day from RH towers (${towerSalesRedHorse} sold)`;
+        }
+      }
+      
+      // Add tower consumption to Red Horse Super 1L
+      if (nameLower.includes('red horse') && nameLower.includes('super')) {
+        extraPerDay = towersRedHorseSuperPerDay * 2; // Each RH Super tower = 2 x 1L bottles per day
+        if (towerSalesRedHorseSuper > 0) {
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from RH Super towers (${towerSalesRedHorseSuper} sold)`;
         }
       }
       
