@@ -4,10 +4,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Users, UserPlus, X, Clock } from 'lucide-react';
+import { Users, UserPlus, X, Clock, Check, CreditCard } from 'lucide-react';
 import { QueueEntry } from '@/types/queue';
 
 interface QueueDialogProps {
@@ -34,12 +35,26 @@ export function QueueDialog({
   onRemoveFromQueue,
 }: QueueDialogProps) {
   const [newName, setNewName] = useState('');
+  const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
+  const [pendingName, setPendingName] = useState('');
 
   const handleAdd = () => {
     if (newName.trim()) {
-      onAddToQueue(timerId, newName);
-      setNewName('');
+      setPendingName(newName.trim());
+      setShowPaymentConfirm(true);
     }
+  };
+
+  const handleConfirmPayment = () => {
+    onAddToQueue(timerId, pendingName);
+    setNewName('');
+    setPendingName('');
+    setShowPaymentConfirm(false);
+  };
+
+  const handleCancelPayment = () => {
+    setPendingName('');
+    setShowPaymentConfirm(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -63,6 +78,55 @@ export function QueueDialog({
       minute: '2-digit',
     });
   };
+
+  // Payment confirmation dialog
+  if (showPaymentConfirm) {
+    return (
+      <Dialog open={isOpen} onOpenChange={() => {}}>
+        <DialogContent className="max-w-sm" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-primary" />
+              Payment Confirmation
+            </DialogTitle>
+            <DialogDescription>
+              Confirm payment before adding to queue
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="text-center">
+              <p className="text-lg font-semibold text-foreground mb-2">
+                {pendingName}
+              </p>
+              <p className="text-muted-foreground">
+                Has this person paid for the session?
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="success"
+                className="flex-1"
+                onClick={handleConfirmPayment}
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Yes, paid
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={handleCancelPayment}
+              >
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
