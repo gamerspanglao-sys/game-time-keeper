@@ -6,37 +6,64 @@ export function useTimerAlerts() {
   const originalTitle = useRef(document.title);
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Initialize AudioContext on first user interaction
+  // Initialize AudioContext - try to create eagerly
   const ensureAudioContext = useCallback(() => {
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      try {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        console.log('🔊 AudioContext created, state:', audioContextRef.current.state);
+      } catch (e) {
+        console.error('Failed to create AudioContext:', e);
+      }
     }
     // Resume if suspended (required after user interaction)
-    if (audioContextRef.current.state === 'suspended') {
-      audioContextRef.current.resume();
+    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume().then(() => {
+        console.log('🔊 AudioContext resumed');
+      }).catch(e => {
+        console.error('Failed to resume AudioContext:', e);
+      });
     }
     return audioContextRef.current;
   }, []);
 
-  // Request notification permission on mount
+  // Request notification permission and initialize audio on mount
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
     
-    // Initialize audio context on any user interaction
+    // Try to initialize audio context immediately
+    ensureAudioContext();
+    
+    // Also initialize on any user interaction to handle browser restrictions
     const initAudio = () => {
-      ensureAudioContext();
-      document.removeEventListener('click', initAudio);
-      document.removeEventListener('touchstart', initAudio);
+      const ctx = ensureAudioContext();
+      if (ctx && ctx.state === 'running') {
+        console.log('🔊 Audio ready after user interaction');
+        // Play a silent sound to fully unlock audio
+        try {
+          const oscillator = ctx.createOscillator();
+          const gainNode = ctx.createGain();
+          oscillator.connect(gainNode);
+          gainNode.connect(ctx.destination);
+          gainNode.gain.value = 0; // Silent
+          oscillator.start();
+          oscillator.stop(ctx.currentTime + 0.001);
+        } catch (e) {
+          // Ignore
+        }
+      }
     };
     
     document.addEventListener('click', initAudio);
     document.addEventListener('touchstart', initAudio);
+    document.addEventListener('keydown', initAudio);
     
     return () => {
       document.removeEventListener('click', initAudio);
       document.removeEventListener('touchstart', initAudio);
+      document.removeEventListener('keydown', initAudio);
     };
   }, [ensureAudioContext]);
 
