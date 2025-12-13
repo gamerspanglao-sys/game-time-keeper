@@ -2,7 +2,7 @@ import { Layout } from '@/components/Layout';
 import { TimerCard } from '@/components/TimerCard';
 import { CurrentSessions } from '@/components/CurrentSessions';
 import { OvertimeStats } from '@/components/OvertimeStats';
-import { GlobalPauseButton } from '@/components/GlobalPauseButton';
+
 import { useSupabaseTimers } from '@/hooks/useSupabaseTimers';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useFullscreen } from '@/hooks/useFullscreen';
@@ -45,7 +45,13 @@ const Index = () => {
 
   if (isLoading) {
     return (
-      <Layout compact={compact}>
+      <Layout 
+        compact={compact}
+        isPaused={isPaused}
+        activeTimersCount={activeTimersCount}
+        onPauseAll={pauseAllTimers}
+        onResumeAll={resumeAllTimers}
+      >
         <div className="flex items-center justify-center min-h-[50vh]">
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -57,22 +63,20 @@ const Index = () => {
   }
 
   return (
-    <Layout compact={compact}>
+    <Layout 
+      compact={compact}
+      isPaused={isPaused}
+      activeTimersCount={activeTimersCount}
+      onPauseAll={pauseAllTimers}
+      onResumeAll={resumeAllTimers}
+    >
       {/* Full screen flash overlay for alerts */}
       {hasFinishedTimer && (
         <div className="fixed inset-0 bg-destructive pointer-events-none z-50 screen-flash" />
       )}
       <div className={cn("max-w-7xl mx-auto", compact ? "space-y-4" : "space-y-6")}>
-        {/* Global Pause Button & Current Sessions */}
-        <div className="flex items-start justify-between gap-4">
-          <CurrentSessions timers={timers} compact={compact} onReset={resetTimer} />
-          <GlobalPauseButton
-            isPaused={isPaused}
-            activeTimersCount={activeTimersCount}
-            onPauseAll={pauseAllTimers}
-            onResumeAll={resumeAllTimers}
-          />
-        </div>
+        {/* Current Sessions */}
+        <CurrentSessions timers={timers} compact={compact} onReset={resetTimer} />
 
         {/* Billiard Tables */}
         <section>
