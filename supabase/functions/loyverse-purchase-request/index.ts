@@ -521,16 +521,16 @@ serve(async (req) => {
         }
       }
       
-      // San Miguel (regular) from baskets (5 per basket, only San Miguel baskets)
-      if (nameLower.includes('san miguel') && !nameLower.includes('light') && !nameLower.includes('premium')) {
+      // San Miguel (regular small bottles) from baskets (5 per basket, only San Miguel baskets, NOT 1L)
+      if (nameLower.includes('san miguel') && !nameLower.includes('light') && !is1LBeer) {
         extraPerDay = basketsSanMiguelPerDay * 5;
         if (basketSalesSanMiguel > 0) {
           note = `+${Math.round(extraPerDay * 10) / 10}/day from San Miguel baskets`;
         }
       }
       
-      // San Miguel Light from baskets (5 per basket, only Light baskets)
-      if (nameLower.includes('san miguel') && nameLower.includes('light')) {
+      // San Miguel Light small bottles from baskets (5 per basket, only Light baskets, NOT 1L)
+      if (nameLower.includes('san miguel') && nameLower.includes('light') && !is1LBeer) {
         extraPerDay = basketsLightPerDay * 5;
         if (basketSalesLight > 0) {
           note = `+${Math.round(extraPerDay * 10) / 10}/day from Light baskets`;
