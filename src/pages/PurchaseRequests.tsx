@@ -3,6 +3,8 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Download, Package, TrendingUp, Loader2, ShoppingCart, X, Beer, Droplets } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -41,6 +43,7 @@ export default function PurchaseRequests() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<PurchaseData | null>(null);
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
+  const [showAllItems, setShowAllItems] = useState(true); // Show all by default
 
   const fetchPurchaseData = async () => {
     setLoading(true);
@@ -66,8 +69,9 @@ export default function PurchaseRequests() {
     setRemovedItems(prev => new Set([...prev, itemName]));
   };
 
+  // Filter based on toggle: show all or only items needing order
   const filteredRecommendations = data?.recommendations.filter(
-    item => !removedItems.has(item.name) && item.toOrder > 0
+    item => !removedItems.has(item.name) && (showAllItems || item.toOrder > 0)
   ) || [];
 
   const exportToCSV = () => {
@@ -113,7 +117,7 @@ export default function PurchaseRequests() {
           <p className="text-sm text-muted-foreground">Based on 7-day sales vs current stock</p>
         </div>
         
-        <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex flex-wrap gap-4 items-center">
           <Button onClick={fetchPurchaseData} disabled={loading} size="lg">
             {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShoppingCart className="h-4 w-4 mr-2" />}
             Generate Order
@@ -124,6 +128,19 @@ export default function PurchaseRequests() {
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
+          )}
+          
+          {data && (
+            <div className="flex items-center gap-2">
+              <Switch 
+                id="show-all" 
+                checked={showAllItems} 
+                onCheckedChange={setShowAllItems}
+              />
+              <Label htmlFor="show-all" className="text-sm">
+                {showAllItems ? "All items" : "Only need order"}
+              </Label>
+            </div>
           )}
         </div>
       </div>
