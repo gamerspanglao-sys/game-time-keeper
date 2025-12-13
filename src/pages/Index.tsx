@@ -2,6 +2,7 @@ import { Layout } from '@/components/Layout';
 import { TimerCard } from '@/components/TimerCard';
 import { CurrentSessions } from '@/components/CurrentSessions';
 import { OvertimeStats } from '@/components/OvertimeStats';
+import { GlobalPauseButton } from '@/components/GlobalPauseButton';
 import { useSupabaseTimers } from '@/hooks/useSupabaseTimers';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useFullscreen } from '@/hooks/useFullscreen';
@@ -11,13 +12,26 @@ import { Layers, Gamepad, Crown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Index = () => {
-  const { timers, startTimer, stopTimer, extendTimer, resetTimer, setDuration, adjustTime, isLoading } = useSupabaseTimers();
+  const { 
+    timers, 
+    startTimer, 
+    stopTimer, 
+    extendTimer, 
+    resetTimer, 
+    setDuration, 
+    adjustTime, 
+    isLoading,
+    isPaused,
+    pauseAllTimers,
+    resumeAllTimers,
+  } = useSupabaseTimers();
   const { playConfirmSound, stopAlarm, notifyQueueNext } = useTimerAlerts();
   const { isFullscreen } = useFullscreen();
   const { getQueueForTimer, addToQueue, removeFromQueue } = useSupabaseQueue();
   
   // Keep screen awake when any timer is running
   const hasActiveTimers = timers.some(t => t.status === 'running' || t.status === 'warning' || t.status === 'finished');
+  const activeTimersCount = timers.filter(t => t.status === 'running' || t.status === 'warning' || t.status === 'finished').length;
   useWakeLock(hasActiveTimers);
 
   const tableTimers = timers.filter(t => t.category === 'billiard');
@@ -49,8 +63,16 @@ const Index = () => {
         <div className="fixed inset-0 bg-destructive pointer-events-none z-50 screen-flash" />
       )}
       <div className={cn("max-w-7xl mx-auto", compact ? "space-y-4" : "space-y-6")}>
-        {/* Current Sessions */}
-        <CurrentSessions timers={timers} compact={compact} onReset={resetTimer} />
+        {/* Global Pause Button & Current Sessions */}
+        <div className="flex items-start justify-between gap-4">
+          <CurrentSessions timers={timers} compact={compact} onReset={resetTimer} />
+          <GlobalPauseButton
+            isPaused={isPaused}
+            activeTimersCount={activeTimersCount}
+            onPauseAll={pauseAllTimers}
+            onResumeAll={resumeAllTimers}
+          />
+        </div>
 
         {/* Billiard Tables */}
         <section>
