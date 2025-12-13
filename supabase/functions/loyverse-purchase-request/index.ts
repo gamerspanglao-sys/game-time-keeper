@@ -25,36 +25,65 @@ const CASE_SIZES: Record<string, number> = {
   'royal': 24,
 };
 
-// Items to INCLUDE in purchase orders (only beer, spirits, cocktails, soft drinks)
-function getCategory(itemName: string): string | null {
+// Items to EXCLUDE from purchase orders (services and non-stock items)
+const EXCLUDED_KEYWORDS = [
+  'billiard', 'playstation', 'vip super', 'vip medium', 'vip comfort',
+  'ps-1', 'ps-2', 'ps5', 'vr', 'table-1', 'table-2', 'table-3', 'timer', 'hour',
+  'hookah', 'cigarette', 'gloves', 'headphones', 'pizza', 'pepperoni', 'meatlovers',
+  '4cheese', 'cropics', 'mexican', 'vip 70', 'charge per bottle',
+];
+
+function isExcluded(itemName: string): boolean {
   const name = itemName.toLowerCase();
-  
-  // Beer - Red Horse, San Miguel variants, Heineken
-  if (name.includes('red horse') || name.includes('san miguel') || name.includes('heineken') ||
-      name.includes('pilsen') || name.includes('pale pilsen')) {
-    return 'beer';
-  }
-  
-  // Spirits - Tanduay
-  if (name.includes('tanduay')) return 'spirits';
-  
-  // Cocktails - Smirnoff Mule, mixed drinks
-  if (name.includes('mule') || name.includes('smirnoff')) return 'cocktails';
-  
-  // Soft drinks - Water, Coke, Sprite, Royal, Tonic, Soda, Juice, Rum Coke
-  if (name.includes('water') || name.includes('coca cola') || name.includes('coke') || 
-      name.includes('sprite') || name.includes('royal') || name.includes('tonic') || 
-      name.includes('soda') || name.includes('juice') || name.includes('juce') ||
-      name.includes('pepsi') || name.includes('rum coke')) {
-    return 'soft';
-  }
-  
-  // Return null for items that should NOT be included
-  return null;
+  return EXCLUDED_KEYWORDS.some((keyword) => name.includes(keyword));
 }
 
-function isIncluded(itemName: string): boolean {
-  return getCategory(itemName) !== null;
+// Categorize items for grouping in UI
+function getCategory(itemName: string): string {
+  const name = itemName.toLowerCase();
+  
+  // Beer - Red Horse, San Miguel variants, Heineken, generic "beer"
+  if (
+    name.includes('red horse') ||
+    name.includes('san miguel') ||
+    name.includes('heineken') ||
+    name.includes('henniken') ||
+    name.includes(' beer') || // space to avoid "beer pong" etc.
+    name.includes('пиво')
+  ) {
+    return 'beer';
+  }
+
+  // Spirits - Tanduay (user explicitly asked for this)
+  if (name.includes('tanduay')) return 'spirits';
+
+  // Cocktails - Smirnoff Mule, mixed drinks, rum coke
+  if (name.includes('mule') || name.includes('smirnoff') || name.includes('rum coke')) {
+    return 'cocktails';
+  }
+
+  // Soft drinks - Water, Coke/Cola, Sprite, Royal, Tonic, Soda, Juice, Lemonade, Pepsi
+  if (
+    name.includes('water') ||
+    name.includes('coca cola') ||
+    name.includes('coca-cola') ||
+    name.includes('coke') ||
+    name.includes('cola') ||
+    name.includes('sprite') ||
+    name.includes('royal') ||
+    name.includes('tonic') ||
+    name.includes('soda') ||
+    name.includes('juice') ||
+    name.includes('juce') ||
+    name.includes('lemonade') ||
+    name.includes('pepsi') ||
+    name.includes('zero') ||
+    name.includes('fanta')
+  ) {
+    return 'soft';
+  }
+
+  return 'other';
 }
 
 function isTower(itemName: string): boolean {
@@ -82,7 +111,7 @@ function getCaseSize(itemName: string): number {
   if (name.includes('tanduay')) return 12;
   if (name.includes('water')) return 12;
   if (name.includes('mule') || name.includes('smirnoff')) return 24;
-  if (name.includes('coke') || name.includes('sprite') || name.includes('royal')) return 24;
+  if (name.includes('coke') || name.includes('cola') || name.includes('sprite') || name.includes('royal')) return 24;
   
   return 12;
 }
@@ -244,8 +273,8 @@ serve(async (req) => {
           continue;
         }
         
-        // Only include beer, spirits, cocktails, soft drinks
-        if (!isIncluded(itemName)) continue;
+        // Skip clearly excluded service / non-stock items
+        if (isExcluded(itemName)) continue;
         
         const key = itemName; // Group by name
         if (!itemSales[key]) {
