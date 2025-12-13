@@ -32,6 +32,9 @@ export function PaymentTypeDialog({
   const hours = Math.ceil(durationMinutes / 60);
   const price = hours * pricePerHour;
 
+  // For first hour (not extension), show prepaid-only confirmation
+  const isPrepaidOnly = !isExtension;
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="max-w-md">
@@ -65,32 +68,49 @@ export function PaymentTypeDialog({
                   </div>
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground">Select payment type:</p>
+              {isPrepaidOnly ? (
+                <p className="text-sm text-success font-medium">First hour is always prepaid</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Select payment type:</p>
+              )}
             </div>
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-3 mt-4">
-          <Button
-            variant="outline"
-            className="flex flex-col items-center gap-2 h-auto py-6 border-success/50 hover:bg-success/10 hover:border-success"
-            onClick={() => onSelect('prepaid')}
-          >
-            <Banknote className="w-8 h-8 text-success" />
-            <span className="font-semibold">Prepaid</span>
-            <span className="text-xs text-muted-foreground">Pay now</span>
-          </Button>
-          
-          <Button
-            variant="outline"
-            className="flex flex-col items-center gap-2 h-auto py-6 border-warning/50 hover:bg-warning/10 hover:border-warning"
-            onClick={() => onSelect('postpaid')}
-          >
-            <CreditCard className="w-8 h-8 text-warning" />
-            <span className="font-semibold">Postpaid</span>
-            <span className="text-xs text-muted-foreground">Pay at end</span>
-          </Button>
-        </div>
+        {isPrepaidOnly ? (
+          <div className="mt-4">
+            <Button
+              variant="success"
+              className="w-full h-14 text-lg"
+              onClick={() => onSelect('prepaid')}
+            >
+              <Banknote className="w-6 h-6 mr-2" />
+              Confirm Payment ({price} ₱)
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <Button
+              variant="outline"
+              className="flex flex-col items-center gap-2 h-auto py-6 border-success/50 hover:bg-success/10 hover:border-success"
+              onClick={() => onSelect('prepaid')}
+            >
+              <Banknote className="w-8 h-8 text-success" />
+              <span className="font-semibold">Prepaid</span>
+              <span className="text-xs text-muted-foreground">Pay now</span>
+            </Button>
+            
+            <Button
+              variant="outline"
+              className="flex flex-col items-center gap-2 h-auto py-6 border-warning/50 hover:bg-warning/10 hover:border-warning"
+              onClick={() => onSelect('postpaid')}
+            >
+              <CreditCard className="w-8 h-8 text-warning" />
+              <span className="font-semibold">Postpaid</span>
+              <span className="text-xs text-muted-foreground">Pay at end</span>
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
