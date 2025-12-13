@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { format, subDays } from "date-fns";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,22 +10,19 @@ import { cn } from "@/lib/utils";
 
 interface PurchaseItem {
   name: string;
+  itemId: string;
   totalQuantity: number;
-  totalAmount: number;
   avgPerDay: number;
   recommendedQty: number;
+  inStock: number;
+  toOrder: number;
   caseSize: number;
   casesToOrder: number;
-  unitsToOrder: number;
   category: string;
 }
 
 interface PurchaseData {
-  period: {
-    startDate: string;
-    endDate: string;
-    days: number;
-  };
+  period: { days: number };
   totalReceipts: number;
   recommendations: PurchaseItem[];
 }
@@ -35,7 +32,6 @@ const CATEGORY_CONFIG: Record<string, { label: string; icon: any; color: string 
   'drinks': { label: 'Drinks', icon: Droplets, color: 'bg-blue-500/20 text-blue-500' },
   'snacks': { label: 'Snacks', icon: Cookie, color: 'bg-orange-500/20 text-orange-500' },
   'supplies': { label: 'Supplies', icon: Snowflake, color: 'bg-cyan-500/20 text-cyan-500' },
-  'food': { label: 'Food', icon: Cookie, color: 'bg-green-500/20 text-green-500' },
   'other': { label: 'Other', icon: Package, color: 'bg-muted text-muted-foreground' },
 };
 
@@ -49,30 +45,13 @@ export default function PurchaseRequests() {
     setRemovedItems(new Set());
     
     try {
-      // Loyverse free plan limit: only last 30 days
-      // Use last 28 days to be safe
-      const endDate = new Date();
-      const startDate = subDays(endDate, 28);
-      
-      const startDateTime = new Date(startDate);
-      startDateTime.setHours(5, 0, 0, 0);
-      
-      const endDateTime = new Date(endDate);
-      endDateTime.setDate(endDateTime.getDate() + 1);
-      endDateTime.setHours(5, 0, 59, 999);
-
-      const { data: response, error } = await supabase.functions.invoke('loyverse-purchase-request', {
-        body: {
-          startDate: startDateTime.toISOString(),
-          endDate: endDateTime.toISOString(),
-        },
-      });
+      const { data: response, error } = await supabase.functions.invoke('loyverse-purchase-request');
 
       if (error) throw error;
       if (!response.success) throw new Error(response.error);
 
       setData(response);
-      toast.success(`Analyzed ${response.totalReceipts} receipts, ${response.recommendations.length} products`);
+      toast.success(`Analyzed ${response.totalReceipts} receipts (7 days), ${response.recommendations.length} products`);
     } catch (error: any) {
       console.error('Error fetching purchase data:', error);
       toast.error(error.message || 'Failed to fetch data');
@@ -86,19 +65,20 @@ export default function PurchaseRequests() {
   };
 
   const filteredRecommendations = data?.recommendations.filter(
-    item => !removedItems.has(item.name)
+    item => !removedItems.has(item.name) && item.toOrder > 0
   ) || [];
 
   const exportToCSV = () => {
     if (!data) return;
 
-    const headers = ['Item', 'Category', 'Sold (30d)', 'Avg/Day', 'Order Units', 'Case Size', 'Cases'];
+    const headers = ['Item', 'Category', 'Sold (7d)', 'Avg/Day', 'In Stock', 'Need', 'Case Size', 'Cases'];
     const rows = filteredRecommendations.map(item => [
       item.name,
       CATEGORY_CONFIG[item.category]?.label || item.category,
       item.totalQuantity,
       item.avgPerDay,
-      item.unitsToOrder,
+      item.inStock,
+      item.toOrder,
       item.caseSize,
       item.casesToOrder,
     ]);
@@ -113,7 +93,7 @@ export default function PurchaseRequests() {
     URL.revokeObjectURL(url);
   };
 
-  const totalUnits = filteredRecommendations.reduce((sum, item) => sum + item.unitsToOrder, 0);
+  const totalUnits = filteredRecommendations.reduce((sum, item) => sum + item.toOrder, 0);
   const totalCases = filteredRecommendations.reduce((sum, item) => sum + item.casesToOrder, 0);
 
   // Group by category
@@ -128,7 +108,7 @@ export default function PurchaseRequests() {
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Purchase Order</h1>
-          <p className="text-sm text-muted-foreground">Tomorrow's order based on 30-day average + 20%</p>
+          <p className="text-sm text-muted-foreground">Based on 7-day sales vs current stock</p>
         </div>
         
         <div className="flex flex-wrap gap-2 items-center">
@@ -151,7 +131,7 @@ export default function PurchaseRequests() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Analysis Period</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Period</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-bold">{data.period.days} days</p>
@@ -160,7 +140,7 @@ export default function PurchaseRequests() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total Receipts</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Receipts</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-bold">{data.totalReceipts.toLocaleString()}</p>
@@ -197,11 +177,6 @@ export default function PurchaseRequests() {
                     <CategoryIcon className="h-5 w-5" />
                     {config.label}
                     <Badge variant="secondary">{items.length} items</Badge>
-                    {removedItems.size > 0 && (
-                      <Badge variant="outline" className="ml-auto">
-                        {removedItems.size} removed
-                      </Badge>
-                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -214,20 +189,25 @@ export default function PurchaseRequests() {
                         <div className="flex-1 min-w-0">
                           <div className="font-medium">{item.name}</div>
                           <div className="text-sm text-muted-foreground">
-                            Sold: <span className="font-medium text-foreground">{item.totalQuantity}</span> in 30 days
+                            Sold: <span className="font-medium text-foreground">{item.totalQuantity}</span> (7d)
                             {' • '}
                             Avg: <span className="font-medium text-foreground">{item.avgPerDay}</span>/day
+                            {' • '}
+                            Stock: <span className={cn(
+                              "font-medium",
+                              item.inStock > item.recommendedQty ? "text-success" : item.inStock > 0 ? "text-warning" : "text-destructive"
+                            )}>{item.inStock}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-center min-w-[60px]">
-                            <div className="text-xs text-muted-foreground">UNITS</div>
-                            <div className="text-lg font-bold">{item.unitsToOrder}</div>
+                            <div className="text-xs text-muted-foreground">NEED</div>
+                            <div className="text-lg font-bold text-primary">{item.toOrder}</div>
                           </div>
                           {item.caseSize > 1 && (
-                            <div className="text-center min-w-[70px]">
-                              <div className="text-xs text-muted-foreground">CASES ({item.caseSize}pcs)</div>
-                              <div className="text-lg font-bold text-primary">{item.casesToOrder}</div>
+                            <div className="text-center min-w-[80px]">
+                              <div className="text-xs text-muted-foreground">CASES ({item.caseSize})</div>
+                              <div className="text-lg font-bold">{item.casesToOrder}</div>
                             </div>
                           )}
                           <Button
@@ -252,7 +232,7 @@ export default function PurchaseRequests() {
               <CardContent className="py-8 text-center text-muted-foreground">
                 {removedItems.size > 0 
                   ? "All items removed. Click Generate Order to refresh."
-                  : "No products to order based on sales data."
+                  : "All items in stock! Nothing to order."
                 }
               </CardContent>
             </Card>
@@ -266,10 +246,10 @@ export default function PurchaseRequests() {
             <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">Generate Purchase Order</h3>
             <p className="text-muted-foreground mb-4">
-              Click Generate Order to analyze your last 30 days of sales and create tomorrow's purchase order.
+              Analyzes 7-day sales, compares with current stock, and recommends what to order.
             </p>
             <p className="text-sm text-muted-foreground">
-              Order includes 20% buffer above daily average. You can remove items you don't need.
+              Only shows items where stock is lower than daily average (+20% buffer).
             </p>
           </CardContent>
         </Card>

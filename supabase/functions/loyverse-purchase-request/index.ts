@@ -6,108 +6,86 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Product categories and case sizes
-const PRODUCT_CONFIG: Record<string, { caseSize: number; category: string }> = {
-  // Red Horse products
-  'red horse 0,5': { caseSize: 12, category: 'beer' },
-  'red horse 500': { caseSize: 12, category: 'beer' },
-  'red horse 1': { caseSize: 6, category: 'beer' },
-  'red horse 1l': { caseSize: 6, category: 'beer' },
-  'beer tower red horse': { caseSize: 1, category: 'beer' },  // Tower is 1 unit
-  'basket red horse': { caseSize: 1, category: 'beer' },      // Basket is 1 unit
-  
-  // San Miguel products
-  'san miguel light': { caseSize: 24, category: 'beer' },
-  'san miguel pale': { caseSize: 24, category: 'beer' },
-  'san miguel pilsen': { caseSize: 24, category: 'beer' },
-  
-  // Soft drinks / cocktails
-  'smirnoff mule': { caseSize: 24, category: 'drinks' },
-  'smirnoff': { caseSize: 24, category: 'drinks' },
-  
-  // Water
-  'water': { caseSize: 12, category: 'drinks' },
-  
-  // Ice - per bag/pack
-  'ice': { caseSize: 1, category: 'supplies' },
-  
-  // Chips/Snacks
-  'chips': { caseSize: 12, category: 'snacks' },
+// Case sizes for products
+const CASE_SIZES: Record<string, number> = {
+  'red horse 0,5': 12,
+  'red horse 500': 12,
+  'red horse 0.5': 12,
+  'san miguel light': 24,
+  'san miguel pale': 24,
+  'san miguel pilsen': 24,
+  'smirnoff mule': 24,
+  'smirnoff': 24,
+  'water': 12,
+  'chips': 12,
 };
 
-// Items to EXCLUDE from purchase orders (services, not products)
-const EXCLUDED_ITEMS = [
-  'billiard',
-  'playstation',
-  'vip super',
-  'vip medium', 
-  'vip comfort',
-  'ps-1',
-  'ps-2',
-  'table-1',
-  'table-2',
-  'table-3',
-  'timer',
-  '1 hour',
-  'hour',
+// Items to EXCLUDE from purchase orders
+const EXCLUDED_KEYWORDS = [
+  'billiard', 'playstation', 'vip super', 'vip medium', 'vip comfort',
+  'ps-1', 'ps-2', 'table-1', 'table-2', 'table-3', 'timer', 'hour',
+  'basket', 'tower', // Exclude multi-packs
+  'sandwich', 'food', // Exclude prepared food
 ];
 
-function getProductConfig(itemName: string): { caseSize: number; category: string } | null {
+function isExcluded(itemName: string): boolean {
+  const name = itemName.toLowerCase();
+  return EXCLUDED_KEYWORDS.some(keyword => name.includes(keyword));
+}
+
+function getCaseSize(itemName: string): number {
   const name = itemName.toLowerCase();
   
-  // Check if excluded
-  for (const excluded of EXCLUDED_ITEMS) {
-    if (name.includes(excluded)) {
-      return null;
-    }
-  }
-  
-  // Try exact match first
-  for (const [key, config] of Object.entries(PRODUCT_CONFIG)) {
-    if (name.includes(key)) {
-      return config;
-    }
+  for (const [key, size] of Object.entries(CASE_SIZES)) {
+    if (name.includes(key)) return size;
   }
   
   // Generic detection
   if (name.includes('red horse') && (name.includes('0,5') || name.includes('500') || name.includes('0.5'))) {
-    return { caseSize: 12, category: 'beer' };
+    return 12;
   }
-  if (name.includes('red horse') && (name.includes('1l') || name.includes('1 l') || name.includes('liter'))) {
-    return { caseSize: 6, category: 'beer' };
+  if (name.includes('red horse') && (name.includes('1l') || name.includes('1 l'))) {
+    return 6;
   }
-  if (name.includes('red horse') || name.includes('san miguel') || name.includes('beer') || name.includes('pilsen') || name.includes('pale')) {
-    return { caseSize: 24, category: 'beer' };
+  if (name.includes('san miguel') || name.includes('beer') || name.includes('pilsen')) {
+    return 24;
   }
-  if (name.includes('water')) {
-    return { caseSize: 12, category: 'drinks' };
-  }
-  if (name.includes('mule') || name.includes('smirnoff') || name.includes('cocktail')) {
-    return { caseSize: 24, category: 'drinks' };
-  }
-  if (name.includes('chips') || name.includes('snack')) {
-    return { caseSize: 12, category: 'snacks' };
-  }
-  if (name.includes('ice')) {
-    return { caseSize: 1, category: 'supplies' };
-  }
-  if (name.includes('sandwich') || name.includes('food')) {
-    return { caseSize: 1, category: 'food' };
-  }
+  if (name.includes('water')) return 12;
+  if (name.includes('mule') || name.includes('smirnoff')) return 24;
+  if (name.includes('chips')) return 12;
+  if (name.includes('ice')) return 1;
   
-  // Default - include but with case size 1
-  return { caseSize: 1, category: 'other' };
+  return 1; // Default
+}
+
+function getCategory(itemName: string): string {
+  const name = itemName.toLowerCase();
+  if (name.includes('red horse') || name.includes('san miguel') || name.includes('beer') || name.includes('pilsen') || name.includes('pale')) {
+    return 'beer';
+  }
+  if (name.includes('water')) return 'drinks';
+  if (name.includes('mule') || name.includes('smirnoff')) return 'drinks';
+  if (name.includes('chips')) return 'snacks';
+  if (name.includes('ice')) return 'supplies';
+  return 'other';
+}
+
+interface InventoryItem {
+  itemId: string;
+  itemName: string;
+  inStock: number;
 }
 
 interface SalesItem {
   name: string;
+  itemId: string;
   totalQuantity: number;
-  totalAmount: number;
   avgPerDay: number;
   recommendedQty: number;
+  inStock: number;
+  toOrder: number;
   caseSize: number;
   casesToOrder: number;
-  unitsToOrder: number;
   category: string;
 }
 
@@ -117,123 +95,177 @@ serve(async (req) => {
   }
 
   try {
-    const { startDate, endDate } = await req.json();
     const accessToken = Deno.env.get('LOYVERSE_ACCESS_TOKEN');
     
     if (!accessToken) {
       throw new Error('LOYVERSE_ACCESS_TOKEN not configured');
     }
 
-    console.log(`📊 Analyzing sales from ${startDate} to ${endDate}`);
+    // Calculate 7 days period
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+    startDate.setHours(5, 0, 0, 0);
+    endDate.setHours(5, 0, 59, 999);
 
-    // Calculate number of days in the period
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const daysDiff = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
-    console.log(`📅 Period: ${daysDiff} days`);
+    console.log(`📊 Analyzing sales from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
-    // Fetch all receipts for the period
+    // Step 1: Fetch current inventory
+    console.log('📦 Fetching inventory...');
+    const inventory: Record<string, InventoryItem> = {};
+    let inventoryCursor: string | null = null;
+    
+    do {
+      const params = new URLSearchParams({ limit: '250' });
+      if (inventoryCursor) params.append('cursor', inventoryCursor);
+
+      const invResponse = await fetch(`https://api.loyverse.com/v1.0/inventory?${params}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+
+      if (!invResponse.ok) {
+        console.log('⚠️ Inventory fetch failed, continuing without stock data');
+        break;
+      }
+
+      const invData = await invResponse.json();
+      for (const item of invData.inventory_levels || []) {
+        if (item.in_stock > 0) {
+          inventory[item.variant_id] = {
+            itemId: item.variant_id,
+            itemName: '',
+            inStock: item.in_stock,
+          };
+        }
+      }
+      inventoryCursor = invData.cursor || null;
+    } while (inventoryCursor);
+
+    console.log(`📦 Found ${Object.keys(inventory).length} items in stock`);
+
+    // Step 2: Fetch items to get names
+    console.log('📋 Fetching item names...');
+    let itemsCursor: string | null = null;
+    const itemNames: Record<string, string> = {};
+    
+    do {
+      const params = new URLSearchParams({ limit: '250' });
+      if (itemsCursor) params.append('cursor', itemsCursor);
+
+      const itemsResponse = await fetch(`https://api.loyverse.com/v1.0/items?${params}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+
+      if (!itemsResponse.ok) break;
+
+      const itemsData = await itemsResponse.json();
+      for (const item of itemsData.items || []) {
+        for (const variant of item.variants || []) {
+          itemNames[variant.variant_id] = item.item_name;
+          if (inventory[variant.variant_id]) {
+            inventory[variant.variant_id].itemName = item.item_name;
+          }
+        }
+      }
+      itemsCursor = itemsData.cursor || null;
+    } while (itemsCursor);
+
+    // Step 3: Fetch receipts for sales data
+    console.log('🧾 Fetching receipts...');
     const allReceipts: any[] = [];
-    let cursor: string | null = null;
+    let receiptsCursor: string | null = null;
     
     do {
       const params = new URLSearchParams({
-        created_at_min: startDate,
-        created_at_max: endDate,
+        created_at_min: startDate.toISOString(),
+        created_at_max: endDate.toISOString(),
         limit: '250',
       });
-      
-      if (cursor) {
-        params.append('cursor', cursor);
-      }
+      if (receiptsCursor) params.append('cursor', receiptsCursor);
 
       const response = await fetch(`https://api.loyverse.com/v1.0/receipts?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
+        headers: { 'Authorization': `Bearer ${accessToken}` },
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ Loyverse API error: ${response.status} - ${errorText}`);
         throw new Error(`Loyverse API error: ${response.status}`);
       }
 
       const data = await response.json();
-      const receipts = data.receipts || [];
-      allReceipts.push(...receipts);
-      cursor = data.cursor || null;
+      allReceipts.push(...(data.receipts || []));
+      receiptsCursor = data.cursor || null;
       
-      console.log(`📦 Fetched ${receipts.length} receipts, total: ${allReceipts.length}`);
-    } while (cursor);
+      console.log(`📦 Fetched ${data.receipts?.length || 0} receipts, total: ${allReceipts.length}`);
+    } while (receiptsCursor);
 
-    // Aggregate sales by item
-    const itemSales: Record<string, { quantity: number; amount: number }> = {};
+    // Step 4: Aggregate sales by item
+    const itemSales: Record<string, { name: string; variantId: string; quantity: number }> = {};
     
     for (const receipt of allReceipts) {
-      // Skip refunds
       if (receipt.receipt_type === 'REFUND') continue;
       
       for (const lineItem of receipt.line_items || []) {
         const itemName = lineItem.item_name || 'Unknown';
         
         // Skip excluded items
-        const config = getProductConfig(itemName);
-        if (!config) continue;
+        if (isExcluded(itemName)) continue;
         
-        if (!itemSales[itemName]) {
-          itemSales[itemName] = { quantity: 0, amount: 0 };
+        const key = lineItem.variant_id || itemName;
+        if (!itemSales[key]) {
+          itemSales[key] = { 
+            name: itemName, 
+            variantId: lineItem.variant_id || '',
+            quantity: 0 
+          };
         }
-        
-        itemSales[itemName].quantity += lineItem.quantity || 0;
-        itemSales[itemName].amount += lineItem.total_money || 0;
+        itemSales[key].quantity += lineItem.quantity || 0;
       }
     }
 
-    // Calculate recommendations for NEXT DAY
+    // Step 5: Calculate recommendations
     const recommendations: SalesItem[] = [];
+    const daysDiff = 7;
     
-    for (const [name, data] of Object.entries(itemSales)) {
-      const config = getProductConfig(name);
-      if (!config) continue;
-      
+    for (const [key, data] of Object.entries(itemSales)) {
       const avgPerDay = data.quantity / daysDiff;
-      const recommendedQty = Math.ceil(avgPerDay * 1.2); // +20% buffer, rounded up
-      const unitsToOrder = Math.max(1, recommendedQty); // At least 1 unit
-      const casesToOrder = Math.ceil(unitsToOrder / config.caseSize);
+      const recommendedQty = Math.ceil(avgPerDay * 1.2); // +20% buffer for 1 day
+      const inStock = inventory[data.variantId]?.inStock || 0;
+      const toOrder = Math.max(0, recommendedQty - inStock);
+      const caseSize = getCaseSize(data.name);
+      const casesToOrder = caseSize > 1 ? Math.ceil(toOrder / caseSize) : toOrder;
+      const category = getCategory(data.name);
       
-      // Only include items with actual sales
       if (data.quantity > 0) {
         recommendations.push({
-          name,
+          name: data.name,
+          itemId: data.variantId,
           totalQuantity: data.quantity,
-          totalAmount: data.amount,
           avgPerDay: Math.round(avgPerDay * 10) / 10,
           recommendedQty,
-          caseSize: config.caseSize,
+          inStock,
+          toOrder,
+          caseSize,
           casesToOrder,
-          unitsToOrder,
-          category: config.category,
+          category,
         });
       }
     }
 
-    // Sort by category then by units to order (descending)
+    // Sort by category then by toOrder
+    const categoryOrder = ['beer', 'drinks', 'snacks', 'supplies', 'other'];
     recommendations.sort((a, b) => {
-      if (a.category !== b.category) {
-        const categoryOrder = ['beer', 'drinks', 'snacks', 'supplies', 'food', 'other'];
-        return categoryOrder.indexOf(a.category) - categoryOrder.indexOf(b.category);
-      }
-      return b.unitsToOrder - a.unitsToOrder;
+      const catDiff = categoryOrder.indexOf(a.category) - categoryOrder.indexOf(b.category);
+      if (catDiff !== 0) return catDiff;
+      return b.toOrder - a.toOrder;
     });
 
-    console.log(`✅ Analyzed ${recommendations.length} products (excluded services)`);
+    console.log(`✅ Analyzed ${recommendations.length} products`);
 
     return new Response(JSON.stringify({
       success: true,
-      period: {
-        startDate,
-        endDate,
-        days: daysDiff,
-      },
+      period: { days: daysDiff },
       totalReceipts: allReceipts.length,
       recommendations,
     }), {
