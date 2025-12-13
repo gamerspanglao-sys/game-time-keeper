@@ -27,7 +27,7 @@ serve(async (req) => {
     const createdAtMin = new Date(startDate).toISOString();
     const createdAtMax = new Date(endDate).toISOString();
 
-    // Fetch receipts from Loyverse
+    // Fetch receipts from Loyverse (both sales and refunds)
     let allReceipts: any[] = [];
     let cursor: string | null = null;
 
@@ -93,36 +93,53 @@ serve(async (req) => {
         total: item.total_money,
       }));
 
+      // Determine if it's a refund
+      const isRefund = receipt.receipt_type === 'REFUND';
+
       return {
         id: receipt.receipt_number,
         date: receipt.created_at,
-        total: receipt.total_money,
+        total: isRefund ? -Math.abs(receipt.total_money) : receipt.total_money,
         payments: paymentDetails,
         items,
         note: receipt.note,
         source: receipt.source,
+        isRefund,
+        refundFor: receipt.refund_for,
       };
     });
 
+    // Separate sales and refunds
+    const sales = payments.filter((p: any) => !p.isRefund);
+    const refunds = payments.filter((p: any) => p.isRefund);
+
     // Calculate summary
     const summary = {
-      totalReceipts: payments.length,
-      totalAmount: payments.reduce((sum: number, p: any) => sum + p.total, 0),
-      byPaymentType: {} as Record<string, { count: number; amount: number }>,
+      totalReceipts: sales.length,
+      totalRefunds: refunds.length,
+      totalAmount: sales.reduce((sum: number, p: any) => sum + p.total, 0),
+      totalRefundAmount: refunds.reduce((sum: number, p: any) => sum + Math.abs(p.total), 0),
+      netAmount: payments.reduce((sum: number, p: any) => sum + p.total, 0),
+      byPaymentType: {} as Record<string, { count: number; amount: number; refundCount: number; refundAmount: number }>,
     };
 
     // Group by payment type
     payments.forEach((payment: any) => {
       payment.payments.forEach((p: any) => {
         if (!summary.byPaymentType[p.type]) {
-          summary.byPaymentType[p.type] = { count: 0, amount: 0 };
+          summary.byPaymentType[p.type] = { count: 0, amount: 0, refundCount: 0, refundAmount: 0 };
         }
-        summary.byPaymentType[p.type].count++;
-        summary.byPaymentType[p.type].amount += p.amount;
+        if (payment.isRefund) {
+          summary.byPaymentType[p.type].refundCount++;
+          summary.byPaymentType[p.type].refundAmount += Math.abs(p.amount);
+        } else {
+          summary.byPaymentType[p.type].count++;
+          summary.byPaymentType[p.type].amount += p.amount;
+        }
       });
     });
 
-    console.log(`✅ Processed ${payments.length} receipts`);
+    console.log(`✅ Processed ${sales.length} sales, ${refunds.length} refunds`);
     console.log(`💰 Summary:`, JSON.stringify(summary, null, 2));
 
     return new Response(
