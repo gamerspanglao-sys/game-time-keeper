@@ -119,26 +119,37 @@ serve(async (req) => {
       const params = new URLSearchParams({ limit: '250' });
       if (inventoryCursor) params.append('cursor', inventoryCursor);
 
-      const invResponse = await fetch(`https://api.loyverse.com/v1.0/inventory?${params}`, {
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-      });
+      try {
+        const invResponse = await fetch(`https://api.loyverse.com/v1.0/inventory?${params}`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+        });
 
-      if (!invResponse.ok) {
-        console.log('⚠️ Inventory fetch failed, continuing without stock data');
+        if (!invResponse.ok) {
+          console.log('⚠️ Inventory fetch failed:', invResponse.status);
+          break;
+        }
+
+        const invText = await invResponse.text();
+        if (!invText) {
+          console.log('⚠️ Empty inventory response');
+          break;
+        }
+        
+        const invData = JSON.parse(invText);
+        for (const item of invData.inventory_levels || []) {
+          if (item.in_stock > 0) {
+            inventory[item.variant_id] = {
+              itemId: item.variant_id,
+              itemName: '',
+              inStock: item.in_stock,
+            };
+          }
+        }
+        inventoryCursor = invData.cursor || null;
+      } catch (e) {
+        console.log('⚠️ Inventory parse error, continuing without stock');
         break;
       }
-
-      const invData = await invResponse.json();
-      for (const item of invData.inventory_levels || []) {
-        if (item.in_stock > 0) {
-          inventory[item.variant_id] = {
-            itemId: item.variant_id,
-            itemName: '',
-            inStock: item.in_stock,
-          };
-        }
-      }
-      inventoryCursor = invData.cursor || null;
     } while (inventoryCursor);
 
     console.log(`📦 Found ${Object.keys(inventory).length} items in stock`);
@@ -152,22 +163,30 @@ serve(async (req) => {
       const params = new URLSearchParams({ limit: '250' });
       if (itemsCursor) params.append('cursor', itemsCursor);
 
-      const itemsResponse = await fetch(`https://api.loyverse.com/v1.0/items?${params}`, {
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-      });
+      try {
+        const itemsResponse = await fetch(`https://api.loyverse.com/v1.0/items?${params}`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+        });
 
-      if (!itemsResponse.ok) break;
+        if (!itemsResponse.ok) break;
 
-      const itemsData = await itemsResponse.json();
-      for (const item of itemsData.items || []) {
-        for (const variant of item.variants || []) {
-          itemNames[variant.variant_id] = item.item_name;
-          if (inventory[variant.variant_id]) {
-            inventory[variant.variant_id].itemName = item.item_name;
+        const itemsText = await itemsResponse.text();
+        if (!itemsText) break;
+        
+        const itemsData = JSON.parse(itemsText);
+        for (const item of itemsData.items || []) {
+          for (const variant of item.variants || []) {
+            itemNames[variant.variant_id] = item.item_name;
+            if (inventory[variant.variant_id]) {
+              inventory[variant.variant_id].itemName = item.item_name;
+            }
           }
         }
+        itemsCursor = itemsData.cursor || null;
+      } catch (e) {
+        console.log('⚠️ Items parse error');
+        break;
       }
-      itemsCursor = itemsData.cursor || null;
     } while (itemsCursor);
 
     // Step 3: Fetch receipts for sales data
@@ -193,7 +212,13 @@ serve(async (req) => {
         throw new Error(`Loyverse API error: ${response.status}`);
       }
 
-      const data = await response.json();
+      const responseText = await response.text();
+      if (!responseText) {
+        console.log('⚠️ Empty receipts response');
+        break;
+      }
+      
+      const data = JSON.parse(responseText);
       allReceipts.push(...(data.receipts || []));
       receiptsCursor = data.cursor || null;
       
