@@ -361,7 +361,10 @@ serve(async (req) => {
     // Step 4: Aggregate sales by item
     const itemSales: Record<string, { name: string; variantId: string; quantity: number }> = {};
     let towerSales = 0; // Count tower sales to add to 1L beer
-    let basketSales = 0; // Count basket sales
+    let basketSales = 0; // Total basket sales (all types)
+    let basketSalesRedHorse = 0; // Baskets specifically with Red Horse
+    let basketSalesSanMiguel = 0; // Baskets specifically with San Miguel
+    let basketSalesLight = 0; // Baskets specifically with San Miguel Light
     
     for (const receipt of allReceipts) {
       if (receipt.receipt_type === 'REFUND') continue;
@@ -376,8 +379,16 @@ serve(async (req) => {
           continue;
         }
         
-        // Count baskets separately (each basket = 5 x 0.5L bottles typically)
+        // Count baskets separately and split by beer type (each basket = 5 bottles of its beer)
         if (isBasket(itemName)) {
+          const lower = itemName.toLowerCase();
+          if (lower.includes('red horse')) {
+            basketSalesRedHorse += qty;
+          } else if (lower.includes('san miguel') && lower.includes('light')) {
+            basketSalesLight += qty;
+          } else if (lower.includes('san miguel')) {
+            basketSalesSanMiguel += qty;
+          }
           basketSales += qty;
           continue;
         }
@@ -402,7 +413,9 @@ serve(async (req) => {
     
     // Calculate avg baskets/towers per day for proportional extra consumption
     const towersPerDay = towerSales / ANALYSIS_DAYS;
-    const basketsPerDay = basketSales / ANALYSIS_DAYS;
+    const basketsRedHorsePerDay = basketSalesRedHorse / ANALYSIS_DAYS;
+    const basketsSanMiguelPerDay = basketSalesSanMiguel / ANALYSIS_DAYS;
+    const basketsLightPerDay = basketSalesLight / ANALYSIS_DAYS;
     
     for (const [key, data] of Object.entries(itemSales)) {
       let extraPerDay = 0;
@@ -418,28 +431,28 @@ serve(async (req) => {
         }
       }
       
-      // Red Horse 0.5L from baskets (5 per basket)
+      // Red Horse 0.5L from baskets (5 per basket, only baskets with Red Horse)
       if (nameLower.includes('red horse') && 
           (nameLower.includes('0,5') || nameLower.includes('500') || nameLower.includes('0.5'))) {
-        extraPerDay = basketsPerDay * 5;
-        if (basketSales > 0) {
-          note = `+${Math.round(extraPerDay * 10) / 10}/day from baskets`;
+        extraPerDay = basketsRedHorsePerDay * 5;
+        if (basketSalesRedHorse > 0) {
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from Red Horse baskets`;
         }
       }
       
-      // San Miguel (regular) from baskets (5 per basket)
+      // San Miguel (regular) from baskets (5 per basket, only San Miguel baskets)
       if (nameLower.includes('san miguel') && !nameLower.includes('light') && !nameLower.includes('premium')) {
-        extraPerDay = basketsPerDay * 5;
-        if (basketSales > 0) {
-          note = `+${Math.round(extraPerDay * 10) / 10}/day from baskets`;
+        extraPerDay = basketsSanMiguelPerDay * 5;
+        if (basketSalesSanMiguel > 0) {
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from San Miguel baskets`;
         }
       }
       
-      // San Miguel Light from baskets (5 per basket)
+      // San Miguel Light from baskets (5 per basket, only Light baskets)
       if (nameLower.includes('san miguel') && nameLower.includes('light')) {
-        extraPerDay = basketsPerDay * 5;
-        if (basketSales > 0) {
-          note = `+${Math.round(extraPerDay * 10) / 10}/day from baskets`;
+        extraPerDay = basketsLightPerDay * 5;
+        if (basketSalesLight > 0) {
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from Light baskets`;
         }
       }
       
@@ -483,7 +496,9 @@ serve(async (req) => {
     });
 
     console.log(`✅ Analyzed ${recommendations.length} products`);
-    console.log(`🍺 Towers sold: ${towerSales}, Baskets sold: ${basketSales}`);
+    console.log(
+      `🍺 Towers sold: ${towerSales}, Baskets RH: ${basketSalesRedHorse}, SM: ${basketSalesSanMiguel}, Light: ${basketSalesLight}, Total: ${basketSales}`,
+    );
 
     return new Response(JSON.stringify({
       success: true,
@@ -491,6 +506,9 @@ serve(async (req) => {
       totalReceipts: allReceipts.length,
       towerSales,
       basketSales,
+      basketSalesRedHorse,
+      basketSalesSanMiguel,
+      basketSalesLight,
       recommendations,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
