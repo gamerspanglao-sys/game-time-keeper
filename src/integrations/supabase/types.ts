@@ -70,6 +70,7 @@ export type Database = {
           added_at: number
           created_at: string
           customer_name: string
+          hours: number
           id: string
           timer_id: string
         }
@@ -77,6 +78,7 @@ export type Database = {
           added_at: number
           created_at?: string
           customer_name: string
+          hours?: number
           id?: string
           timer_id: string
         }
@@ -84,6 +86,7 @@ export type Database = {
           added_at?: number
           created_at?: string
           customer_name?: string
+          hours?: number
           id?: string
           timer_id?: string
         }

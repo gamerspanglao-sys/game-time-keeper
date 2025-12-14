@@ -23,12 +23,13 @@ export function useQueue() {
     saveQueue(queue);
   }, [queue]);
 
-  const addToQueue = (timerId: string, name: string) => {
+  const addToQueue = (timerId: string, name: string, hours: number = 1) => {
     const entry: QueueEntry = {
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: name.trim(),
       timerId,
       timestamp: Date.now(),
+      hours,
     };
 
     setQueue(prev => ({
