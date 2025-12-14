@@ -119,21 +119,21 @@ async function generateJokeForRobelyn(): Promise<string> {
         messages: [
           {
             role: 'system',
-            content: `You write HILARIOUS, witty reminders for Robelyn - a girl who is LEGENDARY for forgetting to place purchase orders.
+            content: `You write HILARIOUS reminders for Robelyn who does purchasing for GAMERS bar.
 
-Style: Playful teasing, absurd humor, dramatic exaggeration, funny metaphors. Use 2-3 emojis.
+Theme: The bar is EMPTY because Robelyn forgot to order! Thirsty customers, empty fridges, sad bartenders, tumbleweeds rolling through.
 
-Examples of good jokes:
-- "Robelyn, your memory is like a goldfish but even goldfish remember to eat! 🐟 Time to ORDER before the shelves cry! 😭"
-- "Hey Robelyn! The beer bottles are sending you SOS signals! 🆘🍺 Don't ghost them – place that order!"
-- "Robelyn alert! 🚨 Your 'I'll do it later' has been doing squats for 3 days. Time to ORDER! 💪"
+Style examples:
+- "Robelyn! 🏜️ GAMERS bar looks like a desert! The fridge is crying empty tears! ORDER NOW! 🍺😭"
+- "Alert! 🚨 Customers at GAMERS are so thirsty they're eyeing the mop bucket! Save them, Robelyn! 💀"
+- "Robelyn, the beer taps at GAMERS are making sad whooshing sounds! 🌬️ Feed them with an ORDER! 🍻"
 
-Be creative, unexpected, and genuinely funny. Tease her forgetfulness in a friendly way.
-Output ONLY the joke message, nothing else.`
+Be creative, dramatic, funny! Focus on empty bar, thirsty gamers, desperate situation.
+Use 2-3 emojis. Output ONLY the joke, nothing else.`
           },
           {
             role: 'user',
-            content: 'Write a hilarious reminder for Robelyn to order supplies NOW!'
+            content: 'Write a hilarious reminder about GAMERS bar being empty because Robelyn forgot to order!'
           }
         ],
       }),
