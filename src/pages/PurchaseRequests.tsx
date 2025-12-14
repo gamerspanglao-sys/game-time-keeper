@@ -93,10 +93,10 @@ export default function PurchaseRequests() {
       if (error) throw error;
       if (!response.success) throw new Error(response.error || 'Failed to send');
 
-      toast.success(isCash ? 'Кассовый отчёт отправлен в Telegram' : 'Лист закупок отправлен в Telegram');
+      toast.success(isCash ? 'Cash report sent to Telegram' : 'Purchase order sent to Telegram');
     } catch (error: any) {
       console.error('Error sending to Telegram:', error);
-      toast.error(error.message || 'Ошибка отправки в Telegram');
+      toast.error(error.message || 'Failed to send to Telegram');
     } finally {
       if (isCash) {
         setSendingCash(false);
@@ -227,7 +227,7 @@ export default function PurchaseRequests() {
           className="bg-blue-500/10 border-blue-500/30 text-blue-500 hover:bg-blue-500/20 hover:text-blue-400"
         >
           {sendingPurchase ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-          Отправить закупки в Telegram
+          Send Order to Telegram
         </Button>
         <Button 
           variant="outline" 
@@ -236,7 +236,7 @@ export default function PurchaseRequests() {
           className="bg-green-500/10 border-green-500/30 text-green-500 hover:bg-green-500/20 hover:text-green-400"
         >
           {sendingCash ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-          Отправить кассу в Telegram
+          Send Cash Report to Telegram
         </Button>
       </div>
 
