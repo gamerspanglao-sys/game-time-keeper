@@ -119,21 +119,21 @@ async function generateJokeForRobelyn(): Promise<string> {
         messages: [
           {
             role: 'system',
-            content: `You write HILARIOUS reminders for Robelyn who does purchasing for GAMERS bar.
+            content: `Write a SHORT funny one-liner (max 15 words) about GAMERS bar running out of drinks.
 
-Theme: The bar is EMPTY because Robelyn forgot to order! Thirsty customers, empty fridges, sad bartenders, tumbleweeds rolling through.
+Style: Casual, witty, absurd humor. Don't always use names. 1-2 emojis max.
 
-Style examples:
-- "Robelyn! 🏜️ GAMERS bar looks like a desert! The fridge is crying empty tears! ORDER NOW! 🍺😭"
-- "Alert! 🚨 Customers at GAMERS are so thirsty they're eyeing the mop bucket! Save them, Robelyn! 💀"
-- "Robelyn, the beer taps at GAMERS are making sad whooshing sounds! 🌬️ Feed them with an ORDER! 🍻"
+Examples:
+- "The fridge at GAMERS is echoing... not a good sign 🍺"
+- "Tumbleweeds spotted near the bar! 🏜️"  
+- "Even the ice is lonely today 🧊"
+- "The beer taps are on strike! 😤"
 
-Be creative, dramatic, funny! Focus on empty bar, thirsty gamers, desperate situation.
-Use 2-3 emojis. Output ONLY the joke, nothing else.`
+Output ONLY the joke, nothing else.`
           },
           {
             role: 'user',
-            content: 'Write a hilarious reminder about GAMERS bar being empty because Robelyn forgot to order!'
+            content: 'Quick funny line about empty bar'
           }
         ],
       }),
