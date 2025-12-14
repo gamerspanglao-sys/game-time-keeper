@@ -399,6 +399,10 @@ serve(async (req) => {
     let basketSalesSanMiguel = 0; // Baskets specifically with San Miguel
     let basketSalesLight = 0; // Baskets specifically with San Miguel Light
     
+    // Tanduay consumption tracking
+    let towerSalesTanduay = 0; // Towers with Tanduay (each = 400ml)
+    let rumCokeSales = 0; // Rum Coke cocktails (each = 50ml)
+    
     for (const receipt of allReceipts) {
       if (receipt.receipt_type === 'REFUND') continue;
       
@@ -407,9 +411,12 @@ serve(async (req) => {
         const qty = lineItem.quantity || 0;
         
         // Count towers separately and split by beer type (each tower = 2 x 1L bottles)
+        // Tanduay tower = 400ml Tanduay
         if (isTower(itemName)) {
           const lower = itemName.toLowerCase();
-          if (lower.includes('red horse') && lower.includes('super')) {
+          if (lower.includes('tanduay')) {
+            towerSalesTanduay += qty;
+          } else if (lower.includes('red horse') && lower.includes('super')) {
             towerSalesRedHorseSuper += qty;
           } else if (lower.includes('red horse')) {
             towerSalesRedHorse += qty;
@@ -420,6 +427,12 @@ serve(async (req) => {
           }
           towerSales += qty;
           continue;
+        }
+        
+        // Count Rum Coke sales (each = 50ml Tanduay)
+        if (itemName.toLowerCase().includes('rum coke')) {
+          rumCokeSales += qty;
+          // Don't continue - also track as cocktail in itemSales
         }
         
         // Count baskets separately and split by beer type (each basket = 5 bottles of its beer)
@@ -529,6 +542,31 @@ serve(async (req) => {
       console.log(`✅ Created synthetic SM Light 1L entry (${towerSalesLight} towers sold, stock: ${found.stock})`);
     }
 
+    // Step 5b: Create synthetic Tanduay entry if towers/rum coke were sold
+    // Tanduay bottle = 750ml, Tower = 400ml, Rum Coke = 50ml
+    const tanduayMlFromTowers = towerSalesTanduay * 400;
+    const tanduayMlFromRumCoke = rumCokeSales * 50;
+    const totalTanduayMl = tanduayMlFromTowers + tanduayMlFromRumCoke;
+    const tanduayBottlesNeeded = totalTanduayMl / 750; // Bottles consumed
+    
+    // Check if Tanduay Select already exists in sales
+    const hasTanduaySelect = Object.keys(itemSales).some(k => {
+      const n = k.toLowerCase();
+      return n.includes('tanduay') && n.includes('select') && !n.includes('tower') && !n.includes('ice');
+    });
+    
+    if (!hasTanduaySelect && totalTanduayMl > 0) {
+      const found = findVariantByName(['tanduay', 'select'], ['tower', 'ice']);
+      itemSales['Tanduay Select (from towers/cocktails)'] = { 
+        name: 'Tanduay Select (from towers/cocktails)', 
+        variantId: found.variantId, 
+        quantity: 0 
+      };
+      console.log(`✅ Created synthetic Tanduay Select entry (${towerSalesTanduay} towers + ${rumCokeSales} rum cokes = ${Math.round(tanduayBottlesNeeded * 10) / 10} bottles, stock: ${found.stock})`);
+    }
+    
+    console.log(`🥃 Tanduay: ${towerSalesTanduay} towers (${tanduayMlFromTowers}ml) + ${rumCokeSales} rum cokes (${tanduayMlFromRumCoke}ml) = ${totalTanduayMl}ml = ${Math.round(tanduayBottlesNeeded * 10) / 10} bottles`);
+
     // Step 6: Calculate recommendations
     const recommendations: SalesItem[] = [];
     
@@ -540,6 +578,9 @@ serve(async (req) => {
     const basketsRedHorsePerDay = basketSalesRedHorse / ANALYSIS_DAYS;
     const basketsSanMiguelPerDay = basketSalesSanMiguel / ANALYSIS_DAYS;
     const basketsLightPerDay = basketSalesLight / ANALYSIS_DAYS;
+    
+    // Tanduay consumption per day (in bottles - 750ml each)
+    const tanduayBottlesPerDay = tanduayBottlesNeeded / ANALYSIS_DAYS;
     
     for (const [key, data] of Object.entries(itemSales)) {
       let extraPerDay = 0;
@@ -606,6 +647,18 @@ serve(async (req) => {
         extraPerDay = basketsLightPerDay * 5;
         if (basketSalesLight > 0) {
           note = `+${Math.round(extraPerDay * 10) / 10}/day from Light baskets`;
+        }
+      }
+      
+      // Tanduay Select from towers (400ml each) and Rum Coke (50ml each)
+      // Tanduay bottle = 750ml
+      if (nameLower.includes('tanduay') && nameLower.includes('select') && !nameLower.includes('ice')) {
+        extraPerDay = tanduayBottlesPerDay; // Already calculated as bottles/day
+        if (totalTanduayMl > 0) {
+          const towersNote = towerSalesTanduay > 0 ? `${towerSalesTanduay} towers` : '';
+          const rumCokeNote = rumCokeSales > 0 ? `${rumCokeSales} rum cokes` : '';
+          const parts = [towersNote, rumCokeNote].filter(Boolean).join(' + ');
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from ${parts}`;
         }
       }
       
