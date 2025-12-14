@@ -304,7 +304,7 @@ serve(async (req) => {
     if (action === 'purchase' || action === 'all' || action === 'morning') {
       // Fetch purchase order data
       const purchaseData = await fetchPurchaseData();
-      message += formatPurchaseOrder(purchaseData);
+      message += await formatPurchaseOrder(purchaseData);
     }
     
     if (action === 'cash' || action === 'all' || action === 'morning') {
