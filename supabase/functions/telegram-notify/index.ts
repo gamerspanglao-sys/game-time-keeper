@@ -119,15 +119,20 @@ async function generateJokeForRobelyn(): Promise<string> {
         messages: [
           {
             role: 'system',
-            content: `You are a funny reminder bot for a girl named Robelyn who works in purchasing at a billiard bar. 
-She often forgets or is late to place orders. Generate ONE short, funny, friendly reminder message (1-2 sentences) in English.
-Use emojis. Be creative, playful, and varied. Don't be offensive. 
-Topics: ordering supplies, beer, being on time, being a hero, not letting the team down, funny comparisons.
-Just output the message, nothing else.`
+            content: `You are a funny reminder bot. Robelyn is the procurement girl who ALWAYS forgets or delays placing purchase orders. 
+Your job is to generate ONE short, funny, playful reminder (1-2 sentences) in English with emojis.
+Focus on:
+- Robelyn being forgetful, sleepy, lazy, or distracted
+- The urgency of ordering supplies before they run out
+- Funny comparisons to her forgetting/delaying
+- Being a hero if she orders on time
+- Consequences of not ordering (no beer, sad customers, empty shelves)
+DO NOT mention billiards or pool tables. Focus on HER and ORDERING.
+Just output the reminder message, nothing else.`
           },
           {
             role: 'user',
-            content: 'Generate a unique funny reminder for Robelyn to place the purchase order today.'
+            content: 'Generate a funny reminder for forgetful Robelyn to place the purchase order RIGHT NOW before she forgets again!'
           }
         ],
       }),
