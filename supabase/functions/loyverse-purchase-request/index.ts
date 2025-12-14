@@ -8,11 +8,11 @@ const corsHeaders = {
 
 // Case sizes for products
 const CASE_SIZES: Record<string, number> = {
-  'red horse 0,5': 24,    // 0.5L = 24 per case
-  'red horse 500': 24,    // 0.5L = 24 per case
-  'red horse 0.5': 24,    // 0.5L = 24 per case
-  'red horse super 0,5': 24, // Super 0.5L = 24 per case
-  'red horse super 0.5': 24, // Super 0.5L = 24 per case
+  'red horse 0,5': 12,    // 0.5L = 12 per case
+  'red horse 500': 12,    // 0.5L = 12 per case
+  'red horse 0.5': 12,    // 0.5L = 12 per case
+  'red horse super 0,5': 12, // Super 0.5L = 12 per case
+  'red horse super 0.5': 12, // Super 0.5L = 12 per case
   'red horse 1': 6,       // 1L = 6 per case
   'red horse 1l': 6,      // 1L = 6 per case
   'red horse super 1l': 6, // Super 1L = 6 per case
@@ -33,9 +33,9 @@ const CASE_SIZES: Record<string, number> = {
   'coca cola 1.75': 6,    // Big Coke = 6 per case
   'sprite 1.75': 6,       // Big Sprite = 6 per case
   'royal 1.75': 6,        // Big Royal = 6 per case
-  'coke': 24,             // Small cans/bottles
-  'sprite': 24,           // Small cans/bottles (will be overridden by 1.75 check)
-  'royal': 24,            // Small cans/bottles (will be overridden by 1.75 check)
+  'coke': 12,             // Small cans/bottles = 12 per case
+  'sprite': 12,           // Small cans/bottles = 12 per case
+  'royal': 12,            // Small cans/bottles = 12 per case
   '1l': 6,                // generic 1L = 6 per case
   'super': 6,             // Red Horse Super = 1L = 6 per case
   'litr': 6,
@@ -217,7 +217,7 @@ function getCaseSize(itemName: string): number {
   
   // Red Horse sizes
   if (name.includes('red horse')) {
-    if (name.includes('0,5') || name.includes('500') || name.includes('0.5')) return 24; // 0.5L = 24 per case
+    if (name.includes('0,5') || name.includes('500') || name.includes('0.5')) return 12; // 0.5L = 12 per case
     if (name.includes('1l') || name.includes('1 l') || name.includes('1000') || name.includes('super')) return 6; // 1L = 6 per case
   }
   
@@ -225,7 +225,7 @@ function getCaseSize(itemName: string): number {
   if (name.includes('tanduay')) return 12;
   if (name.includes('water')) return 12;
   if (name.includes('mule') || name.includes('smirnoff')) return 24;
-  if (name.includes('coke') || name.includes('cola') || name.includes('sprite') || name.includes('royal')) return 24;
+  if (name.includes('coke') || name.includes('cola') || name.includes('sprite') || name.includes('royal')) return 12; // small = 12 per case
   
   return 12;
 }
