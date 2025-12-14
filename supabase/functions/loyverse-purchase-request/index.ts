@@ -698,24 +698,20 @@ serve(async (req) => {
       }
     }
     
-    // 5. Ensure big soft drink bottles (1.75L) like Coke/Sprite/Royal appear even without sales
+    // 5. Ensure big soft drink bottles (Cola/Sprite/Royal) appear even without sales
+    // These are stored in ml and already converted to bottles above
     for (const [variantId, name] of Object.entries(variantToName)) {
       const n = name.toLowerCase();
-      const isSoftDrink =
-        n.includes('coca cola') ||
-        n.includes('coca-cola') ||
+      
+      // Match Cola/Sprite/Royal stock items (they have "stok" in name or are the main item)
+      const isSoftDrinkStock =
+        n.includes('coca') ||
         n.includes('coke') ||
+        n.includes('cola') ||
         n.includes('sprite') ||
         n.includes('royal');
-      const isBigBottle =
-        n.includes('1.75') ||
-        n.includes('1,75') ||
-        n.includes('1.5') ||
-        n.includes('1,5') ||
-        n.includes('2l') ||
-        n.includes('2 l');
 
-      if (!isSoftDrink || !isBigBottle) continue;
+      if (!isSoftDrinkStock) continue;
 
       const exists = Object.values(itemSales).some(item => item.variantId === variantId);
       if (exists) continue;
@@ -723,13 +719,22 @@ serve(async (req) => {
       const stock = inventory[variantId] || 0;
       if (stock <= 0) continue;
 
-      const key = name;
-      itemSales[key] = {
-        name,
+      // Determine display name
+      let displayName = name;
+      if (n.includes('coca') || n.includes('coke') || n.includes('cola')) {
+        displayName = 'Coca Cola 1.75L';
+      } else if (n.includes('sprite')) {
+        displayName = 'Sprite 1.75L';
+      } else if (n.includes('royal')) {
+        displayName = 'Royal 1.75L';
+      }
+
+      itemSales[displayName] = {
+        name: displayName,
         variantId,
         quantity: 0,
       };
-      console.log(`✅ Added big soft drink bottle: "${name}" (stock: ${stock})`);
+      console.log(`✅ Added soft drink: "${displayName}" (stock: ${stock} bottles)`);
     }
     
     console.log(`🥃 Tanduay: ${towerSalesTanduay} towers (${tanduayMlFromTowers}ml) + ${rumCokeSales} rum cokes (${tanduayMlFromRumCoke}ml) = ${totalTanduayMl}ml = ${Math.round(tanduayBottlesNeeded * 10) / 10} bottles`);
