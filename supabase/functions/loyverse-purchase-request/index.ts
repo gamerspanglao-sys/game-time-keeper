@@ -670,6 +670,28 @@ serve(async (req) => {
       return { variantId: '', stock: 0, realName: '' };
     };
     
+    // First, collect direct sales for Tanduay Select / Dark / Gin and remove their separate positions
+    let tanduaySelectDirectQty = 0;
+    let tanduayDarkDirectQty = 0;
+    let ginDirectQty = 0;
+    const spiritKeysToRemove: string[] = [];
+    for (const key of Object.keys(itemSales)) {
+      const k = key.toLowerCase();
+      if (k.includes('tanduay') && k.includes('select') && !k.includes('tower')) {
+        tanduaySelectDirectQty += itemSales[key].quantity;
+        spiritKeysToRemove.push(key);
+      } else if (k.includes('tanduay') && k.includes('dark') && !k.includes('tower')) {
+        tanduayDarkDirectQty += itemSales[key].quantity;
+        spiritKeysToRemove.push(key);
+      } else if (k.includes('gin') && !k.includes('tower')) {
+        ginDirectQty += itemSales[key].quantity;
+        spiritKeysToRemove.push(key);
+      }
+    }
+    for (const key of spiritKeysToRemove) {
+      delete itemSales[key];
+    }
+    
     // 1. Tanduay Select Bottle (with tower/cocktail consumption) - use Stok variant for stock
     const hasTanduaySelect = Object.keys(itemSales).some(k => {
       const n = k.toLowerCase();
@@ -681,9 +703,9 @@ serve(async (req) => {
         itemSales['Tanduay Select Bootle'] = { 
           name: 'Tanduay Select Bootle', 
           variantId: found.variantId, 
-          quantity: 0 
+          quantity: tanduaySelectDirectQty 
         };
-        console.log(`✅ Added Tanduay Select (Stok stock: ${found.stock} ml = ${Math.floor(found.stock / 750)} bottles)`);
+        console.log(`✅ Added Tanduay Select (direct: ${tanduaySelectDirectQty}, Stok stock: ${found.stock} ml = ${Math.floor(found.stock / 750)} bottles)`);
       }
     }
     
@@ -698,9 +720,9 @@ serve(async (req) => {
         itemSales['Tanduay Dark'] = { 
           name: 'Tanduay Dark', 
           variantId: found.variantId, 
-          quantity: 0 
+          quantity: tanduayDarkDirectQty 
         };
-        console.log(`✅ Added Tanduay Dark (Stok stock: ${found.stock} ml = ${Math.floor(found.stock / 750)} bottles)`);
+        console.log(`✅ Added Tanduay Dark (direct: ${tanduayDarkDirectQty}, Stok stock: ${found.stock} ml = ${Math.floor(found.stock / 750)} bottles)`);
       }
     }
     
@@ -732,9 +754,9 @@ serve(async (req) => {
         itemSales['Gin'] = { 
           name: 'Gin', 
           variantId: found.variantId, 
-          quantity: 0 
+          quantity: ginDirectQty 
         };
-        console.log(`✅ Added Gin (Stok stock: ${found.stock} ml = ${Math.floor(found.stock / 750)} bottles)`);
+        console.log(`✅ Added Gin (direct: ${ginDirectQty}, Stok stock: ${found.stock} ml = ${Math.floor(found.stock / 750)} bottles)`);
       }
     }
     
@@ -943,9 +965,9 @@ serve(async (req) => {
           nameLower.includes('sprite') ||
           nameLower.includes('royal'));
       
-      // Check if this is Tanduay Select or Gin stored in ml (750ml bottles)
+      // Check if this is 750ml spirit (Tanduay Select/Dark, Gin) stored in ml
       const is750mlSpirit = 
-        ((nameLower.includes('tanduay') && nameLower.includes('select') && !nameLower.includes('ice')) ||
+        ((nameLower.includes('tanduay') && (nameLower.includes('select') || nameLower.includes('dark')) && !nameLower.includes('ice')) ||
          (nameLower.includes('gin') && !nameLower.includes('tower')));
       
       // If stock seems to be in ml (> 100), convert to bottles
