@@ -950,7 +950,9 @@ serve(async (req) => {
       const totalAvgPerDay = directAvgPerDay + extraPerDay;
       
       // Recommended = avg per day * days to stock * 1.2 safety margin
-      const daysToStock = 1 + DELIVERY_BUFFER_DAYS;
+      // For snacks: delivery only on Friday, so stock for 7 days
+      const itemCategory = getCategory(data.name) || 'other';
+      const daysToStock = itemCategory === 'snacks' ? 7 : (1 + DELIVERY_BUFFER_DAYS);
       const recommendedQty = Math.ceil(totalAvgPerDay * daysToStock * 1.2);
       
       // Get raw stock from inventory
@@ -988,16 +990,15 @@ serve(async (req) => {
       
       const rawToOrder = Math.max(0, recommendedQty - inStock);
       const caseSize = getCaseSize(data.name);
-      const category = getCategory(data.name) || 'other';
       
       // For beer, round up toOrder to be multiple of caseSize (order in full cases)
       let toOrder = rawToOrder;
       let casesToOrder = caseSize > 1 ? Math.ceil(rawToOrder / caseSize) : rawToOrder;
-      if (category === 'beer' && caseSize > 1 && rawToOrder > 0) {
+      if (itemCategory === 'beer' && caseSize > 1 && rawToOrder > 0) {
         casesToOrder = Math.ceil(rawToOrder / caseSize);
         toOrder = casesToOrder * caseSize; // Round to full cases
       }
-      const supplier = getSupplier(category, data.name);
+      const supplier = getSupplier(itemCategory, data.name);
       
       const totalSold = data.quantity + Math.round(extraPerDay * ANALYSIS_DAYS);
       
@@ -1006,7 +1007,7 @@ serve(async (req) => {
       // OR is a big soft drink bottle (1.5L/1.75L/2L Coke/Sprite/Royal)
       const isTanduayOrGin = (nameLower.includes('tanduay') || nameLower.includes('gin')) && !nameLower.includes('tower');
       const isBigSoftDrink =
-        category === 'soft' &&
+        itemCategory === 'soft' &&
         (nameLower.includes('1.75') ||
           nameLower.includes('1,75') ||
           nameLower.includes('1.5') ||
@@ -1029,7 +1030,7 @@ serve(async (req) => {
           toOrder,
           caseSize,
           casesToOrder,
-          category,
+          category: itemCategory,
           supplier,
           note: note || undefined,
         });
