@@ -314,16 +314,37 @@ serve(async (req) => {
     }
     
     if (action === 'cash' || action === 'all' || action === 'morning') {
-      // Calculate 5AM-5AM period for yesterday
+      // Calculate 5AM-5AM period for the PREVIOUS shift in Manila timezone
+      // Manila is UTC+8
       const now = new Date();
-      const endDate = new Date(now);
-      endDate.setHours(5, 0, 0, 0);
-      if (now.getHours() < 5) {
-        endDate.setDate(endDate.getDate()); // Today 5AM
+      const manilaOffset = 8 * 60; // Manila is UTC+8
+      const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const manilaTime = new Date(utcTime + (manilaOffset * 60000));
+      
+      const manilaHour = manilaTime.getHours();
+      const manilaDate = manilaTime.getDate();
+      const manilaMonth = manilaTime.getMonth();
+      const manilaYear = manilaTime.getFullYear();
+      
+      // If current Manila time is before 5AM, we want yesterday's shift (day before yesterday 5AM to yesterday 5AM)
+      // If current Manila time is 5AM or later, we want the shift that just ended (yesterday 5AM to today 5AM)
+      let endDate: Date;
+      let startDate: Date;
+      
+      if (manilaHour < 5) {
+        // Before 5AM Manila: report for shift that ended yesterday at 5AM
+        // End: yesterday 5AM Manila = yesterday 5AM - 8 hours = yesterday at -3 (day before at 21:00 UTC)
+        endDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate - 1, 5 - 8, 0, 0));
+        startDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate - 2, 5 - 8, 0, 0));
+      } else {
+        // 5AM or later Manila: report for shift that just ended at 5AM today
+        // End: today 5AM Manila = today 5AM - 8 hours = yesterday 21:00 UTC
+        endDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate, 5 - 8, 0, 0));
+        startDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate - 1, 5 - 8, 0, 0));
       }
       
-      const startDate = new Date(endDate);
-      startDate.setDate(startDate.getDate() - 1); // Yesterday 5AM
+      console.log(`📊 Cash report period: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+      console.log(`📊 Manila time now: ${manilaTime.toISOString()}, hour: ${manilaHour}`);
       
       const cashData = await fetchPaymentsData(startDate.toISOString(), endDate.toISOString());
       
