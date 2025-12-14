@@ -8,13 +8,16 @@ const corsHeaders = {
 
 // Case sizes for products
 const CASE_SIZES: Record<string, number> = {
-  'red horse 0,5': 12,
-  'red horse 500': 12,
-  'red horse 0.5': 12,
-  'red horse 1': 6,
-  'red horse 1l': 6,
-  'red horse super': 6, // 1L bottles
-  'san miguel 1l': 6,   // 1L bottles
+  'red horse 0,5': 24,    // 0.5L = 24 per case
+  'red horse 500': 24,    // 0.5L = 24 per case
+  'red horse 0.5': 24,    // 0.5L = 24 per case
+  'red horse super 0,5': 24, // Super 0.5L = 24 per case
+  'red horse super 0.5': 24, // Super 0.5L = 24 per case
+  'red horse 1': 6,       // 1L = 6 per case
+  'red horse 1l': 6,      // 1L = 6 per case
+  'red horse super 1l': 6, // Super 1L = 6 per case
+  'red horse super': 6,   // 1L bottles (default for super)
+  'san miguel 1l': 6,     // 1L bottles
   'san miguel light 1l': 6, // 1L bottles
   'san miguel light': 24, // small bottles
   'san miguel pale': 24,
@@ -24,11 +27,17 @@ const CASE_SIZES: Record<string, number> = {
   'smirnoff mule': 24,
   'smirnoff': 24,
   'water': 12,
-  'coke': 24,
-  'sprite': 24,
-  'royal': 24,
-  '1l': 6,  // generic 1L = 6 per case
-  'super': 6, // Red Horse Super = 1L = 6 per case
+  '1.75l': 6,             // Big bottles = 6 per case
+  '1.75': 6,              // Big bottles = 6 per case
+  '1,75': 6,              // Big bottles = 6 per case
+  'coca cola 1.75': 6,    // Big Coke = 6 per case
+  'sprite 1.75': 6,       // Big Sprite = 6 per case
+  'royal 1.75': 6,        // Big Royal = 6 per case
+  'coke': 24,             // Small cans/bottles
+  'sprite': 24,           // Small cans/bottles (will be overridden by 1.75 check)
+  'royal': 24,            // Small cans/bottles (will be overridden by 1.75 check)
+  '1l': 6,                // generic 1L = 6 per case
+  'super': 6,             // Red Horse Super = 1L = 6 per case
   'litr': 6,
 };
 
@@ -196,19 +205,20 @@ function isBasket(itemName: string): boolean {
 function getCaseSize(itemName: string): number {
   const name = itemName.toLowerCase();
   
+  // Check big bottles FIRST (1.75L, 1.5L, 2L) - always 6 per case
+  if (name.includes('1.75') || name.includes('1,75') || name.includes('1.5') || name.includes('1,5') || name.includes('2l') || name.includes('2 l')) {
+    return 6;
+  }
+  
+  // Check specific patterns from CASE_SIZES
   for (const [key, size] of Object.entries(CASE_SIZES)) {
     if (name.includes(key)) return size;
   }
   
   // Red Horse sizes
   if (name.includes('red horse')) {
-    if (name.includes('0,5') || name.includes('500') || name.includes('0.5')) return 12;
-    if (name.includes('1l') || name.includes('1 l') || name.includes('1000')) return 6;
-  }
-  
-  // Big bottles (1.5L, 1.75L, 2L) - typically 6-8 per case
-  if (name.includes('1.5') || name.includes('1,5') || name.includes('1.75') || name.includes('1,75') || name.includes('2l') || name.includes('2 l')) {
-    return 6;
+    if (name.includes('0,5') || name.includes('500') || name.includes('0.5')) return 24; // 0.5L = 24 per case
+    if (name.includes('1l') || name.includes('1 l') || name.includes('1000') || name.includes('super')) return 6; // 1L = 6 per case
   }
   
   if (name.includes('san miguel')) return 24;
