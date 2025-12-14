@@ -204,18 +204,27 @@ interface SalesItem {
   note?: string;
 }
 
-function getSupplier(category: string): string {
+function getSupplier(category: string, itemName: string): string {
+  const nameLower = itemName.toLowerCase();
+  
+  // Tanduay products go to Tanduay supplier
+  if (nameLower.includes('tanduay')) {
+    return 'Tanduay';
+  }
+  
   switch (category) {
     case 'beer':
       return 'San Miguel';
     case 'spirits':
-      return 'Spirits Supplier';
+      // Gin and other spirits go to Others
+      return 'Others';
     case 'cocktails':
-      return 'Cocktails Supplier';
+      // Rum Coke and other cocktails go to Others
+      return 'Others';
     case 'soft':
-      return 'Soft Drinks Supplier';
+      return 'Soft Drinks';
     default:
-      return 'Other';
+      return 'Others';
   }
 }
 
@@ -674,7 +683,7 @@ serve(async (req) => {
       const caseSize = getCaseSize(data.name);
       const casesToOrder = caseSize > 1 ? Math.ceil(toOrder / caseSize) : toOrder;
       const category = getCategory(data.name) || 'other';
-      const supplier = getSupplier(category);
+      const supplier = getSupplier(category, data.name);
       
       const totalSold = data.quantity + Math.round(extraPerDay * ANALYSIS_DAYS);
       
