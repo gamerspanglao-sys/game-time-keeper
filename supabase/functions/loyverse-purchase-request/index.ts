@@ -43,6 +43,11 @@ function isIncluded(itemName: string): boolean {
     return false;
   }
   
+  // EXCLUDE Tower products (they are tracked separately for consumption calculation)
+  if (name.includes('tower')) {
+    return false;
+  }
+  
   // ==== BEER (all brands except Heineken) ====
   if (
     name.includes('red horse') ||
@@ -567,22 +572,16 @@ serve(async (req) => {
       }
     }
     
-    // Check if Tanduay Bottle (regular, not ICE, not Select) already exists in sales
-    // This is "Tanduay" or "Tanduay Park" or "Tanduay Light" - the regular 750ml bottle
-    const hasTanduayBottle = Object.keys(itemSales).some(k => {
+    // Check if Tanduay Select Bottle already exists in sales (note: Loyverse has typo "Bootle")
+    // Tower/Rum Coke consumption should be added to Tanduay Select Bottle
+    const hasTanduaySelectBottle = Object.keys(itemSales).some(k => {
       const n = k.toLowerCase();
-      return n.includes('tanduay') && !n.includes('tower') && !n.includes('ice') && n.includes('bottle');
+      return n.includes('tanduay') && n.includes('select') && !n.includes('tower');
     });
     
-    if (!hasTanduayBottle && totalTanduayMl > 0) {
-      // Try to find "Tanduay Select Bottle" or just "Tanduay Bottle"
-      let found = findVariantByName(['tanduay', 'select', 'bottle'], ['tower', 'ice']);
-      if (!found.variantId) {
-        found = findVariantByName(['tanduay', 'bottle'], ['tower', 'ice']);
-      }
-      if (!found.variantId) {
-        found = findVariantByName(['tanduay'], ['tower', 'ice']);
-      }
+    if (!hasTanduaySelectBottle && totalTanduayMl > 0) {
+      // Find "Tanduay Select Bootle" (with Loyverse typo)
+      const found = findVariantByName(['tanduay', 'select'], ['tower', 'ice']);
       
       if (found.variantId) {
         itemSales['Tanduay Select Bottle (from towers/cocktails)'] = { 
@@ -590,9 +589,9 @@ serve(async (req) => {
           variantId: found.variantId, 
           quantity: 0 
         };
-        console.log(`✅ Created synthetic Tanduay entry from "${found.realName}" (${towerSalesTanduay} towers + ${rumCokeSales} rum cokes = ${Math.round(tanduayBottlesNeeded * 10) / 10} bottles, stock: ${found.stock})`);
+        console.log(`✅ Created synthetic Tanduay Select entry from "${found.realName}" (${towerSalesTanduay} towers + ${rumCokeSales} rum cokes = ${Math.round(tanduayBottlesNeeded * 10) / 10} bottles, stock: ${found.stock})`);
       } else {
-        console.log(`⚠️ Could not find Tanduay bottle variant in inventory`);
+        console.log(`⚠️ Could not find Tanduay Select variant in inventory`);
       }
     }
     
