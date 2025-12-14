@@ -653,47 +653,64 @@ serve(async (req) => {
     }
     
     // Always add all 3 Tanduay bottle products to itemSales if they exist in inventory
-    // 1. Tanduay Select Bottle (with tower/cocktail consumption)
+    // For Tanduay/Gin, we need to find the "Stok" variant (inventory in ml) not "Bootle/Bottle"
+    
+    // Helper to find Stok variant specifically
+    const findStokVariant = (patterns: string[]): { variantId: string; stock: number; realName: string } => {
+      for (const [variantId, name] of Object.entries(variantToName)) {
+        const nameLower = name.toLowerCase();
+        const matchesAll = patterns.every(p => nameLower.includes(p.toLowerCase()));
+        const isStok = nameLower.includes('stok');
+        if (matchesAll && isStok) {
+          const stock = inventory[variantId] || 0;
+          console.log(`🔍 Found Stok match: "${name}" (variantId: ${variantId.slice(0,8)}..., stock: ${stock} ml)`);
+          return { variantId, stock, realName: name };
+        }
+      }
+      return { variantId: '', stock: 0, realName: '' };
+    };
+    
+    // 1. Tanduay Select Bottle (with tower/cocktail consumption) - use Stok variant for stock
     const hasTanduaySelect = Object.keys(itemSales).some(k => {
       const n = k.toLowerCase();
       return n.includes('tanduay') && n.includes('select') && !n.includes('tower');
     });
     if (!hasTanduaySelect) {
-      const found = findVariantByName(['tanduay', 'select'], ['tower', 'ice']);
+      const found = findStokVariant(['tanduay', 'select']);
       if (found.variantId) {
-        itemSales['Tanduay Select Bottle'] = { 
-          name: 'Tanduay Select Bottle', 
+        itemSales['Tanduay Select Bootle'] = { 
+          name: 'Tanduay Select Bootle', 
           variantId: found.variantId, 
           quantity: 0 
         };
-        console.log(`✅ Added Tanduay Select Bottle (stock: ${found.stock})`);
+        console.log(`✅ Added Tanduay Select (Stok stock: ${found.stock} ml = ${Math.floor(found.stock / 750)} bottles)`);
       }
     }
     
-    // 2. Tanduay Dark (regular bottle)
+    // 2. Tanduay Dark (regular bottle) - use Stok variant for stock
     const hasTanduayDark = Object.keys(itemSales).some(k => {
       const n = k.toLowerCase();
       return n.includes('tanduay') && n.includes('dark');
     });
     if (!hasTanduayDark) {
-      const found = findVariantByName(['tanduay', 'dark'], ['tower', 'ice', 'select']);
+      const found = findStokVariant(['tanduay', 'dark']);
       if (found.variantId) {
         itemSales['Tanduay Dark'] = { 
           name: 'Tanduay Dark', 
           variantId: found.variantId, 
           quantity: 0 
         };
-        console.log(`✅ Added Tanduay Dark (stock: ${found.stock})`);
+        console.log(`✅ Added Tanduay Dark (Stok stock: ${found.stock} ml = ${Math.floor(found.stock / 750)} bottles)`);
       }
     }
     
-    // 3. Tanduay ICE
+    // 3. Tanduay ICE - this one seems to be tracked in bottles not ml
     const hasTanduayIce = Object.keys(itemSales).some(k => {
       const n = k.toLowerCase();
       return n.includes('tanduay') && n.includes('ice');
     });
     if (!hasTanduayIce) {
-      const found = findVariantByName(['tanduay', 'ice'], ['tower', 'select', 'dark']);
+      const found = findVariantByName(['tanduay', 'ice'], ['tower', 'select', 'dark', 'stok']);
       if (found.variantId) {
         itemSales['Tanduay ICE'] = { 
           name: 'Tanduay ICE', 
@@ -704,20 +721,20 @@ serve(async (req) => {
       }
     }
     
-    // 4. Gin Bottle - always show
+    // 4. Gin Bottle - use Stok variant for stock
     const hasGin = Object.keys(itemSales).some(k => {
       const n = k.toLowerCase();
       return n.includes('gin') && !n.includes('tower');
     });
     if (!hasGin) {
-      const found = findVariantByName(['gin'], ['tower']);
+      const found = findStokVariant(['gin']);
       if (found.variantId) {
-        itemSales['Gin Bottle'] = { 
-          name: 'Gin Bottle', 
+        itemSales['Gin'] = { 
+          name: 'Gin', 
           variantId: found.variantId, 
           quantity: 0 
         };
-        console.log(`✅ Added Gin Bottle (stock: ${found.stock})`);
+        console.log(`✅ Added Gin (Stok stock: ${found.stock} ml = ${Math.floor(found.stock / 750)} bottles)`);
       }
     }
     
