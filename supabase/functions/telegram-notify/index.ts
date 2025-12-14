@@ -96,11 +96,11 @@ async function generateJokeForRobelyn(): Promise<string> {
   
   // Fallback jokes if AI fails
   const fallbackJokes = [
-    "🎯 Robelyn, remember: order today = beer tomorrow! Don't let the team down! 🍺",
-    "⏰ Robelyn! It's ORDER O'CLOCK! Customers without beer = sad customers! 😅",
-    "🦸‍♀️ Robelyn, you're our purchasing superhero! Save the warehouse today!",
-    "📱 Robelyn, this is your wake-up call! ORDER NOW! 🚨",
-    "💪 Robelyn, be strong! Press 'order' and become the hero of the day! 🏆",
+    "🎯 Robelyn, лучше заказать лишнее, чем объясняться с боссом! 😅",
+    "⏰ Robelyn, запас карман не тянет, а вот пустой склад — тянет нервы! 🍺",
+    "💪 Robelyn, закажи побольше — босс любит когда есть запас! 🏆",
+    "📦 Robelyn, помни: лучше склад ломится, чем клиенты уходят! 😤",
+    "🚨 Robelyn, не злить босса = заказать вовремя! Простая математика! 📱",
   ];
   
   if (!apiKey) {
@@ -119,21 +119,28 @@ async function generateJokeForRobelyn(): Promise<string> {
         messages: [
           {
             role: 'system',
-            content: `Write a SHORT funny one-liner (max 15 words) about GAMERS bar running out of drinks.
+            content: `Напиши КОРОТКУЮ смешную фразу (максимум 15 слов) для Robelyn про заказ товара в бар GAMERS.
 
-Style: Casual, witty, absurd humor. Don't always use names. 1-2 emojis max.
+Стиль: практичный юмор про запасы, босса, склад. НЕ абстрактный. 1-2 эмодзи.
 
-Examples:
-- "The fridge at GAMERS is echoing... not a good sign 🍺"
-- "Tumbleweeds spotted near the bar! 🏜️"  
-- "Even the ice is lonely today 🧊"
-- "The beer taps are on strike! 😤"
+Темы на выбор:
+- Лучше заказать больше, чем злить босса
+- Запас карман не тянет
+- Пустой склад = проблемы с боссом
+- Клиенты без пива = грустные клиенты
+- Закажи сегодня, завтра скажешь спасибо
 
-Output ONLY the joke, nothing else.`
+Примеры хороших шуток:
+- "Robelyn, запас — это любовь босса! Закажи побольше 📦"
+- "Лучше лишний ящик, чем лишний разговор с боссом 😅"
+- "Robelyn, пустой склад = злой босс. Простая математика! 🧮"
+- "Запас карман не тянет, а вот нервы босса — ещё как! 💪"
+
+Выведи ТОЛЬКО шутку, ничего больше.`
           },
           {
             role: 'user',
-            content: 'Quick funny line about empty bar'
+            content: 'Напиши смешное напоминание про заказ товара'
           }
         ],
       }),
