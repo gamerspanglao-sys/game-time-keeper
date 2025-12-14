@@ -91,33 +91,69 @@ async function fetchPaymentsData(startDate: string, endDate: string): Promise<an
   return response.json();
 }
 
-function getRandomJokeForRobelyn(): string {
-  const jokes = [
+async function generateJokeForRobelyn(): Promise<string> {
+  const apiKey = Deno.env.get('LOVABLE_API_KEY');
+  
+  // Fallback jokes if AI fails
+  const fallbackJokes = [
     "🎯 Robelyn, remember: order today = beer tomorrow! Don't let the team down! 🍺",
-    "⏰ Robelyn! It's ORDER O'CLOCK! Customers without beer = sad customers = angry boss 😅",
+    "⏰ Robelyn! It's ORDER O'CLOCK! Customers without beer = sad customers! 😅",
     "🦸‍♀️ Robelyn, you're our purchasing superhero! Save the warehouse today!",
-    "📱 Robelyn, this is your wake-up call! ORDER NOW! Or customers will drink tap water 🚰",
-    "🎪 Robelyn, it's a circus if you forget to order! And you'll be the main clown 🤡",
+    "📱 Robelyn, this is your wake-up call! ORDER NOW! 🚨",
     "💪 Robelyn, be strong! Press 'order' and become the hero of the day! 🏆",
-    "🍕 Robelyn, order everything and maybe boss will buy pizza! (maybe... probably not 😂)",
-    "⚡ Robelyn, Flash orders faster than you! Prove you're cooler! 🏃‍♀️",
-    "🎵 Robelyn, singing reminder: Or-der now, don't for-get! 🎤",
-    "🌟 Robelyn, stars say: today is perfect for ordering! Tomorrow too! Always!",
-    "🐌 Robelyn, even a snail would have ordered by now! You're faster than a snail, right? 😄",
-    "🎁 Robelyn, orders = gifts for everyone! Don't be a Grinch, ORDER! 🎄",
-    "🔥 Robelyn, breaking news: products won't order themselves! Take action! 🚒",
-    "🧠 Robelyn, use 100% brain power today: 99% for ordering, 1% for everything else 😎",
-    "🎰 Robelyn, chances you'll forget: 50%. Chances boss gets upset: 100%. Choose wisely! 🎲",
-    "🦥 Robelyn, even a sloth moves faster when beer is involved! Let's GO! 🍻",
-    "🎬 Robelyn, ACTION! This isn't a movie rehearsal, it's ORDER TIME! 🎥",
-    "🚀 Robelyn, Houston we have a problem... NO ORDERS YET! Launch sequence NOW! 🌙",
-    "🎭 Robelyn, to order or not to order? That's NOT a question. JUST ORDER! 📦",
-    "🦾 Robelyn, activate TURBO MODE and smash that order button! Beep boop! 🤖",
   ];
-  return jokes[Math.floor(Math.random() * jokes.length)];
+  
+  if (!apiKey) {
+    return fallbackJokes[Math.floor(Math.random() * fallbackJokes.length)];
+  }
+  
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a funny reminder bot for a girl named Robelyn who works in purchasing at a billiard bar. 
+She often forgets or is late to place orders. Generate ONE short, funny, friendly reminder message (1-2 sentences) in English.
+Use emojis. Be creative, playful, and varied. Don't be offensive. 
+Topics: ordering supplies, beer, being on time, being a hero, not letting the team down, funny comparisons.
+Just output the message, nothing else.`
+          },
+          {
+            role: 'user',
+            content: 'Generate a unique funny reminder for Robelyn to place the purchase order today.'
+          }
+        ],
+      }),
+    });
+    
+    if (!response.ok) {
+      console.error('AI API error:', response.status);
+      return fallbackJokes[Math.floor(Math.random() * fallbackJokes.length)];
+    }
+    
+    const data = await response.json();
+    const joke = data.choices?.[0]?.message?.content?.trim();
+    
+    if (joke) {
+      console.log('🤖 Generated joke:', joke);
+      return joke;
+    }
+    
+    return fallbackJokes[Math.floor(Math.random() * fallbackJokes.length)];
+  } catch (error) {
+    console.error('Error generating joke:', error);
+    return fallbackJokes[Math.floor(Math.random() * fallbackJokes.length)];
+  }
 }
 
-function formatPurchaseOrder(data: any): string {
+async function formatPurchaseOrder(data: any): Promise<string> {
   if (!data?.recommendations?.length) {
     return '📦 <b>Заказ товаров</b>\n\n✅ Все товары в наличии!';
   }
@@ -135,7 +171,7 @@ function formatPurchaseOrder(data: any): string {
     bySupplier[supplier].push(item);
   }
   
-  const joke = getRandomJokeForRobelyn();
+  const joke = await generateJokeForRobelyn();
   
   let message = `📦 <b>ЗАКАЗ ТОВАРОВ</b>\n`;
   message += `━━━━━━━━━━━━━━━━━━━━\n`;
