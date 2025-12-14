@@ -926,13 +926,24 @@ serve(async (req) => {
           nameLower.includes('sprite') ||
           nameLower.includes('royal'));
       
+      // Check if this is Tanduay Select Stok or Gin stored in ml (750ml bottles)
+      const is750mlSpirit = 
+        (nameLower.includes('tanduay') && nameLower.includes('select') && nameLower.includes('stok')) ||
+        (nameLower.includes('gin') && nameLower.includes('stok'));
+      
       // If stock seems to be in ml (> 100), convert to bottles
-      // 1.75L = 1750ml, 1.5L = 1500ml, 2L = 2000ml - default to 1750ml
       if (isBigSoftDrinkBottle && inStock > 100) {
         const bottleSizeMl = nameLower.includes('1.5') || nameLower.includes('1,5') ? 1500 :
                             nameLower.includes('2l') || nameLower.includes('2 l') ? 2000 : 1750;
         const bottlesCount = Math.floor(inStock / bottleSizeMl);
         console.log(`🥤 Converting "${data.name}": ${inStock}ml ÷ ${bottleSizeMl}ml = ${bottlesCount} bottles`);
+        inStock = bottlesCount;
+      }
+      
+      // Convert 750ml spirits (Tanduay Select, Gin) from ml to bottles
+      if (is750mlSpirit && inStock > 100) {
+        const bottlesCount = Math.floor(inStock / 750);
+        console.log(`🥃 Converting "${data.name}": ${inStock}ml ÷ 750ml = ${bottlesCount} bottles`);
         inStock = bottlesCount;
       }
       
