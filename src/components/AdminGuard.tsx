@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,6 @@ import {
 import { Lock } from 'lucide-react';
 
 const ADMIN_PIN = '8808';
-const SESSION_KEY = 'admin_authenticated';
 
 interface AdminGuardProps {
   children: React.ReactNode;
@@ -20,26 +19,16 @@ interface AdminGuardProps {
 
 export function AdminGuard({ children }: AdminGuardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [showDialog, setShowDialog] = useState(false);
+  const [showDialog, setShowDialog] = useState(true); // Always show on mount
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const authenticated = sessionStorage.getItem(SESSION_KEY);
-    if (authenticated === 'true') {
-      setIsAuthenticated(true);
-    } else {
-      setShowDialog(true);
-    }
-  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (pin === ADMIN_PIN) {
       setIsAuthenticated(true);
       setShowDialog(false);
-      sessionStorage.setItem(SESSION_KEY, 'true');
       setError(false);
     } else {
       setError(true);
