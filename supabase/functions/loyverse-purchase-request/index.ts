@@ -1027,17 +1027,13 @@ serve(async (req) => {
       const totalAvgPerDay = directAvgPerDay + extraPerDay;
       const totalSold = data.quantity + Math.round(extraPerDay * ANALYSIS_DAYS);
       
-      // FORMULA FOR ALL ITEMS:
-      // recommendedQty = max(avgPerDay * bufferDays * 2, totalSold)
-      // This ensures:
-      // 1. Double safety buffer on average consumption
-      // 2. At minimum, replace everything sold in last period
+      // FORMULA FOR ALL ITEMS (Option A - 5 days coverage):
+      // recommendedQty = avgPerDay × (ANALYSIS_DAYS + DELIVERY_BUFFER_DAYS) × 1.2
+      // This ensures 5 days of stock (3 analysis days + 2 buffer) with 20% safety margin
       // For snacks: delivery only on Friday, so stock for 7 days
       const itemCategory = getCategory(data.name) || 'other';
-      const daysToStock = itemCategory === 'snacks' ? 7 : DELIVERY_BUFFER_DAYS;
-      const avgBasedRecommendation = Math.ceil(totalAvgPerDay * daysToStock * 2); // 2x safety
-      const salesBasedRecommendation = Math.ceil(totalSold); // At minimum replace sold
-      const recommendedQty = Math.max(avgBasedRecommendation, salesBasedRecommendation);
+      const daysToStock = itemCategory === 'snacks' ? 7 : (ANALYSIS_DAYS + DELIVERY_BUFFER_DAYS);
+      const recommendedQty = Math.ceil(totalAvgPerDay * daysToStock * 1.2);
       
       // Get raw stock from inventory
       let inStock = inventory[data.variantId] || 0;
