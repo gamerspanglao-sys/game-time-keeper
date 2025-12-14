@@ -78,6 +78,14 @@ serve(async (req) => {
       console.log(`💳 Payment types loaded: ${Object.keys(paymentTypesMap).length}`);
     }
 
+    // Categorize items
+    function getItemCategory(itemName: string): string {
+      const name = itemName.toLowerCase();
+      if (name.includes('billiard') || name.includes('table') || name.includes('bilyar')) return 'billiards';
+      if (name.includes('vip') || name.includes('room') || name.includes('playstation') || name.includes('ps')) return 'vip';
+      return 'bar';
+    }
+
     // Process receipts to extract payment information
     let totalCost = 0;
     let totalRevenue = 0;
@@ -100,6 +108,7 @@ serve(async (req) => {
           total: item.total_money,
           cost: item.cost || 0,
           totalCost: cost,
+          category: getItemCategory(item.item_name),
         };
       });
 
@@ -133,6 +142,26 @@ serve(async (req) => {
     const sales = payments.filter((p: any) => !p.isRefund);
     const refunds = payments.filter((p: any) => p.isRefund);
 
+    // Calculate by category
+    const byCategory: Record<string, { sales: number; refunds: number; cost: number; count: number }> = {
+      billiards: { sales: 0, refunds: 0, cost: 0, count: 0 },
+      vip: { sales: 0, refunds: 0, cost: 0, count: 0 },
+      bar: { sales: 0, refunds: 0, cost: 0, count: 0 },
+    };
+
+    payments.forEach((payment: any) => {
+      payment.items.forEach((item: any) => {
+        const cat = item.category;
+        if (payment.isRefund) {
+          byCategory[cat].refunds += Math.abs(item.total);
+        } else {
+          byCategory[cat].sales += item.total;
+          byCategory[cat].cost += item.totalCost;
+          byCategory[cat].count += item.quantity;
+        }
+      });
+    });
+
     // Calculate summary with profit
     const summary = {
       totalReceipts: sales.length,
@@ -142,6 +171,7 @@ serve(async (req) => {
       netAmount: payments.reduce((sum: number, p: any) => sum + p.total, 0),
       totalCost,
       totalProfit: totalRevenue - totalCost,
+      byCategory,
       byPaymentType: {} as Record<string, { count: number; amount: number; refundCount: number; refundAmount: number }>,
     };
 

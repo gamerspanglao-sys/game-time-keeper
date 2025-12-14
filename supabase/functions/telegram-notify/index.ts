@@ -93,68 +93,129 @@ async function fetchPaymentsData(startDate: string, endDate: string): Promise<an
 
 function formatPurchaseOrder(data: any): string {
   if (!data?.recommendations?.length) {
-    return '📦 <b>Purchase Order</b>\n\nNo items need ordering!';
+    return '📦 <b>Заказ товаров</b>\n\n✅ Все товары в наличии!';
   }
   
   const itemsToOrder = data.recommendations.filter((item: any) => item.toOrder > 0);
   if (itemsToOrder.length === 0) {
-    return '📦 <b>Purchase Order</b>\n\n✅ All items in stock!';
+    return '📦 <b>Заказ товаров</b>\n\n✅ Все товары в наличии!';
   }
   
   // Group by supplier
   const bySupplier: Record<string, any[]> = {};
   for (const item of itemsToOrder) {
-    const supplier = item.supplier || 'Other';
+    const supplier = item.supplier || 'Другое';
     if (!bySupplier[supplier]) bySupplier[supplier] = [];
     bySupplier[supplier].push(item);
   }
   
-  let message = `📦 <b>Purchase Order</b>\n`;
-  message += `📊 Analysis: ${data.period?.days || 3} days\n`;
-  message += `📅 Buffer: ${data.period?.deliveryBuffer || 2} days\n\n`;
+  let message = `📦 <b>ЗАКАЗ ТОВАРОВ</b>\n`;
+  message += `━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `📊 Анализ: ${data.period?.days || 3} дней\n`;
+  message += `📅 Буфер доставки: ${data.period?.deliveryBuffer || 2} дней\n\n`;
+  
+  const supplierEmojis: Record<string, string> = {
+    'San Miguel': '🍺',
+    'Tanduay': '🥃',
+    'Others': '🥤',
+    'Другое': '📦',
+  };
+  
+  let grandTotalCases = 0;
   
   for (const [supplier, items] of Object.entries(bySupplier)) {
     const totalCases = items.reduce((sum: number, item: any) => sum + (item.casesToOrder || 0), 0);
-    message += `<b>🏪 ${supplier}</b> (${totalCases} cases)\n`;
+    grandTotalCases += totalCases;
+    const emoji = supplierEmojis[supplier] || '📦';
+    
+    message += `${emoji} <b>${supplier.toUpperCase()}</b>\n`;
+    message += `┌─────────────────────\n`;
     
     for (const item of items) {
       const name = item.name.replace(/\s*\(from towers\)/gi, '').replace(/\s*\(from baskets\)/gi, '');
-      message += `  • ${name}: <b>${item.casesToOrder}</b> cs (${item.caseSize})\n`;
+      message += `│ • ${name}\n`;
+      message += `│   📦 <b>${item.casesToOrder}</b> уп. (по ${item.caseSize} шт)\n`;
     }
-    message += '\n';
+    message += `└─────────────────────\n\n`;
   }
   
   const totalUnits = itemsToOrder.reduce((sum: number, item: any) => sum + item.toOrder, 0);
-  const totalCases = itemsToOrder.reduce((sum: number, item: any) => sum + item.casesToOrder, 0);
-  message += `📊 <b>Total:</b> ${totalUnits} units / ${totalCases} cases`;
+  message += `━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `📊 <b>ИТОГО:</b> ${totalUnits} шт / ${grandTotalCases} уп.`;
   
   return message;
 }
 
 function formatCashReport(data: any): string {
   if (!data?.summary) {
-    return '💰 <b>Cash Report</b>\n\nNo data available';
+    return '💰 <b>Финансовый отчет</b>\n\nНет данных';
   }
   
   const s = data.summary;
-  let message = `💰 <b>Daily Cash Report</b>\n`;
-  message += `📅 Period: 5:00 AM - 5:00 AM\n\n`;
+  const formatMoney = (n: number) => `₱${n?.toLocaleString() || 0}`;
   
-  message += `💵 <b>Sales:</b> ₱${s.totalSales?.toLocaleString() || 0}\n`;
-  message += `↩️ <b>Refunds:</b> ₱${s.totalRefunds?.toLocaleString() || 0}\n`;
-  message += `📊 <b>Net:</b> ₱${s.netAmount?.toLocaleString() || 0}\n\n`;
+  let message = `💰 <b>ФИНАНСОВЫЙ ОТЧЕТ</b>\n`;
+  message += `━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `📅 Смена: 5:00 - 5:00\n\n`;
+  
+  // By category
+  if (s.byCategory) {
+    const cats = s.byCategory;
+    
+    // Billiards
+    if (cats.billiards?.sales > 0 || cats.billiards?.refunds > 0) {
+      message += `🎱 <b>БИЛЬЯРД</b>\n`;
+      message += `   💵 Продажи: ${formatMoney(cats.billiards.sales)}\n`;
+      if (cats.billiards.refunds > 0) {
+        message += `   ↩️ Возвраты: ${formatMoney(cats.billiards.refunds)}\n`;
+      }
+      message += `   📊 Чистая: ${formatMoney(cats.billiards.sales - cats.billiards.refunds)}\n\n`;
+    }
+    
+    // VIP
+    if (cats.vip?.sales > 0 || cats.vip?.refunds > 0) {
+      message += `👑 <b>VIP / PS</b>\n`;
+      message += `   💵 Продажи: ${formatMoney(cats.vip.sales)}\n`;
+      if (cats.vip.refunds > 0) {
+        message += `   ↩️ Возвраты: ${formatMoney(cats.vip.refunds)}\n`;
+      }
+      message += `   📊 Чистая: ${formatMoney(cats.vip.sales - cats.vip.refunds)}\n\n`;
+    }
+    
+    // Bar
+    if (cats.bar?.sales > 0 || cats.bar?.refunds > 0) {
+      message += `🍺 <b>БАР</b>\n`;
+      message += `   💵 Продажи: ${formatMoney(cats.bar.sales)}\n`;
+      if (cats.bar.refunds > 0) {
+        message += `   ↩️ Возвраты: ${formatMoney(cats.bar.refunds)}\n`;
+      }
+      const barProfit = cats.bar.sales - cats.bar.refunds - (cats.bar.cost || 0);
+      message += `   💸 Себест.: ${formatMoney(cats.bar.cost || 0)}\n`;
+      message += `   📈 Прибыль: ${formatMoney(barProfit)}\n\n`;
+    }
+  }
+  
+  message += `━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `📊 <b>ИТОГО</b>\n`;
+  message += `   💵 Продажи: ${formatMoney(s.totalAmount)} (${s.totalReceipts} чеков)\n`;
+  message += `   ↩️ Возвраты: ${formatMoney(s.totalRefundAmount)} (${s.totalRefunds} шт)\n`;
+  message += `   📊 Чистая: ${formatMoney(s.netAmount)}\n`;
   
   if (s.totalCost !== undefined) {
-    message += `📦 <b>Cost:</b> ₱${s.totalCost?.toLocaleString() || 0}\n`;
-    message += `📈 <b>Profit:</b> ₱${s.profit?.toLocaleString() || 0}\n\n`;
+    message += `   💸 Себест.: ${formatMoney(s.totalCost)}\n`;
+    message += `   📈 Прибыль: ${formatMoney(s.totalProfit)}\n`;
   }
   
   // Payment types breakdown
-  if (data.payments?.length > 0) {
-    message += `<b>By Payment Type:</b>\n`;
-    for (const p of data.payments) {
-      if (p.amount > 0) {
-        message += `  • ${p.paymentType}: ₱${p.amount?.toLocaleString()}\n`;
+  if (Object.keys(s.byPaymentType || {}).length > 0) {
+    message += `\n💳 <b>ПО ТИПАМ ОПЛАТЫ</b>\n`;
+    for (const [type, p] of Object.entries(s.byPaymentType as Record<string, any>)) {
+      if (p.amount > 0 || p.refundAmount > 0) {
+        message += `   • ${type}: ${formatMoney(p.amount)}`;
+        if (p.refundAmount > 0) {
+          message += ` (возврат: ${formatMoney(p.refundAmount)})`;
+        }
+        message += `\n`;
       }
     }
   }
