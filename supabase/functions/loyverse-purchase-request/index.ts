@@ -635,6 +635,73 @@ serve(async (req) => {
       };
       console.log(`✅ Created synthetic SM Light 1L entry (${towerSalesLight} towers sold, stock: ${found.stock})`);
     }
+    
+    // Step 5a.1: Create synthetic entries for 0.5L beers if baskets were sold
+    // Same logic as 1L from towers, but for baskets
+    
+    // Check if Red Horse 0.5L exists in sales (from direct sales)
+    const hasRedHorse05L = Object.keys(itemSales).some(k => {
+      const n = k.toLowerCase();
+      return n.includes('red horse') && (n.includes('0,5') || n.includes('500') || n.includes('0.5'));
+    });
+    if (!hasRedHorse05L && basketSalesRedHorse > 0) {
+      const found = findVariantByName(['red horse', '0,5'], ['1l', '1 l', '1000', 'super', 'tower', 'basket']);
+      if (!found.variantId) {
+        // Try with "500" pattern
+        const found2 = findVariantByName(['red horse', '500'], ['1l', '1 l', '1000', 'super', 'tower', 'basket']);
+        if (found2.variantId) {
+          itemSales['Red Horse 0.5L (from baskets)'] = { 
+            name: 'Red Horse 0.5L (from baskets)', 
+            variantId: found2.variantId, 
+            quantity: 0 
+          };
+          console.log(`✅ Created synthetic Red Horse 0.5L entry (${basketSalesRedHorse} baskets sold, stock: ${found2.stock})`);
+        }
+      } else {
+        itemSales['Red Horse 0.5L (from baskets)'] = { 
+          name: 'Red Horse 0.5L (from baskets)', 
+          variantId: found.variantId, 
+          quantity: 0 
+        };
+        console.log(`✅ Created synthetic Red Horse 0.5L entry (${basketSalesRedHorse} baskets sold, stock: ${found.stock})`);
+      }
+    }
+    
+    // Check if San Miguel small bottles exist in sales
+    const hasSanMiguelSmall = Object.keys(itemSales).some(k => {
+      const n = k.toLowerCase();
+      return n.includes('san miguel') && !n.includes('light') && !n.includes('1l') && !n.includes('1 l') && !n.includes('tower') && !n.includes('basket');
+    });
+    if (!hasSanMiguelSmall && basketSalesSanMiguel > 0) {
+      const found = findVariantByName(['san miguel'], ['1l', '1 l', 'light', 'tower', 'basket']);
+      if (found.variantId) {
+        itemSales['San Miguel (from baskets)'] = { 
+          name: 'San Miguel (from baskets)', 
+          variantId: found.variantId, 
+          quantity: 0 
+        };
+        console.log(`✅ Created synthetic San Miguel small entry (${basketSalesSanMiguel} baskets sold, stock: ${found.stock})`);
+      }
+    }
+    
+    // Check if San Miguel Light small bottles exist in sales
+    const hasSanMiguelLightSmall = Object.keys(itemSales).some(k => {
+      const n = k.toLowerCase();
+      return n.includes('san miguel') && n.includes('light') && !n.includes('1l') && !n.includes('1 l') && !n.includes('tower') && !n.includes('basket');
+    });
+    if (!hasSanMiguelLightSmall && basketSalesLight > 0) {
+      const found = findVariantByName(['san miguel', 'light'], ['1l', '1 l', 'tower', 'basket']);
+      if (found.variantId) {
+        itemSales['San Miguel Light (from baskets)'] = { 
+          name: 'San Miguel Light (from baskets)', 
+          variantId: found.variantId, 
+          quantity: 0 
+        };
+        console.log(`✅ Created synthetic SM Light small entry (${basketSalesLight} baskets sold, stock: ${found.stock})`);
+      }
+    }
+    
+    console.log(`🍺 Baskets RH: ${basketSalesRedHorse}, SM: ${basketSalesSanMiguel}, Light: ${basketSalesLight}, Total: ${basketSales}`);
 
     // Step 5b: Create entries for ALL Tanduay bottle products (Select, Dark, ICE)
     // Tanduay bottle = 750ml, Tower = 400ml, Rum Coke = 50ml
