@@ -96,11 +96,11 @@ async function generateJokeForRobelyn(): Promise<string> {
   
   // Fallback jokes if AI fails
   const fallbackJokes = [
-    "🎯 Robelyn, лучше заказать лишнее, чем объясняться с боссом! 😅",
-    "⏰ Robelyn, запас карман не тянет, а вот пустой склад — тянет нервы! 🍺",
-    "💪 Robelyn, закажи побольше — босс любит когда есть запас! 🏆",
-    "📦 Robelyn, помни: лучше склад ломится, чем клиенты уходят! 😤",
-    "🚨 Robelyn, не злить босса = заказать вовремя! Простая математика! 📱",
+    "🎯 Robelyn, better to order extra than explain to the boss! 😅",
+    "📦 Extra stock never hurt anyone, but empty shelves sure do! 🍺",
+    "💪 Order big, sleep well! That's the GAMERS way! 🏆",
+    "⏰ Today's order = tomorrow's happy customers! 📱",
+    "🚨 Remember: full warehouse = peaceful life! 😌",
   ];
   
   if (!apiKey) {
@@ -119,28 +119,29 @@ async function generateJokeForRobelyn(): Promise<string> {
         messages: [
           {
             role: 'system',
-            content: `Напиши КОРОТКУЮ смешную фразу (максимум 15 слов) для Robelyn про заказ товара в бар GAMERS.
+            content: `Write a SHORT funny one-liner (max 15 words) for Robelyn about ordering supplies for GAMERS bar.
 
-Стиль: практичный юмор про запасы, босса, склад. НЕ абстрактный. 1-2 эмодзи.
+Style: practical, witty humor about real situations. 1-2 emojis max.
 
-Темы на выбор:
-- Лучше заказать больше, чем злить босса
-- Запас карман не тянет
-- Пустой склад = проблемы с боссом
-- Клиенты без пива = грустные клиенты
-- Закажи сегодня, завтра скажешь спасибо
+Topics to pick from (vary them!):
+- Better to have extra stock than run out
+- Happy customers when shelves are full
+- Order today, relax tomorrow
+- Full warehouse = peaceful day
+- Don't let the team down
 
-Примеры хороших шуток:
-- "Robelyn, запас — это любовь босса! Закажи побольше 📦"
-- "Лучше лишний ящик, чем лишний разговор с боссом 😅"
-- "Robelyn, пустой склад = злой босс. Простая математика! 🧮"
-- "Запас карман не тянет, а вот нервы босса — ещё как! 💪"
+Good examples:
+- "Better to order extra than explain to the boss! 😅"
+- "Extra stock never hurt anyone, but empty shelves sure do! 🍺"
+- "Order big, sleep well! That's the GAMERS way! 💪"
+- "Today's order = tomorrow's happy customers! 📦"
+- "Full warehouse, peaceful life! 😌"
 
-Выведи ТОЛЬКО шутку, ничего больше.`
+Output ONLY the joke, nothing else.`
           },
           {
             role: 'user',
-            content: 'Напиши смешное напоминание про заказ товара'
+            content: 'Write a quick funny reminder about ordering supplies'
           }
         ],
       }),
