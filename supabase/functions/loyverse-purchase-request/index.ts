@@ -1028,13 +1028,13 @@ serve(async (req) => {
       const totalSold = data.quantity + Math.round(extraPerDay * ANALYSIS_DAYS);
       
       // Recommended = avg per day * delivery buffer days * 1.2 safety margin,
-      // but never less than 120% of recent sales volume (safety against spikes)
+      // but never less than recent sales scaled to buffer days (to avoid stockouts after spikes)
       // DELIVERY_BUFFER_DAYS = days until next delivery (2 normally, 3 on weekends)
       // For snacks: delivery only on Friday, so stock for 7 days
       const itemCategory = getCategory(data.name) || 'other';
       const daysToStock = itemCategory === 'snacks' ? 7 : DELIVERY_BUFFER_DAYS;
       let recommendedQty = Math.ceil(totalAvgPerDay * daysToStock * 1.2);
-      const minRecommendedFromRecentSales = Math.ceil(totalSold * 1.2);
+      const minRecommendedFromRecentSales = Math.ceil(totalSold * DELIVERY_BUFFER_DAYS);
       if (minRecommendedFromRecentSales > recommendedQty) {
         recommendedQty = minRecommendedFromRecentSales;
       }
