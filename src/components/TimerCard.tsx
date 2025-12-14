@@ -162,6 +162,9 @@ export function TimerCard({
   const handleCloseoutComplete = () => {
     setShowCloseout(false);
     
+    // Stop alarm when closing out
+    stopAlarm(id);
+    
     // Notify next person in queue if exists
     if (queue.length > 0 && notifyQueueNext) {
       notifyQueueNext(name, queue[0].name);
@@ -304,7 +307,10 @@ export function TimerCard({
             <Button 
               variant="timer" 
               size={compact ? "default" : "lg"}
-              onClick={() => onReset(id)}
+              onClick={() => {
+                stopAlarm(id);
+                onReset(id);
+              }}
               className="flex-1"
             >
               <RotateCcw className="w-5 h-5" />

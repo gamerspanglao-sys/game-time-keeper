@@ -355,6 +355,34 @@ export function useTimerAlerts() {
     }
   }, [ensureAudioContext, sendNotification]);
 
+  // Force reload audio context
+  const reloadAudio = useCallback(() => {
+    console.log('🔄 Reloading AudioContext...');
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+    }
+    audioContextRef.current = null;
+    const ctx = ensureAudioContext();
+    if (ctx) {
+      // Play test sound
+      try {
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        oscillator.frequency.value = 440;
+        oscillator.type = 'sine';
+        gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.2);
+        console.log('✅ Audio reloaded successfully');
+      } catch (e) {
+        console.error('Failed to play test sound:', e);
+      }
+    }
+  }, [ensureAudioContext]);
+
   return {
     playWarningBeep,
     playFinishedAlarm,
@@ -364,5 +392,6 @@ export function useTimerAlerts() {
     playConfirmSound,
     ensureAudioContext,
     notifyQueueNext,
+    reloadAudio,
   };
 }

@@ -2,14 +2,16 @@ import { Layout } from '@/components/Layout';
 import { TimerCard } from '@/components/TimerCard';
 import { CurrentSessions } from '@/components/CurrentSessions';
 import { OvertimeStats } from '@/components/OvertimeStats';
+import { Button } from '@/components/ui/button';
 
 import { useSupabaseTimers } from '@/hooks/useSupabaseTimers';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { useSupabaseQueue } from '@/hooks/useSupabaseQueue';
 import { useWakeLock } from '@/hooks/useWakeLock';
-import { Layers, Gamepad, Crown, Loader2 } from 'lucide-react';
+import { Layers, Gamepad, Crown, Loader2, Volume2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const Index = () => {
   const { 
@@ -25,7 +27,7 @@ const Index = () => {
     pauseAllTimers,
     resumeAllTimers,
   } = useSupabaseTimers();
-  const { playConfirmSound, stopAlarm, notifyQueueNext } = useTimerAlerts();
+  const { playConfirmSound, stopAlarm, stopAllAlarms, notifyQueueNext, reloadAudio } = useTimerAlerts();
   const { isFullscreen } = useFullscreen();
   const { getQueueForTimer, addToQueue, removeFromQueue } = useSupabaseQueue();
   
@@ -40,6 +42,11 @@ const Index = () => {
   
   // Check if any timer is in finished state for screen flash effect
   const hasFinishedTimer = timers.some(t => t.status === 'finished');
+
+  const handleReloadAudio = () => {
+    reloadAudio();
+    toast.success('Audio reloaded');
+  };
 
   const compact = isFullscreen;
 
@@ -75,8 +82,21 @@ const Index = () => {
         <div className="fixed inset-0 bg-destructive pointer-events-none z-50 screen-flash" />
       )}
       <div className={cn("max-w-7xl mx-auto", compact ? "space-y-4" : "space-y-6")}>
+        {/* Audio Reload Button */}
+        <div className="flex justify-end">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleReloadAudio}
+            className="gap-2"
+          >
+            <Volume2 className="w-4 h-4" />
+            Reload Audio
+          </Button>
+        </div>
+
         {/* Current Sessions */}
-        <CurrentSessions timers={timers} compact={compact} onReset={resetTimer} />
+        <CurrentSessions timers={timers} compact={compact} onReset={resetTimer} onStopAlarm={stopAlarm} />
 
         {/* Billiard Tables */}
         <section>
