@@ -17,12 +17,13 @@ interface CurrentSessionsProps {
   timers: Timer[];
   compact?: boolean;
   onReset?: (timerId: string) => void;
+  onStopAlarm?: (timerId: string) => void;
   overtimeByTimer?: Record<string, number>;
 }
 
 const ADMIN_PASSWORD = '8808';
 
-export function CurrentSessions({ timers, compact, onReset, overtimeByTimer = {} }: CurrentSessionsProps) {
+export function CurrentSessions({ timers, compact, onReset, onStopAlarm, overtimeByTimer = {} }: CurrentSessionsProps) {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [selectedTimerId, setSelectedTimerId] = useState<string | null>(null);
@@ -99,8 +100,9 @@ export function CurrentSessions({ timers, compact, onReset, overtimeByTimer = {}
 
   const handlePasswordSubmit = () => {
     if (password === ADMIN_PASSWORD) {
-      if (selectedTimerId && onReset) {
-        onReset(selectedTimerId);
+      if (selectedTimerId) {
+        if (onStopAlarm) onStopAlarm(selectedTimerId);
+        if (onReset) onReset(selectedTimerId);
       }
       setPasswordDialogOpen(false);
       setPassword('');
