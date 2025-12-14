@@ -1025,13 +1025,19 @@ serve(async (req) => {
       // Calculate average per day (direct sales + extra from baskets/towers)
       const directAvgPerDay = data.quantity / ANALYSIS_DAYS;
       const totalAvgPerDay = directAvgPerDay + extraPerDay;
+      const totalSold = data.quantity + Math.round(extraPerDay * ANALYSIS_DAYS);
       
-      // Recommended = avg per day * delivery buffer days * 1.2 safety margin
+      // Recommended = avg per day * delivery buffer days * 1.2 safety margin,
+      // but never less than 120% of recent sales volume (safety against spikes)
       // DELIVERY_BUFFER_DAYS = days until next delivery (2 normally, 3 on weekends)
       // For snacks: delivery only on Friday, so stock for 7 days
       const itemCategory = getCategory(data.name) || 'other';
       const daysToStock = itemCategory === 'snacks' ? 7 : DELIVERY_BUFFER_DAYS;
-      const recommendedQty = Math.ceil(totalAvgPerDay * daysToStock * 1.2);
+      let recommendedQty = Math.ceil(totalAvgPerDay * daysToStock * 1.2);
+      const minRecommendedFromRecentSales = Math.ceil(totalSold * 1.2);
+      if (minRecommendedFromRecentSales > recommendedQty) {
+        recommendedQty = minRecommendedFromRecentSales;
+      }
       
       // Get raw stock from inventory
       let inStock = inventory[data.variantId] || 0;
@@ -1077,8 +1083,6 @@ serve(async (req) => {
         toOrder = casesToOrder * caseSize; // Round to full cases
       }
       const supplier = getSupplier(itemCategory, data.name);
-      
-      const totalSold = data.quantity + Math.round(extraPerDay * ANALYSIS_DAYS);
       
       // Include item if: has sales, has extra consumption,
       // OR is a Tanduay/Gin product (always show),
