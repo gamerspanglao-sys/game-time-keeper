@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Download, Package, TrendingUp, Loader2, ShoppingCart, X, Beer, Droplets } from "lucide-react";
+import { Download, Package, TrendingUp, Loader2, ShoppingCart, X, Beer, Droplets, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -50,6 +50,8 @@ const CATEGORY_CONFIG: Record<string, { label: string; icon: any; color: string 
 
 export default function PurchaseRequests() {
   const [loading, setLoading] = useState(false);
+  const [sendingPurchase, setSendingPurchase] = useState(false);
+  const [sendingCash, setSendingCash] = useState(false);
   const [data, setData] = useState<PurchaseData | null>(null);
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
   const [showAllItems, setShowAllItems] = useState(true); // Show all by default
@@ -71,6 +73,35 @@ export default function PurchaseRequests() {
       toast.error(error.message || 'Failed to fetch data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const sendToTelegram = async (action: 'purchase' | 'cash') => {
+    const isCash = action === 'cash';
+    if (isCash) {
+      setSendingCash(true);
+    } else {
+      setSendingPurchase(true);
+    }
+    
+    try {
+      const { data: response, error } = await supabase.functions.invoke('telegram-notify', {
+        body: { action }
+      });
+
+      if (error) throw error;
+      if (!response.success) throw new Error(response.error || 'Failed to send');
+
+      toast.success(isCash ? 'Кассовый отчёт отправлен в Telegram' : 'Лист закупок отправлен в Telegram');
+    } catch (error: any) {
+      console.error('Error sending to Telegram:', error);
+      toast.error(error.message || 'Ошибка отправки в Telegram');
+    } finally {
+      if (isCash) {
+        setSendingCash(false);
+      } else {
+        setSendingPurchase(false);
+      }
     }
   };
 
@@ -184,6 +215,28 @@ export default function PurchaseRequests() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Telegram Buttons */}
+      <div className="flex flex-wrap gap-3">
+        <Button 
+          variant="outline" 
+          onClick={() => sendToTelegram('purchase')} 
+          disabled={sendingPurchase}
+          className="bg-blue-500/10 border-blue-500/30 text-blue-500 hover:bg-blue-500/20 hover:text-blue-400"
+        >
+          {sendingPurchase ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+          Отправить закупки в Telegram
+        </Button>
+        <Button 
+          variant="outline" 
+          onClick={() => sendToTelegram('cash')} 
+          disabled={sendingCash}
+          className="bg-green-500/10 border-green-500/30 text-green-500 hover:bg-green-500/20 hover:text-green-400"
+        >
+          {sendingCash ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+          Отправить кассу в Telegram
+        </Button>
       </div>
 
       {data && (
