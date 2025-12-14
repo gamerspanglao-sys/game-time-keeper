@@ -379,6 +379,16 @@ serve(async (req) => {
       }
     } while (itemsCursor);
 
+    // Debug: show soft drink inventory for Coca-Cola / Sprite / Royal
+    console.log('🥤 Soft drink inventory (Coke/Sprite/Royal):');
+    for (const [variantId, name] of Object.entries(variantToName)) {
+      const n = name.toLowerCase();
+      if (n.includes('coca') || n.includes('sprite') || n.includes('royal')) {
+        const stock = inventory[variantId] || 0;
+        console.log(`   - "${name}" (variantId: ${variantId.slice(0,8)}..., stock: ${stock})`);
+      }
+    }
+
     // Step 3: Fetch receipts
     console.log('🧾 Fetching receipts...');
     const allReceipts: any[] = [];
