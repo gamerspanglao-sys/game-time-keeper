@@ -97,10 +97,10 @@ async function generateJokeForRobelyn(): Promise<string> {
   // Fallback jokes if AI fails
   const fallbackJokes = [
     "🎯 Robelyn, better to order extra than explain to the boss! 😅",
-    "📦 Extra stock never hurt anyone, but empty shelves sure do! 🍺",
-    "💪 Order big, sleep well! That's the GAMERS way! 🏆",
-    "⏰ Today's order = tomorrow's happy customers! 📱",
-    "🚨 Remember: full warehouse = peaceful life! 😌",
+    "📦 Robelyn, extra stock never hurt anyone, but empty shelves sure do! 🍺",
+    "💪 Robelyn, order big, sleep well! That's the GAMERS way! 🏆",
+    "⏰ Robelyn, today's order = tomorrow's happy customers! 📱",
+    "🚨 Robelyn, full warehouse = peaceful life! 😌",
   ];
   
   if (!apiKey) {
@@ -119,7 +119,9 @@ async function generateJokeForRobelyn(): Promise<string> {
         messages: [
           {
             role: 'system',
-            content: `Write a SHORT funny one-liner (max 15 words) for Robelyn about ordering supplies for GAMERS bar.
+            content: `Write a SHORT funny one-liner (max 15 words) addressed to Robelyn about ordering supplies for GAMERS bar.
+
+IMPORTANT: Always start with "Robelyn," and address her directly.
 
 Style: practical, witty humor about real situations. 1-2 emojis max.
 
@@ -128,20 +130,18 @@ Topics to pick from (vary them!):
 - Happy customers when shelves are full
 - Order today, relax tomorrow
 - Full warehouse = peaceful day
-- Don't let the team down
 
 Good examples:
-- "Better to order extra than explain to the boss! 😅"
-- "Extra stock never hurt anyone, but empty shelves sure do! 🍺"
-- "Order big, sleep well! That's the GAMERS way! 💪"
-- "Today's order = tomorrow's happy customers! 📦"
-- "Full warehouse, peaceful life! 😌"
+- "Robelyn, better to order extra than explain to the boss! 😅"
+- "Robelyn, extra stock never hurt anyone, but empty shelves sure do! 🍺"
+- "Robelyn, order big, sleep well! That's the GAMERS way! 💪"
+- "Robelyn, today's order = tomorrow's happy customers! 📦"
 
 Output ONLY the joke, nothing else.`
           },
           {
             role: 'user',
-            content: 'Write a quick funny reminder about ordering supplies'
+            content: 'Write a quick funny reminder for Robelyn about ordering supplies'
           }
         ],
       }),

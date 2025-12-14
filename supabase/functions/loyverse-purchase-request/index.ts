@@ -75,6 +75,8 @@ function isIncluded(itemName: string): boolean {
     name.includes('beer') ||
     name.includes('pilsen') ||
     name.includes('pale') ||
+    name.includes('light apple') ||  // San Miguel Light Apple
+    name.includes('light lemon') ||  // San Miguel Light Lemon
     name.includes('light') // San Miguel Light
   ) {
     return true;
