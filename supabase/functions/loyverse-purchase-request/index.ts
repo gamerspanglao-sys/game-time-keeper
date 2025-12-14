@@ -177,7 +177,7 @@ function getCategory(itemName: string): string {
   }
   
   // Snacks
-  if (name.includes('snack') || name.includes('big') || name.includes('small')) {
+  if (name.includes('snack') || name.includes('chips') || name.includes('chip')) {
     return 'snacks';
   }
   
