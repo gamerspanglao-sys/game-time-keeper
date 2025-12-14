@@ -55,6 +55,9 @@ function isIncluded(itemName: string): boolean {
   if (name.includes('rum coke') || name.includes('tequila shot')) {
     return false;
   }
+  if (name.includes('coca cola glass') || name.includes('coca-cola glass')) {
+    return false;
+  }
   
   // ==== BEER (all brands except Heineken) ====
   if (
