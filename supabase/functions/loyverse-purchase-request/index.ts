@@ -212,8 +212,8 @@ interface SalesItem {
 function getSupplier(category: string, itemName: string): string {
   const nameLower = itemName.toLowerCase();
   
-  // Tanduay products go to Tanduay supplier
-  if (nameLower.includes('tanduay')) {
+  // Tanduay and Gin products go to Tanduay supplier
+  if (nameLower.includes('tanduay') || nameLower.includes('gin')) {
     return 'Tanduay';
   }
   
@@ -221,7 +221,7 @@ function getSupplier(category: string, itemName: string): string {
     case 'beer':
       return 'San Miguel';
     case 'spirits':
-      // Gin and other spirits go to Others
+      // Other spirits go to Others
       return 'Others';
     case 'cocktails':
       // Rum Coke and other cocktails go to Others
