@@ -36,6 +36,7 @@ const SUPPLIER_CONFIG: Record<string, { label: string; color: string }> = {
   'San Miguel': { label: 'San Miguel (Beer)', color: 'bg-amber-500/20 text-amber-500 border-amber-500/30' },
   'Tanduay': { label: 'Tanduay', color: 'bg-orange-500/20 text-orange-500 border-orange-500/30' },
   'Soft Drinks': { label: 'Soft Drinks', color: 'bg-blue-500/20 text-blue-500 border-blue-500/30' },
+  'Snacks': { label: 'Snacks', color: 'bg-purple-500/20 text-purple-500 border-purple-500/30' },
   'Others': { label: 'Others', color: 'bg-muted text-muted-foreground border-muted' },
 };
 
@@ -44,6 +45,7 @@ const CATEGORY_CONFIG: Record<string, { label: string; icon: any; color: string 
   'spirits': { label: 'Spirits (Tanduay)', icon: Droplets, color: 'bg-orange-500/20 text-orange-500' },
   'cocktails': { label: 'Cocktails', icon: Droplets, color: 'bg-pink-500/20 text-pink-500' },
   'soft': { label: 'Soft Drinks', icon: Droplets, color: 'bg-blue-500/20 text-blue-500' },
+  'snacks': { label: 'Snacks', icon: Package, color: 'bg-purple-500/20 text-purple-500' },
   'other': { label: 'Other', icon: Package, color: 'bg-muted text-muted-foreground' },
 };
 
@@ -158,7 +160,7 @@ export default function PurchaseRequests() {
   const totalCases = filteredRecommendations.reduce((sum, item) => sum + item.casesToOrder, 0);
 
   // Group by supplier with proper sorting
-  const supplierOrder = ['San Miguel', 'Tanduay', 'Soft Drinks', 'Others'];
+  const supplierOrder = ['San Miguel', 'Tanduay', 'Soft Drinks', 'Snacks', 'Others'];
   const groupedBySupplier = filteredRecommendations.reduce((acc, item) => {
     const supplier = item.supplier || 'Other';
     if (!acc[supplier]) acc[supplier] = [];
@@ -324,67 +326,59 @@ export default function PurchaseRequests() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
                     {typedItems.map((item, index) => (
                       <div
                         key={index}
                         className={cn(
-                          "flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl gap-3 transition-all",
+                          "flex items-center justify-between p-3 rounded-lg gap-2 transition-all",
                           item.toOrder > 0 
                             ? "bg-gradient-to-r from-primary/5 to-transparent border border-primary/10" 
                             : "bg-muted/30"
                         )}
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-base">
+                          <div className="font-medium text-sm truncate">
                             {cleanProductName(item.name)}
                           </div>
-                          <div className="text-sm text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                            <span>
-                              Sold: <span className="font-medium text-foreground">{item.totalQuantity}</span>
-                            </span>
-                            <span>
-                              Avg: <span className="font-medium text-foreground">{item.avgPerDay}</span>/day
-                            </span>
-                            <span>
-                              Stock: <span className={cn(
-                                "font-medium",
-                                item.inStock >= item.recommendedQty ? "text-green-500" : item.inStock > 0 ? "text-amber-500" : "text-red-500"
-                              )}>{item.inStock}</span>
-                            </span>
+                          <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2">
+                            <span>S:{item.totalQuantity}</span>
+                            <span>A:{item.avgPerDay}/d</span>
+                            <span className={cn(
+                              "font-medium",
+                              item.inStock >= item.recommendedQty ? "text-green-500" : item.inStock > 0 ? "text-amber-500" : "text-red-500"
+                            )}>St:{item.inStock}</span>
                           </div>
                           {item.note && (
-                            <div className="text-xs text-primary/80 mt-1 italic">
+                            <div className="text-xs text-primary/80 truncate italic">
                               {item.note}
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 shrink-0">
                           <div className={cn(
-                            "text-center px-4 py-2 rounded-lg min-w-[70px]",
+                            "text-center px-2 py-1 rounded min-w-[45px]",
                             item.toOrder > 0 ? "bg-primary/10" : "bg-muted/50"
                           )}>
-                            <div className="text-xs text-muted-foreground font-medium">NEED</div>
+                            <div className="text-[10px] text-muted-foreground">NEED</div>
                             <div className={cn(
-                              "text-xl font-bold",
+                              "text-base font-bold",
                               item.toOrder > 0 ? "text-primary" : "text-muted-foreground"
                             )}>{item.toOrder}</div>
                           </div>
                           {item.caseSize > 1 && (
-                            <div className="text-center px-4 py-2 rounded-lg bg-muted/50 min-w-[90px]">
-                              <div className="text-xs text-muted-foreground font-medium">
-                                CASES <span className="opacity-60">({item.caseSize})</span>
-                              </div>
-                              <div className="text-xl font-bold">{item.casesToOrder}</div>
+                            <div className="text-center px-2 py-1 rounded bg-muted/50 min-w-[50px]">
+                              <div className="text-[10px] text-muted-foreground">CS({item.caseSize})</div>
+                              <div className="text-base font-bold">{item.casesToOrder}</div>
                             </div>
                           )}
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 rounded-full"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 rounded-full"
                             onClick={() => removeItem(item.name)}
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-3 w-3" />
                           </Button>
                         </div>
                       </div>
