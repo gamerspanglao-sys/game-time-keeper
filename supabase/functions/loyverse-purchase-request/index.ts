@@ -379,15 +379,50 @@ serve(async (req) => {
       }
     } while (itemsCursor);
 
-    // Debug: show soft drink inventory for Coca-Cola / Sprite / Royal
+    // Debug + normalize soft drink inventory for Coca-Cola / Sprite / Royal (ml → bottles)
     console.log('🥤 Soft drink inventory (Coke/Sprite/Royal):');
+    const softTotals = {
+      cola: 0,
+      sprite: 0,
+      royal: 0,
+    };
+
     for (const [variantId, name] of Object.entries(variantToName)) {
       const n = name.toLowerCase();
-      if (n.includes('coca') || n.includes('sprite') || n.includes('royal')) {
-        const stock = inventory[variantId] || 0;
-        console.log(`   - "${name}" (variantId: ${variantId.slice(0,8)}..., stock: ${stock})`);
+      const stock = inventory[variantId] || 0;
+      if (stock <= 0) continue;
+
+      if (n.includes('coca') || n.includes('coke')) {
+        console.log(`   - "${name}" (variantId: ${variantId.slice(0,8)}..., stock: ${stock} ml)`);
+        softTotals.cola += stock;
+      } else if (n.includes('sprite')) {
+        console.log(`   - "${name}" (variantId: ${variantId.slice(0,8)}..., stock: ${stock} ml)`);
+        softTotals.sprite += stock;
+      } else if (n.includes('royal')) {
+        console.log(`   - "${name}" (variantId: ${variantId.slice(0,8)}..., stock: ${stock} ml)`);
+        softTotals.royal += stock;
       }
     }
+
+    const ML_PER_BIG_SOFT_BOTTLE = 1750;
+    (['cola', 'sprite', 'royal'] as const).forEach((key) => {
+      const totalMl = softTotals[key];
+      if (totalMl <= 0) return;
+      const bottles = Math.floor(totalMl / ML_PER_BIG_SOFT_BOTTLE);
+      console.log(`🥤 ${key} total: ${totalMl}ml => ${bottles} bottles`);
+
+      // Write back bottle counts into inventory so the rest of the code works in bottles
+      for (const [variantId, name] of Object.entries(variantToName)) {
+        const n = name.toLowerCase();
+        if (
+          (key === 'cola' && (n.includes('coca') || n.includes('coke'))) ||
+          (key === 'sprite' && n.includes('sprite')) ||
+          (key === 'royal' && n.includes('royal'))
+        ) {
+          inventory[variantId] = bottles;
+        }
+      }
+    });
 
     // Step 3: Fetch receipts
     console.log('🧾 Fetching receipts...');
