@@ -326,7 +326,7 @@ export default function PurchaseRequests() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
                     {typedItems.map((item, index) => (
                       <div
                         key={index}

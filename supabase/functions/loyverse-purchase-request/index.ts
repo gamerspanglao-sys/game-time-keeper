@@ -936,10 +936,17 @@ serve(async (req) => {
         inStock = bottlesCount;
       }
       
-      const toOrder = Math.max(0, recommendedQty - inStock);
+      const rawToOrder = Math.max(0, recommendedQty - inStock);
       const caseSize = getCaseSize(data.name);
-      const casesToOrder = caseSize > 1 ? Math.ceil(toOrder / caseSize) : toOrder;
       const category = getCategory(data.name) || 'other';
+      
+      // For beer, round up toOrder to be multiple of caseSize (order in full cases)
+      let toOrder = rawToOrder;
+      let casesToOrder = caseSize > 1 ? Math.ceil(rawToOrder / caseSize) : rawToOrder;
+      if (category === 'beer' && caseSize > 1 && rawToOrder > 0) {
+        casesToOrder = Math.ceil(rawToOrder / caseSize);
+        toOrder = casesToOrder * caseSize; // Round to full cases
+      }
       const supplier = getSupplier(category, data.name);
       
       const totalSold = data.quantity + Math.round(extraPerDay * ANALYSIS_DAYS);
