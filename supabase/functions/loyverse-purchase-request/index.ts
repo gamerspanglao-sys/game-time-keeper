@@ -1027,9 +1027,10 @@ serve(async (req) => {
       const totalAvgPerDay = directAvgPerDay + extraPerDay;
       
       // Recommended = avg per day * days to stock * 1.2 safety margin
+      // Days to stock = period until next order (ANALYSIS_DAYS) + delivery buffer
       // For snacks: delivery only on Friday, so stock for 7 days
       const itemCategory = getCategory(data.name) || 'other';
-      const daysToStock = itemCategory === 'snacks' ? 7 : (1 + DELIVERY_BUFFER_DAYS);
+      const daysToStock = itemCategory === 'snacks' ? 7 : (ANALYSIS_DAYS + DELIVERY_BUFFER_DAYS);
       const recommendedQty = Math.ceil(totalAvgPerDay * daysToStock * 1.2);
       
       // Get raw stock from inventory
