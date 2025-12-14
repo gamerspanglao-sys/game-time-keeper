@@ -123,6 +123,15 @@ function isIncluded(itemName: string): boolean {
     return true;
   }
   
+  // ==== SNACKS ====
+  if (
+    name.includes('snack') ||
+    name.includes('big') ||
+    name.includes('small')
+  ) {
+    return true;
+  }
+  
   return false;
 }
 
@@ -165,6 +174,11 @@ function getCategory(itemName: string): string {
   // Cocktails
   if (name.includes('mule') || name.includes('smirnoff') || name.includes('rum coke')) {
     return 'cocktails';
+  }
+  
+  // Snacks
+  if (name.includes('snack') || name.includes('big') || name.includes('small')) {
+    return 'snacks';
   }
   
   // Soft drinks
@@ -239,6 +253,8 @@ function getSupplier(category: string, itemName: string): string {
       return 'Others';
     case 'soft':
       return 'Soft Drinks';
+    case 'snacks':
+      return 'Snacks';
     default:
       return 'Others';
   }
