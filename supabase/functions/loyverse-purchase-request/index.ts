@@ -454,14 +454,19 @@ serve(async (req) => {
     // Step 5: Create synthetic entries for 1L beers if towers were sold but no direct 1L sales exist
     // This ensures 1L positions appear in recommendations based on tower consumption
     
-    // Find variant IDs for 1L beers from existing inventory/items data
-    const findVariantIdByName = (searchName: string): string => {
+    // Find variant ID and stock by matching item name in Loyverse
+    const findVariantByName = (patterns: string[], excludePatterns: string[] = []): { variantId: string; stock: number; realName: string } => {
       for (const [variantId, name] of Object.entries(variantToName)) {
-        if (name.toLowerCase().includes(searchName)) {
-          return variantId;
+        const nameLower = name.toLowerCase();
+        const matchesAll = patterns.every(p => nameLower.includes(p.toLowerCase()));
+        const matchesExclude = excludePatterns.some(p => nameLower.includes(p.toLowerCase()));
+        if (matchesAll && !matchesExclude) {
+          const stock = inventory[variantId] || 0;
+          console.log(`🔍 Found match: "${name}" (variantId: ${variantId.slice(0,8)}..., stock: ${stock})`);
+          return { variantId, stock, realName: name };
         }
       }
-      return '';
+      return { variantId: '', stock: 0, realName: '' };
     };
     
     // Check if Red Horse 1L (regular) exists in sales
@@ -470,8 +475,13 @@ serve(async (req) => {
       return n.includes('red horse') && !n.includes('super') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr'));
     });
     if (!hasRedHorse1L && towerSalesRedHorse > 0) {
-      itemSales['Red Horse 1L (from towers)'] = { name: 'Red Horse 1L (from towers)', variantId: '', quantity: 0 };
-      console.log(`✅ Created synthetic Red Horse 1L entry (${towerSalesRedHorse} towers sold)`);
+      const found = findVariantByName(['red horse', '1l'], ['super', '0,5', '500', '0.5']);
+      itemSales['Red Horse 1L (from towers)'] = { 
+        name: 'Red Horse 1L (from towers)', 
+        variantId: found.variantId, 
+        quantity: 0 
+      };
+      console.log(`✅ Created synthetic Red Horse 1L entry (${towerSalesRedHorse} towers sold, stock: ${found.stock})`);
     }
     
     // Check if Red Horse Super 1L exists in sales
@@ -480,8 +490,13 @@ serve(async (req) => {
       return n.includes('red horse') && n.includes('super');
     });
     if (!hasRedHorseSuper1L && towerSalesRedHorseSuper > 0) {
-      itemSales['Red Horse Super 1L (from towers)'] = { name: 'Red Horse Super 1L (from towers)', variantId: '', quantity: 0 };
-      console.log(`✅ Created synthetic Red Horse Super 1L entry (${towerSalesRedHorseSuper} towers sold)`);
+      const found = findVariantByName(['red horse', 'super']);
+      itemSales['Red Horse Super 1L (from towers)'] = { 
+        name: 'Red Horse Super 1L (from towers)', 
+        variantId: found.variantId, 
+        quantity: 0 
+      };
+      console.log(`✅ Created synthetic Red Horse Super 1L entry (${towerSalesRedHorseSuper} towers sold, stock: ${found.stock})`);
     }
     
     // Check if 1L San Miguel exists in sales
@@ -490,8 +505,13 @@ serve(async (req) => {
       return n.includes('san miguel') && !n.includes('light') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr'));
     });
     if (!hasSanMiguel1L && towerSalesSanMiguel > 0) {
-      itemSales['San Miguel 1L (from towers)'] = { name: 'San Miguel 1L (from towers)', variantId: '', quantity: 0 };
-      console.log(`✅ Created synthetic San Miguel 1L entry (${towerSalesSanMiguel} towers sold)`);
+      const found = findVariantByName(['san miguel', '1l'], ['light']);
+      itemSales['San Miguel 1L (from towers)'] = { 
+        name: 'San Miguel 1L (from towers)', 
+        variantId: found.variantId, 
+        quantity: 0 
+      };
+      console.log(`✅ Created synthetic San Miguel 1L entry (${towerSalesSanMiguel} towers sold, stock: ${found.stock})`);
     }
     
     // Check if 1L San Miguel Light exists in sales
@@ -500,7 +520,13 @@ serve(async (req) => {
       return n.includes('light') && (n.includes('1l') || n.includes('1 l') || n.includes('1000') || n.includes('litr'));
     });
     if (!hasLight1L && towerSalesLight > 0) {
-      itemSales['San Miguel Light 1L (from towers)'] = { name: 'San Miguel Light 1L (from towers)', variantId: '', quantity: 0 };
+      const found = findVariantByName(['light', '1l']);
+      itemSales['San Miguel Light 1L (from towers)'] = { 
+        name: 'San Miguel Light 1L (from towers)', 
+        variantId: found.variantId, 
+        quantity: 0 
+      };
+      console.log(`✅ Created synthetic SM Light 1L entry (${towerSalesLight} towers sold, stock: ${found.stock})`);
     }
 
     // Step 6: Calculate recommendations
