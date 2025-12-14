@@ -471,8 +471,11 @@ serve(async (req) => {
     let basketSalesLight = 0; // Baskets specifically with San Miguel Light
     
     // Tanduay consumption tracking
-    let towerSalesTanduay = 0; // Towers with Tanduay (each = 400ml)
-    let rumCokeSales = 0; // Rum Coke cocktails (each = 50ml)
+    let towerSalesTanduay = 0; // Towers with Tanduay (each = 400ml Tanduay)
+    let rumCokeSales = 0; // Rum Coke cocktails (each = 50ml Tanduay + 150ml Cola)
+    
+    // Cola consumption tracking (for Rum Coke towers and cocktails)
+    let towerRumCokeSales = 0; // Tower Rum Coke (each = 1200ml Cola)
     
     for (const receipt of allReceipts) {
       if (receipt.receipt_type === 'REFUND') continue;
@@ -483,9 +486,13 @@ serve(async (req) => {
         
         // Count towers separately and split by beer type (each tower = 2 x 1L bottles)
         // Tanduay tower = 400ml Tanduay
+        // Rum Coke tower = 1200ml Cola
         if (isTower(itemName)) {
           const lower = itemName.toLowerCase();
-          if (lower.includes('tanduay')) {
+          if (lower.includes('rum coke') || lower.includes('rumcoke')) {
+            towerRumCokeSales += qty; // Tower Rum Coke = 1200ml Cola
+            towerSalesTanduay += qty; // Also uses Tanduay
+          } else if (lower.includes('tanduay')) {
             towerSalesTanduay += qty;
           } else if (lower.includes('red horse') && lower.includes('super')) {
             towerSalesRedHorseSuper += qty;
@@ -500,8 +507,8 @@ serve(async (req) => {
           continue;
         }
         
-        // Count Rum Coke sales (each = 50ml Tanduay)
-        if (itemName.toLowerCase().includes('rum coke')) {
+        // Count Rum Coke cocktail sales (each = 50ml Tanduay + 150ml Cola)
+        if (itemName.toLowerCase().includes('rum coke') && !itemName.toLowerCase().includes('tower')) {
           rumCokeSales += qty;
           // Don't continue - also track as cocktail in itemSales
         }
@@ -756,7 +763,14 @@ serve(async (req) => {
       console.log(`✅ Added Royal 1.75L (stock: ${inventory[royalVariantId]} bottles)`);
     }
     
+    // Calculate Cola consumption from Rum Coke towers (1200ml each) and Rum Coke cocktails (150ml each)
+    const colaMlFromTowers = towerRumCokeSales * 1200;
+    const colaMlFromCocktails = rumCokeSales * 150;
+    const totalColaMl = colaMlFromTowers + colaMlFromCocktails;
+    const colaBottlesNeeded = totalColaMl / 1750; // 1.75L bottles
+    
     console.log(`🥃 Tanduay: ${towerSalesTanduay} towers (${tanduayMlFromTowers}ml) + ${rumCokeSales} rum cokes (${tanduayMlFromRumCoke}ml) = ${totalTanduayMl}ml = ${Math.round(tanduayBottlesNeeded * 10) / 10} bottles`);
+    console.log(`🥤 Cola: ${towerRumCokeSales} RC towers (${colaMlFromTowers}ml) + ${rumCokeSales} rum cokes (${colaMlFromCocktails}ml) = ${totalColaMl}ml = ${Math.round(colaBottlesNeeded * 10) / 10} bottles`);
 
     // Step 6: Calculate recommendations
     const recommendations: SalesItem[] = [];
@@ -771,6 +785,9 @@ serve(async (req) => {
     const basketsLightPerDay = basketSalesLight / ANALYSIS_DAYS;
     
     // Tanduay consumption per day (in bottles - 750ml each)
+    
+    // Cola consumption per day (in bottles - 1750ml each)
+    const colaBottlesPerDay = colaBottlesNeeded / ANALYSIS_DAYS;
     const tanduayBottlesPerDay = tanduayBottlesNeeded / ANALYSIS_DAYS;
     
     for (const [key, data] of Object.entries(itemSales)) {
@@ -849,6 +866,17 @@ serve(async (req) => {
           const towersNote = towerSalesTanduay > 0 ? `${towerSalesTanduay} towers` : '';
           const rumCokeNote = rumCokeSales > 0 ? `${rumCokeSales} rum cokes` : '';
           const parts = [towersNote, rumCokeNote].filter(Boolean).join(' + ');
+          note = `+${Math.round(extraPerDay * 10) / 10}/day from ${parts}`;
+        }
+      }
+      
+      // Coca Cola 1.75L from Tower Rum Coke (1200ml each) and Rum Coke cocktails (150ml each)
+      if (nameLower.includes('coca cola') && nameLower.includes('1.75')) {
+        extraPerDay = colaBottlesPerDay; // Already calculated as bottles/day
+        if (totalColaMl > 0) {
+          const towersNote = towerRumCokeSales > 0 ? `${towerRumCokeSales} RC towers` : '';
+          const cocktailNote = rumCokeSales > 0 ? `${rumCokeSales} rum cokes` : '';
+          const parts = [towersNote, cocktailNote].filter(Boolean).join(' + ');
           note = `+${Math.round(extraPerDay * 10) / 10}/day from ${parts}`;
         }
       }
