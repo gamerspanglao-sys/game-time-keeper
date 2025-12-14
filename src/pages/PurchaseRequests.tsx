@@ -34,10 +34,9 @@ interface PurchaseData {
 
 const SUPPLIER_CONFIG: Record<string, { label: string; color: string }> = {
   'San Miguel': { label: 'San Miguel (Beer)', color: 'bg-amber-500/20 text-amber-500 border-amber-500/30' },
-  'Spirits Supplier': { label: 'Spirits & Cocktails', color: 'bg-orange-500/20 text-orange-500 border-orange-500/30' },
-  'Cocktails Supplier': { label: 'Cocktails', color: 'bg-pink-500/20 text-pink-500 border-pink-500/30' },
-  'Soft Drinks Supplier': { label: 'Soft Drinks', color: 'bg-blue-500/20 text-blue-500 border-blue-500/30' },
-  'Other': { label: 'Other', color: 'bg-muted text-muted-foreground border-muted' },
+  'Tanduay': { label: 'Tanduay', color: 'bg-orange-500/20 text-orange-500 border-orange-500/30' },
+  'Soft Drinks': { label: 'Soft Drinks', color: 'bg-blue-500/20 text-blue-500 border-blue-500/30' },
+  'Others': { label: 'Others', color: 'bg-muted text-muted-foreground border-muted' },
 };
 
 const CATEGORY_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
@@ -159,7 +158,7 @@ export default function PurchaseRequests() {
   const totalCases = filteredRecommendations.reduce((sum, item) => sum + item.casesToOrder, 0);
 
   // Group by supplier with proper sorting
-  const supplierOrder = ['San Miguel', 'Spirits Supplier', 'Cocktails Supplier', 'Soft Drinks Supplier', 'Other'];
+  const supplierOrder = ['San Miguel', 'Tanduay', 'Soft Drinks', 'Others'];
   const groupedBySupplier = filteredRecommendations.reduce((acc, item) => {
     const supplier = item.supplier || 'Other';
     if (!acc[supplier]) acc[supplier] = [];
