@@ -790,7 +790,29 @@ serve(async (req) => {
       // Recommended = avg per day * days to stock * 1.2 safety margin
       const daysToStock = 1 + DELIVERY_BUFFER_DAYS;
       const recommendedQty = Math.ceil(totalAvgPerDay * daysToStock * 1.2);
-      const inStock = inventory[data.variantId] || 0;
+      
+      // Get raw stock from inventory
+      let inStock = inventory[data.variantId] || 0;
+      
+      // Check if this is a big soft drink bottle stored in ml
+      // Big bottles (1.75L, 1.5L, 2L) of Coke/Sprite/Royal are stored in ml, need to convert to bottles
+      const isBigSoftDrinkBottle =
+        (nameLower.includes('coca cola') ||
+          nameLower.includes('coca-cola') ||
+          nameLower.includes('coke') ||
+          nameLower.includes('sprite') ||
+          nameLower.includes('royal'));
+      
+      // If stock seems to be in ml (> 100), convert to bottles
+      // 1.75L = 1750ml, 1.5L = 1500ml, 2L = 2000ml - default to 1750ml
+      if (isBigSoftDrinkBottle && inStock > 100) {
+        const bottleSizeMl = nameLower.includes('1.5') || nameLower.includes('1,5') ? 1500 :
+                            nameLower.includes('2l') || nameLower.includes('2 l') ? 2000 : 1750;
+        const bottlesCount = Math.floor(inStock / bottleSizeMl);
+        console.log(`🥤 Converting "${data.name}": ${inStock}ml ÷ ${bottleSizeMl}ml = ${bottlesCount} bottles`);
+        inStock = bottlesCount;
+      }
+      
       const toOrder = Math.max(0, recommendedQty - inStock);
       const caseSize = getCaseSize(data.name);
       const casesToOrder = caseSize > 1 ? Math.ceil(toOrder / caseSize) : toOrder;
