@@ -48,6 +48,14 @@ function isIncluded(itemName: string): boolean {
     return false;
   }
   
+  // EXCLUDE specific items
+  if (name.includes('lemonade pitcher') || name.includes('lemonade fresh')) {
+    return false;
+  }
+  if (name.includes('rum coke') || name.includes('tequila shot')) {
+    return false;
+  }
+  
   // ==== BEER (all brands except Heineken) ====
   if (
     name.includes('red horse') ||
@@ -73,19 +81,21 @@ function isIncluded(itemName: string): boolean {
     name.includes('brandy') ||
     name.includes('rum') // plain rum bottles, not Rum Coke
   ) {
+    // Exclude tequila shot (already handled above but double check)
+    if (name.includes('shot')) return false;
     return true;
   }
   
-  // ==== COCKTAILS (Smirnoff Mule, Rum Coke, etc.) ====
+  // ==== COCKTAILS (Smirnoff Mule only - Rum Coke excluded) ====
   if (
     name.includes('mule') ||
-    name.includes('smirnoff') ||
-    name.includes('rum coke')
+    name.includes('smirnoff')
   ) {
     return true;
   }
   
   // ==== SOFT DRINKS (all sizes - bottles, cans, big 1.75L, water, juices) ====
+  // Exclude lemonade pitcher/fresh (handled above)
   if (
     name.includes('water') ||
     name.includes('coca cola') ||
@@ -97,8 +107,6 @@ function isIncluded(itemName: string): boolean {
     name.includes('tonic') ||
     name.includes('soda') ||
     name.includes('juice') ||
-    name.includes('juce') ||
-    name.includes('lemonade') ||
     name.includes('pepsi') ||
     name.includes('fanta') ||
     name.includes('zero') ||
@@ -624,6 +632,23 @@ serve(async (req) => {
       }
     }
     
+    // 4. Gin Bottle - always show
+    const hasGin = Object.keys(itemSales).some(k => {
+      const n = k.toLowerCase();
+      return n.includes('gin') && !n.includes('tower');
+    });
+    if (!hasGin) {
+      const found = findVariantByName(['gin'], ['tower']);
+      if (found.variantId) {
+        itemSales['Gin Bottle'] = { 
+          name: 'Gin Bottle', 
+          variantId: found.variantId, 
+          quantity: 0 
+        };
+        console.log(`✅ Added Gin Bottle (stock: ${found.stock})`);
+      }
+    }
+    
     console.log(`🥃 Tanduay: ${towerSalesTanduay} towers (${tanduayMlFromTowers}ml) + ${rumCokeSales} rum cokes (${tanduayMlFromRumCoke}ml) = ${totalTanduayMl}ml = ${Math.round(tanduayBottlesNeeded * 10) / 10} bottles`);
 
     // Step 6: Calculate recommendations
@@ -737,9 +762,9 @@ serve(async (req) => {
       
       const totalSold = data.quantity + Math.round(extraPerDay * ANALYSIS_DAYS);
       
-      // Include item if: has sales, has extra consumption, OR is a Tanduay bottle product (always show)
-      const isTanduayBottle = nameLower.includes('tanduay') && !nameLower.includes('tower');
-      if (data.quantity > 0 || extraPerDay > 0 || isTanduayBottle) {
+      // Include item if: has sales, has extra consumption, OR is a Tanduay/Gin product (always show)
+      const isTanduayOrGin = (nameLower.includes('tanduay') || nameLower.includes('gin')) && !nameLower.includes('tower');
+      if (data.quantity > 0 || extraPerDay > 0 || isTanduayOrGin) {
         recommendations.push({
           name: data.name,
           totalQuantity: totalSold,
