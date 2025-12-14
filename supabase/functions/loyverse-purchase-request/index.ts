@@ -487,10 +487,10 @@ serve(async (req) => {
     // Check if Red Horse Super 1L exists in sales
     const hasRedHorseSuper1L = Object.keys(itemSales).some(k => {
       const n = k.toLowerCase();
-      return n.includes('red horse') && n.includes('super');
+      return n.includes('red horse') && n.includes('super') && !n.includes('tower');
     });
     if (!hasRedHorseSuper1L && towerSalesRedHorseSuper > 0) {
-      const found = findVariantByName(['red horse', 'super']);
+      const found = findVariantByName(['red horse', 'super', '1l'], ['tower', 'basket']);
       itemSales['Red Horse Super 1L (from towers)'] = { 
         name: 'Red Horse Super 1L (from towers)', 
         variantId: found.variantId, 
