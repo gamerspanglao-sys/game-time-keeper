@@ -926,10 +926,10 @@ serve(async (req) => {
           nameLower.includes('sprite') ||
           nameLower.includes('royal'));
       
-      // Check if this is Tanduay Select Stok or Gin stored in ml (750ml bottles)
+      // Check if this is Tanduay Select or Gin stored in ml (750ml bottles)
       const is750mlSpirit = 
-        (nameLower.includes('tanduay') && nameLower.includes('select') && nameLower.includes('stok')) ||
-        (nameLower.includes('gin') && nameLower.includes('stok'));
+        ((nameLower.includes('tanduay') && nameLower.includes('select') && !nameLower.includes('ice')) ||
+         (nameLower.includes('gin') && !nameLower.includes('tower')));
       
       // If stock seems to be in ml (> 100), convert to bottles
       if (isBigSoftDrinkBottle && inStock > 100) {
