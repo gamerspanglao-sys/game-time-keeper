@@ -19,6 +19,8 @@ const CASE_SIZES: Record<string, number> = {
   'red horse super': 6,   // 1L bottles (default for super)
   'san miguel 1l': 6,     // 1L bottles
   'san miguel light 1l': 6, // 1L bottles
+  'san miguel light apple': 24, // Light Apple = 24 per case
+  'san miguel light lemon': 24, // Light Lemon = 24 per case
   'san miguel light': 24, // small bottles
   'san miguel pale': 24,
   'san miguel pilsen': 24,
@@ -27,12 +29,12 @@ const CASE_SIZES: Record<string, number> = {
   'smirnoff mule': 24,
   'smirnoff': 24,
   'water': 12,
-  '1.75l': 6,             // Big bottles = 6 per case
-  '1.75': 6,              // Big bottles = 6 per case
-  '1,75': 6,              // Big bottles = 6 per case
-  'coca cola 1.75': 6,    // Big Coke = 6 per case
-  'sprite 1.75': 6,       // Big Sprite = 6 per case
-  'royal 1.75': 6,        // Big Royal = 6 per case
+  'coca cola 1.75': 12,   // Big Coke = 12 per case
+  'sprite 1.75': 12,      // Big Sprite = 12 per case
+  'royal 1.75': 12,       // Big Royal = 12 per case
+  '1.75l': 12,            // Big bottles = 12 per case
+  '1.75': 12,             // Big bottles = 12 per case
+  '1,75': 12,             // Big bottles = 12 per case
   'coke': 12,             // Small cans/bottles = 12 per case
   'sprite': 12,           // Small cans/bottles = 12 per case
   'royal': 12,            // Small cans/bottles = 12 per case
@@ -207,9 +209,9 @@ function isBasket(itemName: string): boolean {
 function getCaseSize(itemName: string): number {
   const name = itemName.toLowerCase();
   
-  // Check big bottles FIRST (1.75L, 1.5L, 2L) - always 6 per case
-  if (name.includes('1.75') || name.includes('1,75') || name.includes('1.5') || name.includes('1,5') || name.includes('2l') || name.includes('2 l')) {
-    return 6;
+  // Check specific patterns from CASE_SIZES FIRST
+  for (const [key, size] of Object.entries(CASE_SIZES)) {
+    if (name.includes(key)) return size;
   }
   
   // Check specific patterns from CASE_SIZES
@@ -713,6 +715,35 @@ serve(async (req) => {
       }
     }
     
+    // Step 5a2: Create entries for San Miguel Light Apple and Lemon if they exist in inventory
+    const lightAppleExists = Object.keys(itemSales).some(k => k.toLowerCase().includes('apple'));
+    if (!lightAppleExists) {
+      for (const [variantId, name] of Object.entries(variantToName)) {
+        if (name.toLowerCase().includes('apple') && name.toLowerCase().includes('light')) {
+          const stock = inventory[variantId] || 0;
+          if (stock > 0) {
+            itemSales['San Miguel Light Apple'] = { name: 'San Miguel Light Apple', variantId, quantity: 0 };
+            console.log(`✅ Added San Miguel Light Apple (stock: ${stock})`);
+          }
+          break;
+        }
+      }
+    }
+    
+    const lightLemonExists = Object.keys(itemSales).some(k => k.toLowerCase().includes('lemon'));
+    if (!lightLemonExists) {
+      for (const [variantId, name] of Object.entries(variantToName)) {
+        if (name.toLowerCase().includes('lemon') && name.toLowerCase().includes('light')) {
+          const stock = inventory[variantId] || 0;
+          if (stock > 0) {
+            itemSales['San Miguel Light Lemon'] = { name: 'San Miguel Light Lemon', variantId, quantity: 0 };
+            console.log(`✅ Added San Miguel Light Lemon (stock: ${stock})`);
+          }
+          break;
+        }
+      }
+    }
+    
     console.log(`🍺 Baskets RH: ${basketSalesRedHorse}, SM: ${basketSalesSanMiguel}, Light: ${basketSalesLight}, Total: ${basketSales}`);
 
     // Step 5b: Create entries for ALL Tanduay bottle products (Select, Dark, ICE)
@@ -993,8 +1024,8 @@ serve(async (req) => {
         }
       }
       
-      // San Miguel Light small bottles from baskets (5 per basket, only Light baskets, NOT 1L)
-      if (nameLower.includes('san miguel') && nameLower.includes('light') && !is1LBeer) {
+      // San Miguel Light small bottles from baskets (5 per basket, only Light baskets, NOT 1L, NOT Apple/Lemon)
+      if (nameLower.includes('san miguel') && nameLower.includes('light') && !is1LBeer && !nameLower.includes('apple') && !nameLower.includes('lemon')) {
         extraPerDay = basketsLightPerDay * 5;
         if (basketSalesLight > 0) {
           note = `+${Math.round(extraPerDay * 10) / 10}/day from Light baskets`;
@@ -1085,7 +1116,9 @@ serve(async (req) => {
       // Include item if: has sales, has extra consumption,
       // OR is a Tanduay/Gin product (always show),
       // OR is a big soft drink bottle (1.5L/1.75L/2L Coke/Sprite/Royal)
+      // OR is San Miguel Light Apple/Lemon (always show)
       const isTanduayOrGin = (nameLower.includes('tanduay') || nameLower.includes('gin')) && !nameLower.includes('tower');
+      const isLightAppleOrLemon = nameLower.includes('apple') || nameLower.includes('lemon');
       const isBigSoftDrink =
         itemCategory === 'soft' &&
         (nameLower.includes('1.75') ||
@@ -1100,7 +1133,7 @@ serve(async (req) => {
           nameLower.includes('sprite') ||
           nameLower.includes('royal'));
 
-      if (data.quantity > 0 || extraPerDay > 0 || isTanduayOrGin || isBigSoftDrink) {
+      if (data.quantity > 0 || extraPerDay > 0 || isTanduayOrGin || isBigSoftDrink || isLightAppleOrLemon) {
         recommendations.push({
           name: data.name,
           totalQuantity: totalSold,
