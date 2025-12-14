@@ -33,7 +33,7 @@ interface TimerCardProps {
   notifyQueueNext?: (timerName: string, personName: string) => void;
   compact?: boolean;
   queue: QueueEntry[];
-  onAddToQueue: (timerId: string, name: string) => void;
+  onAddToQueue: (timerId: string, name: string, hours: number) => void;
   onRemoveFromQueue: (timerId: string, entryId: string) => void;
 }
 

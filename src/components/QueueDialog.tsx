@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Users, UserPlus, X, Clock, Check, CreditCard } from 'lucide-react';
 import { QueueEntry } from '@/types/queue';
 
@@ -18,11 +19,10 @@ interface QueueDialogProps {
   timerId: string;
   queue: QueueEntry[];
   remainingTime: number; // in ms
-  onAddToQueue: (timerId: string, name: string) => void;
+  onAddToQueue: (timerId: string, name: string, hours: number) => void;
   onRemoveFromQueue: (timerId: string, entryId: string) => void;
 }
 
-const SESSION_DURATION_MS = 60 * 60 * 1000; // 1 hour default session
 const CLEANUP_BUFFER_MS = 3 * 60 * 1000; // 3 minutes cleanup time
 
 export function QueueDialog({
@@ -36,25 +36,31 @@ export function QueueDialog({
   onRemoveFromQueue,
 }: QueueDialogProps) {
   const [newName, setNewName] = useState('');
+  const [selectedHours, setSelectedHours] = useState(1);
   const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
   const [pendingName, setPendingName] = useState('');
+  const [pendingHours, setPendingHours] = useState(1);
 
   const handleAdd = () => {
     if (newName.trim()) {
       setPendingName(newName.trim());
+      setPendingHours(selectedHours);
       setShowPaymentConfirm(true);
     }
   };
 
   const handleConfirmPayment = () => {
-    onAddToQueue(timerId, pendingName);
+    onAddToQueue(timerId, pendingName, pendingHours);
     setNewName('');
+    setSelectedHours(1);
     setPendingName('');
+    setPendingHours(1);
     setShowPaymentConfirm(false);
   };
 
   const handleCancelPayment = () => {
     setPendingName('');
+    setPendingHours(1);
     setShowPaymentConfirm(false);
   };
 
@@ -67,9 +73,12 @@ export function QueueDialog({
   // Calculate estimated start time for each person in queue
   const getEstimatedStartTime = (index: number) => {
     const now = Date.now();
-    // First person: remaining time on current session + cleanup buffer
-    // Others: add 1 hour session + cleanup buffer for each person ahead
-    const waitTime = remainingTime + CLEANUP_BUFFER_MS + (index * (SESSION_DURATION_MS + CLEANUP_BUFFER_MS));
+    // Calculate wait based on hours of people ahead
+    let waitTime = remainingTime + CLEANUP_BUFFER_MS;
+    for (let i = 0; i < index; i++) {
+      const entry = queue[i];
+      waitTime += (entry.hours * 60 * 60 * 1000) + CLEANUP_BUFFER_MS;
+    }
     return new Date(now + waitTime);
   };
 
@@ -88,10 +97,10 @@ export function QueueDialog({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-primary" />
-              Payment Confirmation
+              Prepayment Confirmation
             </DialogTitle>
             <DialogDescription>
-              Confirm payment before adding to queue
+              Confirm prepayment before adding to queue
             </DialogDescription>
           </DialogHeader>
 
@@ -100,8 +109,11 @@ export function QueueDialog({
               <p className="text-lg font-semibold text-foreground mb-2">
                 {pendingName}
               </p>
+              <p className="text-2xl font-bold text-primary mb-2">
+                {pendingHours} {pendingHours === 1 ? 'hour' : 'hours'}
+              </p>
               <p className="text-muted-foreground">
-                Has this person paid for the session?
+                Has this person prepaid for {pendingHours} {pendingHours === 1 ? 'hour' : 'hours'}?
               </p>
             </div>
 
@@ -112,7 +124,7 @@ export function QueueDialog({
                 onClick={handleConfirmPayment}
               >
                 <Check className="w-4 h-4 mr-2" />
-                Yes, paid
+                Yes, prepaid
               </Button>
               <Button
                 variant="outline"
@@ -141,17 +153,38 @@ export function QueueDialog({
 
         <div className="space-y-4">
           {/* Add to queue */}
-          <div className="flex gap-2">
-            <Input
-              placeholder="Enter name..."
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="flex-1"
-            />
-            <Button onClick={handleAdd} disabled={!newName.trim()}>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter name..."
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="flex-1"
+              />
+            </div>
+            
+            {/* Hours selector */}
+            <div className="space-y-2">
+              <Label className="text-sm text-muted-foreground">Prepaid hours</Label>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map((hours) => (
+                  <Button
+                    key={hours}
+                    variant={selectedHours === hours ? "default" : "outline"}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setSelectedHours(hours)}
+                  >
+                    {hours}h
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <Button onClick={handleAdd} disabled={!newName.trim()} className="w-full">
               <UserPlus className="w-4 h-4 mr-2" />
-              Add
+              Add to Queue ({selectedHours}h prepaid)
             </Button>
           </div>
 
@@ -178,7 +211,12 @@ export function QueueDialog({
                       {index + 1}
                     </span>
                     <div>
-                      <p className="font-medium text-foreground">{entry.name}</p>
+                      <p className="font-medium text-foreground">
+                        {entry.name}
+                        <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-semibold">
+                          {entry.hours}h
+                        </span>
+                      </p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         Start ~{formatTime(getEstimatedStartTime(index))}

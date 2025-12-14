@@ -27,6 +27,7 @@ export function useSupabaseQueue() {
             name: entry.customer_name,
             timerId: entry.timer_id,
             timestamp: Number(entry.added_at),
+            hours: (entry as any).hours || 1,
           };
           if (!queueState[entry.timer_id]) {
             queueState[entry.timer_id] = [];
@@ -66,11 +67,12 @@ export function useSupabaseQueue() {
     };
   }, [loadQueue]);
 
-  const addToQueue = useCallback(async (timerId: string, name: string) => {
+  const addToQueue = useCallback(async (timerId: string, name: string, hours: number = 1) => {
     const entry = {
       timer_id: timerId,
       customer_name: name.trim(),
       added_at: Date.now(),
+      hours: hours,
     };
 
     try {
@@ -91,6 +93,7 @@ export function useSupabaseQueue() {
           name: data.customer_name,
           timerId: data.timer_id,
           timestamp: Number(data.added_at),
+          hours: (data as any).hours || 1,
         };
 
         setQueue(prev => ({
