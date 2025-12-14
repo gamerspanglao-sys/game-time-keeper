@@ -392,7 +392,8 @@ serve(async (req) => {
       const stock = inventory[variantId] || 0;
       if (stock <= 0) continue;
 
-      if (n.includes('coca') || n.includes('coke')) {
+      // Cola: match any cola/coke/coca
+      if (n.includes('coca') || n.includes('coke') || n.includes('cola')) {
         console.log(`   - "${name}" (variantId: ${variantId.slice(0,8)}..., stock: ${stock} ml)`);
         softTotals.cola += stock;
       } else if (n.includes('sprite')) {
@@ -415,7 +416,7 @@ serve(async (req) => {
       for (const [variantId, name] of Object.entries(variantToName)) {
         const n = name.toLowerCase();
         if (
-          (key === 'cola' && (n.includes('coca') || n.includes('coke'))) ||
+          (key === 'cola' && (n.includes('coca') || n.includes('coke') || n.includes('cola'))) ||
           (key === 'sprite' && n.includes('sprite')) ||
           (key === 'royal' && n.includes('royal'))
         ) {
