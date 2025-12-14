@@ -698,43 +698,62 @@ serve(async (req) => {
       }
     }
     
-    // 5. Ensure big soft drink bottles (Cola/Sprite/Royal) appear even without sales
+    // 5. Ensure big soft drink bottles (Cola/Sprite/Royal) appear - consolidate into single entries
     // These are stored in ml and already converted to bottles above
+    // First, remove any existing Cola/Sprite/Royal entries from itemSales (from direct sales)
+    const keysToRemove: string[] = [];
+    for (const key of Object.keys(itemSales)) {
+      const k = key.toLowerCase();
+      if (k.includes('coca') || k.includes('coke') || k.includes('cola') || 
+          k.includes('sprite') || k.includes('royal')) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      delete itemSales[key];
+    }
+    
+    // Now add single consolidated entries for each
+    let colaVariantId = '';
+    let spriteVariantId = '';
+    let royalVariantId = '';
+    
     for (const [variantId, name] of Object.entries(variantToName)) {
       const n = name.toLowerCase();
-      
-      // Match Cola/Sprite/Royal stock items (they have "stok" in name or are the main item)
-      const isSoftDrinkStock =
-        n.includes('coca') ||
-        n.includes('coke') ||
-        n.includes('cola') ||
-        n.includes('sprite') ||
-        n.includes('royal');
-
-      if (!isSoftDrinkStock) continue;
-
-      const exists = Object.values(itemSales).some(item => item.variantId === variantId);
-      if (exists) continue;
-
-      const stock = inventory[variantId] || 0;
-      if (stock <= 0) continue;
-
-      // Determine display name
-      let displayName = name;
-      if (n.includes('coca') || n.includes('coke') || n.includes('cola')) {
-        displayName = 'Coca Cola 1.75L';
-      } else if (n.includes('sprite')) {
-        displayName = 'Sprite 1.75L';
-      } else if (n.includes('royal')) {
-        displayName = 'Royal 1.75L';
+      if ((n.includes('coca') || n.includes('coke') || n.includes('cola')) && !colaVariantId) {
+        colaVariantId = variantId;
+      } else if (n.includes('sprite') && !spriteVariantId) {
+        spriteVariantId = variantId;
+      } else if (n.includes('royal') && !royalVariantId) {
+        royalVariantId = variantId;
       }
-
-      itemSales[displayName] = {
-        name: displayName,
-        variantId,
+    }
+    
+    if (colaVariantId && (inventory[colaVariantId] || 0) > 0) {
+      itemSales['Coca Cola 1.75L'] = {
+        name: 'Coca Cola 1.75L',
+        variantId: colaVariantId,
         quantity: 0,
       };
-      console.log(`✅ Added soft drink: "${displayName}" (stock: ${stock} bottles)`);
+      console.log(`✅ Added Coca Cola 1.75L (stock: ${inventory[colaVariantId]} bottles)`);
+    }
+    
+    if (spriteVariantId && (inventory[spriteVariantId] || 0) > 0) {
+      itemSales['Sprite 1.75L'] = {
+        name: 'Sprite 1.75L',
+        variantId: spriteVariantId,
+        quantity: 0,
+      };
+      console.log(`✅ Added Sprite 1.75L (stock: ${inventory[spriteVariantId]} bottles)`);
+    }
+    
+    if (royalVariantId && (inventory[royalVariantId] || 0) > 0) {
+      itemSales['Royal 1.75L'] = {
+        name: 'Royal 1.75L',
+        variantId: royalVariantId,
+        quantity: 0,
+      };
+      console.log(`✅ Added Royal 1.75L (stock: ${inventory[royalVariantId]} bottles)`);
     }
     
     console.log(`🥃 Tanduay: ${towerSalesTanduay} towers (${tanduayMlFromTowers}ml) + ${rumCokeSales} rum cokes (${tanduayMlFromRumCoke}ml) = ${totalTanduayMl}ml = ${Math.round(tanduayBottlesNeeded * 10) / 10} bottles`);
