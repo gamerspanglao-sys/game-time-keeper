@@ -707,12 +707,21 @@ serve(async (req) => {
     
     // 5. Ensure big soft drink bottles (Cola/Sprite/Royal) appear - consolidate into single entries
     // These are stored in ml and already converted to bottles above
-    // First, remove any existing Cola/Sprite/Royal entries from itemSales (from direct sales)
+    // First, collect direct sales for Cola/Sprite/Royal and remove their separate positions
+    let colaDirectQty = 0;
+    let spriteDirectQty = 0;
+    let royalDirectQty = 0;
     const keysToRemove: string[] = [];
     for (const key of Object.keys(itemSales)) {
       const k = key.toLowerCase();
-      if (k.includes('coca') || k.includes('coke') || k.includes('cola') || 
-          k.includes('sprite') || k.includes('royal')) {
+      if (k.includes('coca') || k.includes('coke') || k.includes('cola')) {
+        colaDirectQty += itemSales[key].quantity;
+        keysToRemove.push(key);
+      } else if (k.includes('sprite')) {
+        spriteDirectQty += itemSales[key].quantity;
+        keysToRemove.push(key);
+      } else if (k.includes('royal')) {
+        royalDirectQty += itemSales[key].quantity;
         keysToRemove.push(key);
       }
     }
@@ -740,27 +749,27 @@ serve(async (req) => {
       itemSales['Coca Cola 1.75L'] = {
         name: 'Coca Cola 1.75L',
         variantId: colaVariantId,
-        quantity: 0,
+        quantity: colaDirectQty,
       };
-      console.log(`✅ Added Coca Cola 1.75L (stock: ${inventory[colaVariantId]} bottles)`);
+      console.log(`✅ Added Coca Cola 1.75L (direct: ${colaDirectQty}, stock: ${inventory[colaVariantId]} bottles)`);
     }
     
     if (spriteVariantId && (inventory[spriteVariantId] || 0) > 0) {
       itemSales['Sprite 1.75L'] = {
         name: 'Sprite 1.75L',
         variantId: spriteVariantId,
-        quantity: 0,
+        quantity: spriteDirectQty,
       };
-      console.log(`✅ Added Sprite 1.75L (stock: ${inventory[spriteVariantId]} bottles)`);
+      console.log(`✅ Added Sprite 1.75L (direct: ${spriteDirectQty}, stock: ${inventory[spriteVariantId]} bottles)`);
     }
     
     if (royalVariantId && (inventory[royalVariantId] || 0) > 0) {
       itemSales['Royal 1.75L'] = {
         name: 'Royal 1.75L',
         variantId: royalVariantId,
-        quantity: 0,
+        quantity: royalDirectQty,
       };
-      console.log(`✅ Added Royal 1.75L (stock: ${inventory[royalVariantId]} bottles)`);
+      console.log(`✅ Added Royal 1.75L (direct: ${royalDirectQty}, stock: ${inventory[royalVariantId]} bottles)`);
     }
     
     // Calculate Cola consumption from Rum Coke towers (1200ml each) and Rum Coke cocktails (150ml each)
