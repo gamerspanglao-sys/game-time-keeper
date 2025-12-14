@@ -922,9 +922,9 @@ serve(async (req) => {
         }
       }
       
-      // Tanduay Select from towers (400ml each) and Rum Coke (50ml each)
+      // Tanduay Dark from towers (400ml each) and Rum Coke (50ml each)
       // Tanduay bottle = 750ml
-      if (nameLower.includes('tanduay') && nameLower.includes('select') && !nameLower.includes('ice')) {
+      if (nameLower.includes('tanduay') && nameLower.includes('dark') && !nameLower.includes('ice')) {
         extraPerDay = tanduayBottlesPerDay; // Already calculated as bottles/day
         if (totalTanduayMl > 0) {
           const towersNote = towerSalesTanduay > 0 ? `${towerSalesTanduay} towers` : '';
