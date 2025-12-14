@@ -652,6 +652,40 @@ serve(async (req) => {
       }
     }
     
+    // 5. Ensure big soft drink bottles (1.75L) like Coke/Sprite/Royal appear even without sales
+    for (const [variantId, name] of Object.entries(variantToName)) {
+      const n = name.toLowerCase();
+      const isSoftDrink =
+        n.includes('coca cola') ||
+        n.includes('coca-cola') ||
+        n.includes('coke') ||
+        n.includes('sprite') ||
+        n.includes('royal');
+      const isBigBottle =
+        n.includes('1.75') ||
+        n.includes('1,75') ||
+        n.includes('1.5') ||
+        n.includes('1,5') ||
+        n.includes('2l') ||
+        n.includes('2 l');
+
+      if (!isSoftDrink || !isBigBottle) continue;
+
+      const exists = Object.values(itemSales).some(item => item.variantId === variantId);
+      if (exists) continue;
+
+      const stock = inventory[variantId] || 0;
+      if (stock <= 0) continue;
+
+      const key = name;
+      itemSales[key] = {
+        name,
+        variantId,
+        quantity: 0,
+      };
+      console.log(`✅ Added big soft drink bottle: "${name}" (stock: ${stock})`);
+    }
+    
     console.log(`🥃 Tanduay: ${towerSalesTanduay} towers (${tanduayMlFromTowers}ml) + ${rumCokeSales} rum cokes (${tanduayMlFromRumCoke}ml) = ${totalTanduayMl}ml = ${Math.round(tanduayBottlesNeeded * 10) / 10} bottles`);
 
     // Step 6: Calculate recommendations
@@ -765,9 +799,25 @@ serve(async (req) => {
       
       const totalSold = data.quantity + Math.round(extraPerDay * ANALYSIS_DAYS);
       
-      // Include item if: has sales, has extra consumption, OR is a Tanduay/Gin product (always show)
+      // Include item if: has sales, has extra consumption,
+      // OR is a Tanduay/Gin product (always show),
+      // OR is a big soft drink bottle (1.5L/1.75L/2L Coke/Sprite/Royal)
       const isTanduayOrGin = (nameLower.includes('tanduay') || nameLower.includes('gin')) && !nameLower.includes('tower');
-      if (data.quantity > 0 || extraPerDay > 0 || isTanduayOrGin) {
+      const isBigSoftDrink =
+        category === 'soft' &&
+        (nameLower.includes('1.75') ||
+          nameLower.includes('1,75') ||
+          nameLower.includes('1.5') ||
+          nameLower.includes('1,5') ||
+          nameLower.includes('2l') ||
+          nameLower.includes('2 l')) &&
+        (nameLower.includes('coca cola') ||
+          nameLower.includes('coca-cola') ||
+          nameLower.includes('coke') ||
+          nameLower.includes('sprite') ||
+          nameLower.includes('royal'));
+
+      if (data.quantity > 0 || extraPerDay > 0 || isTanduayOrGin || isBigSoftDrink) {
         recommendations.push({
           name: data.name,
           totalQuantity: totalSold,
