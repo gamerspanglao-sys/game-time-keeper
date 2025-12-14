@@ -556,7 +556,7 @@ serve(async (req) => {
       console.log(`✅ Created synthetic SM Light 1L entry (${towerSalesLight} towers sold, stock: ${found.stock})`);
     }
 
-    // Step 5b: Create synthetic Tanduay entry if towers/rum coke were sold
+    // Step 5b: Create entries for ALL Tanduay bottle products (Select, Dark, ICE)
     // Tanduay bottle = 750ml, Tower = 400ml, Rum Coke = 50ml
     const tanduayMlFromTowers = towerSalesTanduay * 400;
     const tanduayMlFromRumCoke = rumCokeSales * 50;
@@ -572,26 +572,55 @@ serve(async (req) => {
       }
     }
     
-    // Check if Tanduay Select Bottle already exists in sales (note: Loyverse has typo "Bootle")
-    // Tower/Rum Coke consumption should be added to Tanduay Select Bottle
-    const hasTanduaySelectBottle = Object.keys(itemSales).some(k => {
+    // Always add all 3 Tanduay bottle products to itemSales if they exist in inventory
+    // 1. Tanduay Select Bottle (with tower/cocktail consumption)
+    const hasTanduaySelect = Object.keys(itemSales).some(k => {
       const n = k.toLowerCase();
       return n.includes('tanduay') && n.includes('select') && !n.includes('tower');
     });
-    
-    if (!hasTanduaySelectBottle && totalTanduayMl > 0) {
-      // Find "Tanduay Select Bootle" (with Loyverse typo)
+    if (!hasTanduaySelect) {
       const found = findVariantByName(['tanduay', 'select'], ['tower', 'ice']);
-      
       if (found.variantId) {
-        itemSales['Tanduay Select Bottle (from towers/cocktails)'] = { 
-          name: 'Tanduay Select Bottle (from towers/cocktails)', 
+        itemSales['Tanduay Select Bottle'] = { 
+          name: 'Tanduay Select Bottle', 
           variantId: found.variantId, 
           quantity: 0 
         };
-        console.log(`✅ Created synthetic Tanduay Select entry from "${found.realName}" (${towerSalesTanduay} towers + ${rumCokeSales} rum cokes = ${Math.round(tanduayBottlesNeeded * 10) / 10} bottles, stock: ${found.stock})`);
-      } else {
-        console.log(`⚠️ Could not find Tanduay Select variant in inventory`);
+        console.log(`✅ Added Tanduay Select Bottle (stock: ${found.stock})`);
+      }
+    }
+    
+    // 2. Tanduay Dark (regular bottle)
+    const hasTanduayDark = Object.keys(itemSales).some(k => {
+      const n = k.toLowerCase();
+      return n.includes('tanduay') && n.includes('dark');
+    });
+    if (!hasTanduayDark) {
+      const found = findVariantByName(['tanduay', 'dark'], ['tower', 'ice', 'select']);
+      if (found.variantId) {
+        itemSales['Tanduay Dark'] = { 
+          name: 'Tanduay Dark', 
+          variantId: found.variantId, 
+          quantity: 0 
+        };
+        console.log(`✅ Added Tanduay Dark (stock: ${found.stock})`);
+      }
+    }
+    
+    // 3. Tanduay ICE
+    const hasTanduayIce = Object.keys(itemSales).some(k => {
+      const n = k.toLowerCase();
+      return n.includes('tanduay') && n.includes('ice');
+    });
+    if (!hasTanduayIce) {
+      const found = findVariantByName(['tanduay', 'ice'], ['tower', 'select', 'dark']);
+      if (found.variantId) {
+        itemSales['Tanduay ICE'] = { 
+          name: 'Tanduay ICE', 
+          variantId: found.variantId, 
+          quantity: 0 
+        };
+        console.log(`✅ Added Tanduay ICE (stock: ${found.stock})`);
       }
     }
     
@@ -708,7 +737,9 @@ serve(async (req) => {
       
       const totalSold = data.quantity + Math.round(extraPerDay * ANALYSIS_DAYS);
       
-      if (data.quantity > 0 || extraPerDay > 0) {
+      // Include item if: has sales, has extra consumption, OR is a Tanduay bottle product (always show)
+      const isTanduayBottle = nameLower.includes('tanduay') && !nameLower.includes('tower');
+      if (data.quantity > 0 || extraPerDay > 0 || isTanduayBottle) {
         recommendations.push({
           name: data.name,
           totalQuantity: totalSold,
