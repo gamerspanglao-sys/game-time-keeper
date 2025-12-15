@@ -131,7 +131,7 @@ const getShiftDate = (): string => {
 };
 
 export default function Finance() {
-  const [activeTab, setActiveTab] = useState('staff');
+  const [activeTab, setActiveTab] = useState('shifts');
   
   // ============= CASH REGISTER STATE =============
   const [records, setRecords] = useState<CashRecord[]>([]);
@@ -1893,9 +1893,9 @@ export default function Finance() {
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full max-w-lg grid-cols-3">
-          <TabsTrigger value="staff" className="flex items-center gap-2">
+          <TabsTrigger value="shifts" className="flex items-center gap-2">
             <Users className="w-4 h-4" />
-            Staff
+            Shifts
           </TabsTrigger>
           <TabsTrigger value="purchases" className="flex items-center gap-2">
             <ShoppingCart className="w-4 h-4" />
@@ -1907,7 +1907,7 @@ export default function Finance() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="staff">
+        <TabsContent value="shifts">
           {isAdminMode ? (
             <div className="space-y-6">
               <Tabs defaultValue="cash" className="space-y-4">
