@@ -1206,40 +1206,54 @@ export default function Finance() {
         {/* History Table */}
         <Card>
           <CardHeader className="py-3">
-            <CardTitle className="text-base">History</CardTitle>
+            <CardTitle className="text-base">History ({records.length} records)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 px-2">Date</th>
-                    <th className="text-left py-2 px-2">Shift</th>
-                    <th className="text-right py-2 px-2">Sales</th>
-                    <th className="text-right py-2 px-2">Cost</th>
-                    <th className="text-right py-2 px-2">Profit</th>
-                    <th className="text-right py-2 px-2">Expenses</th>
-                    <th className="text-right py-2 px-2">Cash</th>
-                    <th className="text-right py-2 px-2">Diff</th>
+                  <tr className="border-b bg-muted/30">
+                    <th className="text-left py-2 px-2 font-semibold">Date</th>
+                    <th className="text-left py-2 px-2 font-semibold">Shift</th>
+                    <th className="text-right py-2 px-2 font-semibold">Sales</th>
+                    <th className="text-right py-2 px-2 font-semibold">Cost</th>
+                    <th className="text-right py-2 px-2 font-semibold text-green-600">Gross</th>
+                    <th className="text-right py-2 px-2 font-semibold text-orange-500">Purch</th>
+                    <th className="text-right py-2 px-2 font-semibold text-blue-500">Salary</th>
+                    <th className="text-right py-2 px-2 font-semibold text-purple-500">Other</th>
+                    <th className="text-right py-2 px-2 font-semibold text-red-500">Expns</th>
+                    <th className="text-right py-2 px-2 font-semibold">Net</th>
+                    <th className="text-right py-2 px-2 font-semibold">Cash</th>
+                    <th className="text-right py-2 px-2 font-semibold">Diff</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {records.slice(0, 30).map((record) => {
+                  {records.map((record) => {
                     const totalExp = record.purchases + record.salaries + record.other_expenses;
                     const grossProfit = record.expected_sales - (record.cost || 0);
+                    const netProfit = grossProfit - totalExp;
                     return (
                       <tr key={record.id} className="border-b hover:bg-muted/50">
-                        <td className="py-2 px-2">{record.date}</td>
+                        <td className="py-2 px-2 whitespace-nowrap">{record.date}</td>
                         <td className="py-2 px-2">
                           <Badge variant={record.shift === 'day' ? 'default' : 'secondary'} className="text-xs">
                             {record.shift === 'day' ? <Sun className="w-3 h-3 mr-1" /> : <Moon className="w-3 h-3 mr-1" />}
-                            {record.shift === 'day' ? 'Day' : 'Night'}
+                            {record.shift === 'day' ? 'D' : 'N'}
                           </Badge>
                         </td>
                         <td className="text-right py-2 px-2 text-green-600">₱{record.expected_sales.toLocaleString()}</td>
                         <td className="text-right py-2 px-2 text-muted-foreground">₱{(record.cost || 0).toLocaleString()}</td>
-                        <td className="text-right py-2 px-2 text-green-600">₱{grossProfit.toLocaleString()}</td>
-                        <td className="text-right py-2 px-2 text-red-600">₱{totalExp.toLocaleString()}</td>
+                        <td className="text-right py-2 px-2 text-green-600 font-medium">₱{grossProfit.toLocaleString()}</td>
+                        <td className="text-right py-2 px-2 text-orange-500">{record.purchases > 0 ? `₱${record.purchases.toLocaleString()}` : '—'}</td>
+                        <td className="text-right py-2 px-2 text-blue-500">{record.salaries > 0 ? `₱${record.salaries.toLocaleString()}` : '—'}</td>
+                        <td className="text-right py-2 px-2 text-purple-500">{record.other_expenses > 0 ? `₱${record.other_expenses.toLocaleString()}` : '—'}</td>
+                        <td className="text-right py-2 px-2 text-red-500 font-medium">₱{totalExp.toLocaleString()}</td>
+                        <td className={cn(
+                          "text-right py-2 px-2 font-bold",
+                          netProfit >= 0 ? "text-green-600" : "text-red-600"
+                        )}>
+                          {netProfit >= 0 ? '+' : ''}₱{netProfit.toLocaleString()}
+                        </td>
                         <td className="text-right py-2 px-2">
                           {record.actual_cash != null ? `₱${record.actual_cash.toLocaleString()}` : '—'}
                         </td>
@@ -1257,6 +1271,32 @@ export default function Finance() {
                     );
                   })}
                 </tbody>
+                <tfoot className="bg-muted/50 font-bold">
+                  <tr className="border-t-2">
+                    <td className="py-2 px-2" colSpan={2}>TOTAL</td>
+                    <td className="text-right py-2 px-2 text-green-600">₱{overallTotals.totalSales.toLocaleString()}</td>
+                    <td className="text-right py-2 px-2 text-muted-foreground">₱{overallTotals.totalCost.toLocaleString()}</td>
+                    <td className="text-right py-2 px-2 text-green-600">₱{(overallTotals.totalSales - overallTotals.totalCost).toLocaleString()}</td>
+                    <td className="text-right py-2 px-2 text-orange-500">₱{overallTotals.totalPurchases.toLocaleString()}</td>
+                    <td className="text-right py-2 px-2 text-blue-500">₱{overallTotals.totalSalaries.toLocaleString()}</td>
+                    <td className="text-right py-2 px-2 text-purple-500">₱{overallTotals.totalOther.toLocaleString()}</td>
+                    <td className="text-right py-2 px-2 text-red-500">₱{(overallTotals.totalPurchases + overallTotals.totalSalaries + overallTotals.totalOther).toLocaleString()}</td>
+                    <td className={cn(
+                      "text-right py-2 px-2",
+                      (overallTotals.totalSales - overallTotals.totalCost - overallTotals.totalPurchases - overallTotals.totalSalaries - overallTotals.totalOther) >= 0 
+                        ? "text-green-600" : "text-red-600"
+                    )}>
+                      ₱{(overallTotals.totalSales - overallTotals.totalCost - overallTotals.totalPurchases - overallTotals.totalSalaries - overallTotals.totalOther).toLocaleString()}
+                    </td>
+                    <td className="text-right py-2 px-2">—</td>
+                    <td className={cn(
+                      "text-right py-2 px-2",
+                      overallTotals.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600"
+                    )}>
+                      ₱{overallTotals.totalDiscrepancy.toLocaleString()}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </CardContent>
