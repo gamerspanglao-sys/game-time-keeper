@@ -415,7 +415,7 @@ export default function CashRegister() {
     
     // Add BOM for Excel UTF-8 recognition
     const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' });
+    const blob = new Blob([BOM + csv], { type: 'application/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
