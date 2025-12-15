@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Play, Square, Clock, Wallet, Gift, Plus, Loader2 } from 'lucide-react';
+import { Play, Square, Clock, Wallet, Gift, Plus, Loader2, Users, Pencil, Sun, Moon } from 'lucide-react';
 
 interface Employee {
   id: string;
@@ -30,6 +30,10 @@ interface Shift {
   cash_handed_over: number | null;
 }
 
+interface ActiveShiftWithEmployee extends Shift {
+  employee_name: string;
+}
+
 interface Bonus {
   id: string;
   bonus_type: string;
@@ -38,10 +42,21 @@ interface Bonus {
   comment: string | null;
 }
 
+// Get current shift type based on Manila time
+const getCurrentShiftType = (): 'day' | 'night' => {
+  const now = new Date();
+  const manilaOffset = 8 * 60;
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const manilaTime = new Date(utcTime + (manilaOffset * 60000));
+  const hour = manilaTime.getHours();
+  return hour >= 5 && hour < 17 ? 'day' : 'night';
+};
+
 export function EmployeeShiftCard() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<string>('');
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
+  const [allActiveShifts, setAllActiveShifts] = useState<ActiveShiftWithEmployee[]>([]);
   const [shiftBonuses, setShiftBonuses] = useState<Bonus[]>([]);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
@@ -49,10 +64,18 @@ export function EmployeeShiftCard() {
   
   // Live timer
   const [elapsedTime, setElapsedTime] = useState<string>('00:00:00');
+  const currentShiftType = getCurrentShiftType();
   
   // End shift dialog
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [cashInput, setCashInput] = useState('');
+  
+  // Edit shift dialog
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingShift, setEditingShift] = useState<ActiveShiftWithEmployee | null>(null);
+  const [editHours, setEditHours] = useState('');
+  const [editSalary, setEditSalary] = useState('');
+  const [saving, setSaving] = useState(false);
   
   // Bonus dialog
   const [showBonusDialog, setShowBonusDialog] = useState(false);
@@ -63,6 +86,19 @@ export function EmployeeShiftCard() {
 
   useEffect(() => {
     loadEmployees();
+    loadAllActiveShifts();
+    
+    // Subscribe to shifts changes
+    const channel = supabase
+      .channel('shifts-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => {
+        loadAllActiveShifts();
+      })
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
@@ -112,6 +148,30 @@ export function EmployeeShiftCard() {
       console.error('Error loading employees:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAllActiveShifts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('shifts')
+        .select(`
+          *,
+          employees (name)
+        `)
+        .eq('status', 'open')
+        .order('shift_start', { ascending: false });
+      
+      if (error) throw error;
+      
+      setAllActiveShifts(
+        (data || []).map((s: any) => ({
+          ...s,
+          employee_name: s.employees?.name || 'Unknown'
+        }))
+      );
+    } catch (error) {
+      console.error('Error loading active shifts:', error);
     }
   };
 
@@ -301,6 +361,40 @@ export function EmployeeShiftCard() {
     }
   };
 
+  const openEditDialog = (shift: ActiveShiftWithEmployee) => {
+    setEditingShift(shift);
+    setEditHours(shift.total_hours?.toString() || '');
+    setEditSalary(shift.base_salary?.toString() || '500');
+    setShowEditDialog(true);
+  };
+
+  const saveShiftEdit = async () => {
+    if (!editingShift) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('shifts')
+        .update({
+          total_hours: parseFloat(editHours) || 0,
+          base_salary: parseInt(editSalary) || 500
+        })
+        .eq('id', editingShift.id);
+
+      if (error) throw error;
+
+      toast.success('Shift updated');
+      setShowEditDialog(false);
+      setEditingShift(null);
+      loadAllActiveShifts();
+    } catch (error) {
+      console.error('Error updating shift:', error);
+      toast.error('Failed to update shift');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const totalBonuses = shiftBonuses.reduce((sum, b) => sum + b.amount, 0);
 
   if (loading) {
@@ -315,10 +409,64 @@ export function EmployeeShiftCard() {
 
   return (
     <div className="space-y-6">
+      {/* Current Shift - All Employees On Duty */}
+      <Card className={currentShiftType === 'day' 
+        ? "border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-amber-500/10" 
+        : "border-indigo-500/30 bg-gradient-to-br from-indigo-500/5 to-indigo-500/10"
+      }>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {currentShiftType === 'day' ? (
+                <Sun className="w-5 h-5 text-amber-500" />
+              ) : (
+                <Moon className="w-5 h-5 text-indigo-500" />
+              )}
+              <span>{currentShiftType === 'day' ? 'Day Shift' : 'Night Shift'}</span>
+              <Badge variant="secondary" className="text-xs">
+                {currentShiftType === 'day' ? '5AM - 5PM' : '5PM - 5AM'}
+              </Badge>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setShowEditDialog(true)}>
+              <Pencil className="w-4 h-4 mr-1" />
+              Edit
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {allActiveShifts.length > 0 ? (
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                On duty: {allActiveShifts.length} employee{allActiveShifts.length > 1 ? 's' : ''}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {allActiveShifts.map((shift) => (
+                  <Badge 
+                    key={shift.id} 
+                    variant="default" 
+                    className="px-3 py-1.5 cursor-pointer hover:opacity-80"
+                    onClick={() => openEditDialog(shift)}
+                  >
+                    <Clock className="w-3 h-3 mr-1.5" />
+                    {shift.employee_name}
+                    <span className="ml-1.5 text-xs opacity-75">
+                      {shift.shift_start ? format(new Date(shift.shift_start), 'HH:mm') : ''}
+                    </span>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">No employees on shift</div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Employee Selection */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Select Employee</CardTitle>
+          <CardTitle className="text-lg">Start Your Shift</CardTitle>
         </CardHeader>
         <CardContent>
           <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
@@ -539,6 +687,89 @@ export function EmployeeShiftCard() {
               Add Bonus
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Shift Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-5 h-5" />
+              {editingShift ? `Edit ${editingShift.employee_name}'s Shift` : 'Active Shifts'}
+            </DialogTitle>
+          </DialogHeader>
+          {editingShift ? (
+            <div className="space-y-4 pt-2">
+              <div className="bg-secondary/50 p-3 rounded-lg">
+                <div className="font-medium">{editingShift.employee_name}</div>
+                <div className="text-sm text-muted-foreground">
+                  {editingShift.date} • Started {editingShift.shift_start ? format(new Date(editingShift.shift_start), 'HH:mm') : '—'}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Total Hours</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={editHours}
+                    onChange={(e) => setEditHours(e.target.value)}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label>Base Salary (₱)</Label>
+                  <Input
+                    type="number"
+                    value={editSalary}
+                    onChange={(e) => setEditSalary(e.target.value)}
+                    className="mt-2"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setEditingShift(null)} className="flex-1">
+                  Back
+                </Button>
+                <Button onClick={saveShiftEdit} className="flex-1" disabled={saving}>
+                  {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 pt-2">
+              {allActiveShifts.length > 0 ? (
+                <div className="space-y-2">
+                  {allActiveShifts.map((shift) => (
+                    <div 
+                      key={shift.id} 
+                      className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg hover:bg-secondary/70 cursor-pointer"
+                      onClick={() => openEditDialog(shift)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Clock className="w-5 h-5 text-green-500" />
+                        <div>
+                          <div className="font-medium">{shift.employee_name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            Started {shift.shift_start ? format(new Date(shift.shift_start), 'HH:mm') : '—'}
+                          </div>
+                        </div>
+                      </div>
+                      <Pencil className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  No active shifts
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
