@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { FileSpreadsheet, Download, Loader2 } from 'lucide-react';
+import { FileSpreadsheet, Download, Loader2, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface PayrollEntry {
@@ -22,9 +22,24 @@ interface PayrollEntry {
 
 export function PayrollReport() {
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [payroll, setPayroll] = useState<PayrollEntry[]>([]);
+
+  const syncToGoogleSheets = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('google-sheets-sync');
+      if (error) throw error;
+      toast.success('Synced to Google Sheets');
+    } catch (error) {
+      console.error('Error syncing to Google Sheets:', error);
+      toast.error('Failed to sync to Google Sheets');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const loadPayroll = async () => {
     setLoading(true);
@@ -185,6 +200,16 @@ export function PayrollReport() {
             }}
           >
             Last 7 Days
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={syncToGoogleSheets}
+            disabled={syncing}
+            className="gap-2"
+          >
+            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sheets
           </Button>
           <Button variant="outline" size="sm" onClick={exportToExcel}>
             <Download className="w-4 h-4 mr-2" />
