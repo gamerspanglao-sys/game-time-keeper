@@ -272,13 +272,35 @@ export function EmployeeShiftCard() {
       const totalHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
       const cashAmount = parseInt(cashInput);
       
+      // Determine the shift type based on when shift started (not current time)
+      const startHour = (() => {
+        const manilaOffset = 8 * 60;
+        const utcTime = startTime.getTime() + (startTime.getTimezoneOffset() * 60000);
+        const manilaTime = new Date(utcTime + (manilaOffset * 60000));
+        return manilaTime.getHours();
+      })();
+      const shiftType = startHour >= 5 && startHour < 17 ? 'day' : 'night';
+      
+      // For shift date, use the date when the shift started (for day shifts)
+      // For night shifts that started after 5 PM, use the NEXT day's date for the cash register
+      const shiftDate = (() => {
+        const manilaOffset = 8 * 60;
+        const utcTime = startTime.getTime() + (startTime.getTimezoneOffset() * 60000);
+        const manilaTime = new Date(utcTime + (manilaOffset * 60000));
+        
+        // Night shift belongs to the next calendar day
+        if (shiftType === 'night' && manilaTime.getHours() >= 17) {
+          manilaTime.setDate(manilaTime.getDate() + 1);
+        }
+        return format(manilaTime, 'yyyy-MM-dd');
+      })();
+      
       // Get expected cash from cash_register for this shift
-      const shiftDate = format(startTime, 'yyyy-MM-dd');
       const { data: cashRecord } = await supabase
         .from('cash_register')
         .select('*')
         .eq('date', shiftDate)
-        .eq('shift', currentShiftType)
+        .eq('shift', shiftType)
         .maybeSingle();
       
       const expectedCash = cashRecord?.expected_sales || 0;
@@ -323,7 +345,7 @@ export function EmployeeShiftCard() {
           .from('cash_register')
           .insert({
             date: shiftDate,
-            shift: currentShiftType,
+            shift: shiftType,
             actual_cash: cashAmount,
             discrepancy: discrepancy
           });
