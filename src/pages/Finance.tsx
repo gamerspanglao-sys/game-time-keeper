@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { EmployeeShiftCard } from '@/components/staff/EmployeeShiftCard';
 import { EmployeeManagement } from '@/components/staff/EmployeeManagement';
 import { PayrollReport } from '@/components/staff/PayrollReport';
+import { AdminShiftList } from '@/components/staff/AdminShiftList';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -129,7 +130,7 @@ const getShiftDate = (): string => {
 };
 
 export default function Finance() {
-  const [activeTab, setActiveTab] = useState('staff');
+  const [activeTab, setActiveTab] = useState('cash');
   
   // ============= CASH REGISTER STATE =============
   const [records, setRecords] = useState<CashRecord[]>([]);
@@ -1957,14 +1958,10 @@ export default function Finance() {
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full max-w-lg grid-cols-3">
-          <TabsTrigger value="staff" className="flex items-center gap-2">
-            <Users className="w-4 h-4" />
-            Staff
-          </TabsTrigger>
+        <TabsList className="grid w-full max-w-lg grid-cols-2">
           <TabsTrigger value="cash" className="flex items-center gap-2">
             <Wallet className="w-4 h-4" />
-            Cash
+            Shift & Cash
           </TabsTrigger>
           <TabsTrigger value="purchases" className="flex items-center gap-2">
             <ShoppingCart className="w-4 h-4" />
@@ -1972,25 +1969,32 @@ export default function Finance() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="staff">
+        <TabsContent value="cash">
           {isAdminMode ? (
             <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold">Staff Management</h2>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => setIsAdminMode(false)}
-                >
-                  <EyeOff className="w-4 h-4 mr-2" />
-                  Exit Admin
-                </Button>
-              </div>
-              <Tabs defaultValue="employees" className="space-y-4">
-                <TabsList>
-                  <TabsTrigger value="employees">Employees</TabsTrigger>
-                  <TabsTrigger value="payroll">Payroll</TabsTrigger>
-                </TabsList>
+              <Tabs defaultValue="cash" className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <TabsList>
+                    <TabsTrigger value="cash">Cash Register</TabsTrigger>
+                    <TabsTrigger value="shifts">Shifts</TabsTrigger>
+                    <TabsTrigger value="employees">Employees</TabsTrigger>
+                    <TabsTrigger value="payroll">Payroll</TabsTrigger>
+                  </TabsList>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setIsAdminMode(false)}
+                  >
+                    <EyeOff className="w-4 h-4 mr-2" />
+                    Exit Admin
+                  </Button>
+                </div>
+                <TabsContent value="cash">
+                  {renderCashRegister()}
+                </TabsContent>
+                <TabsContent value="shifts">
+                  <AdminShiftList />
+                </TabsContent>
                 <TabsContent value="employees">
                   <EmployeeManagement />
                 </TabsContent>
@@ -2000,7 +2004,7 @@ export default function Finance() {
               </Tabs>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold">My Shift</h2>
                 <Button 
@@ -2014,10 +2018,6 @@ export default function Finance() {
               <EmployeeShiftCard />
             </div>
           )}
-        </TabsContent>
-
-        <TabsContent value="cash">
-          {renderCashRegister()}
         </TabsContent>
 
         <TabsContent value="purchases">
