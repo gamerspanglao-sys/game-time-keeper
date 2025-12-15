@@ -254,17 +254,19 @@ serve(async (req) => {
     console.log(`📋 Found ${records?.length || 0} cash records, ${expenses?.length || 0} expenses`);
 
     // Build cash register rows
-    // FIXED: Net Profit = Gross Profit - Salaries - Other (Purchases NOT deducted)
+    // Expenses split: Returnable (purchases) vs Non-returnable (salaries, other)
     const cashHeaders = [
       'Дата',
       'Смена',
       'Продажи',
       'Себестоимость',
       'Валовая прибыль',
-      'Закупки (cash flow)',
+      '--- ОБОРОТНЫЕ ---',
+      'Закупки',
+      '--- НЕВОЗВРАТНЫЕ ---',
       'Зарплаты',
       'Прочие расходы',
-      'Расходы (без закупок)',
+      'Итого невозвратные',
       'Чистая прибыль',
       'Ожид. Cash',
       'Ожид. GCash',
@@ -278,11 +280,15 @@ serve(async (req) => {
     
     if (records && records.length > 0) {
       records.forEach(r => {
-        // Expenses for operations (salaries + other) - NOT purchases
-        const operatingExp = (r.salaries || 0) + (r.other_expenses || 0);
+        // Returnable expenses (working capital) - purchases that become inventory
+        const returnableExp = r.purchases || 0;
+        
+        // Non-returnable expenses - salaries and other that don't come back
+        const nonReturnableExp = (r.salaries || 0) + (r.other_expenses || 0);
+        
         const grossProfit = (r.expected_sales || 0) - (r.cost || 0);
-        // FIXED: Net profit doesn't include purchases (they are cash flow, not P&L expense)
-        const netProfit = grossProfit - operatingExp;
+        // Net profit = Gross Profit - Non-returnable expenses (purchases excluded)
+        const netProfit = grossProfit - nonReturnableExp;
         
         const shiftLabel = r.shift === 'day' ? '☀️ День' : '🌙 Ночь';
         
@@ -308,10 +314,12 @@ serve(async (req) => {
           r.expected_sales || 0,
           r.cost || 0,
           grossProfit,
-          r.purchases || 0,
+          '',  // separator
+          returnableExp,
+          '',  // separator
           r.salaries || 0,
           r.other_expenses || 0,
-          operatingExp,
+          nonReturnableExp,
           netProfit,
           r.cash_expected || 0,
           r.gcash_expected || 0,
@@ -335,9 +343,9 @@ serve(async (req) => {
         gcashAct: acc.gcashAct + (r.gcash_actual || 0),
       }), { sales: 0, cost: 0, purchases: 0, salaries: 0, other: 0, cashExp: 0, gcashExp: 0, cashAct: 0, gcashAct: 0 });
 
-      const totalOperatingExp = totals.salaries + totals.other;
+      const totalNonReturnable = totals.salaries + totals.other;
       const totalGrossProfit = totals.sales - totals.cost;
-      const totalNetProfit = totalGrossProfit - totalOperatingExp;
+      const totalNetProfit = totalGrossProfit - totalNonReturnable;
       const totalDiscrepancy = (totals.cashAct - totals.cashExp) + (totals.gcashAct - totals.gcashExp);
 
       cashRows.push([
@@ -346,10 +354,12 @@ serve(async (req) => {
         totals.sales,
         totals.cost,
         totalGrossProfit,
+        '',  // separator
         totals.purchases,
+        '',  // separator
         totals.salaries,
         totals.other,
-        totalOperatingExp,
+        totalNonReturnable,
         totalNetProfit,
         totals.cashExp,
         totals.gcashExp,
@@ -359,20 +369,38 @@ serve(async (req) => {
         ''
       ]);
 
-      // Expenses detail section
+      // Expenses detail section with type grouping
       if (expenses && expenses.length > 0) {
-        cashRows.push(Array(16).fill(''));
-        cashRows.push(['РАСХОДЫ (детализация)', ...Array(15).fill('')]);
-        cashRows.push(['Дата', 'Смена', 'Категория', 'Сумма', 'Описание', ...Array(11).fill('')]);
+        cashRows.push(Array(18).fill(''));
+        cashRows.push(['РАСХОДЫ (детализация)', ...Array(17).fill('')]);
         
-        expenses.forEach(exp => {
+        // Returnable expenses section
+        cashRows.push(['🔄 ОБОРОТНЫЕ (возвратные)', ...Array(17).fill('')]);
+        cashRows.push(['Дата', 'Смена', 'Категория', 'Сумма', 'Описание', ...Array(13).fill('')]);
+        const purchaseExp = expenses.filter(e => e.category === 'purchases');
+        purchaseExp.forEach(exp => {
           const record = records.find(r => r.id === exp.cash_register_id);
           const date = record?.date || '';
           const shiftLabel = exp.shift === 'day' ? '☀️ День' : '🌙 Ночь';
-          const categoryLabel = exp.category === 'purchases' ? 'Закупки' : 
-                               exp.category === 'salaries' ? 'Зарплаты' : 'Прочее';
-          cashRows.push([date, shiftLabel, categoryLabel, exp.amount, exp.description || '', ...Array(11).fill('')]);
+          cashRows.push([date, shiftLabel, 'Закупки', exp.amount, exp.description || '', ...Array(13).fill('')]);
         });
+        const totalPurchases = purchaseExp.reduce((sum, e) => sum + e.amount, 0);
+        cashRows.push(['', '', 'Итого оборотные:', totalPurchases, '', ...Array(13).fill('')]);
+        
+        // Non-returnable expenses section
+        cashRows.push(Array(18).fill(''));
+        cashRows.push(['❌ НЕВОЗВРАТНЫЕ', ...Array(17).fill('')]);
+        cashRows.push(['Дата', 'Смена', 'Категория', 'Сумма', 'Описание', ...Array(13).fill('')]);
+        const nonReturnableExp = expenses.filter(e => e.category !== 'purchases');
+        nonReturnableExp.forEach(exp => {
+          const record = records.find(r => r.id === exp.cash_register_id);
+          const date = record?.date || '';
+          const shiftLabel = exp.shift === 'day' ? '☀️ День' : '🌙 Ночь';
+          const categoryLabel = exp.category === 'salaries' ? 'Зарплаты' : 'Прочее';
+          cashRows.push([date, shiftLabel, categoryLabel, exp.amount, exp.description || '', ...Array(13).fill('')]);
+        });
+        const totalNonRetExp = nonReturnableExp.reduce((sum, e) => sum + e.amount, 0);
+        cashRows.push(['', '', 'Итого невозвратные:', totalNonRetExp, '', ...Array(13).fill('')]);
       }
     }
 
