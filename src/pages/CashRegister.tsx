@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format, subDays } from 'date-fns';
+import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -379,51 +380,62 @@ export default function CashRegister() {
     // Sort by date ascending for the export
     const sortedRecords = [...records].sort((a, b) => a.date.localeCompare(b.date));
     
-    const rows = sortedRecords.map(r => {
-      const totalExp = r.purchases + r.salaries + r.other_expenses;
-      const expected = r.opening_balance + r.expected_sales - totalExp;
-      return [
-        r.date,
-        r.opening_balance,
-        r.expected_sales,
-        r.purchases,
-        r.salaries,
-        r.other_expenses,
-        totalExp,
-        expected,
-        r.actual_cash ?? '',
-        r.discrepancy ?? ''
-      ].join(',');
-    });
+    // Create worksheet data
+    const wsData = [
+      headers, // Header row
+      ...sortedRecords.map(r => {
+        const totalExp = r.purchases + r.salaries + r.other_expenses;
+        const expected = r.opening_balance + r.expected_sales - totalExp;
+        return [
+          r.date,
+          r.opening_balance,
+          r.expected_sales,
+          r.purchases,
+          r.salaries,
+          r.other_expenses,
+          totalExp,
+          expected,
+          r.actual_cash ?? '',
+          r.discrepancy ?? ''
+        ];
+      }),
+      [], // Empty row
+      [ // Totals row
+        'TOTAL',
+        '',
+        overallTotals.totalSales,
+        overallTotals.totalPurchases,
+        overallTotals.totalSalaries,
+        overallTotals.totalOther,
+        overallTotals.totalPurchases + overallTotals.totalSalaries + overallTotals.totalOther,
+        '',
+        '',
+        overallTotals.totalDiscrepancy
+      ]
+    ];
 
-    // Add totals row
-    const totalsRow = [
-      'TOTAL',
-      '',
-      overallTotals.totalSales,
-      overallTotals.totalPurchases,
-      overallTotals.totalSalaries,
-      overallTotals.totalOther,
-      overallTotals.totalPurchases + overallTotals.totalSalaries + overallTotals.totalOther,
-      '',
-      '',
-      overallTotals.totalDiscrepancy
-    ].join(',');
-
-    // Use commas as delimiter for Mac Excel compatibility
-    const csv = [headers.join(','), ...rows, '', totalsRow].join('\n');
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
     
-    // Add BOM for Excel UTF-8 recognition
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csv], { type: 'application/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `cash-register-${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 12 }, // Date
+      { wch: 15 }, // Opening Balance
+      { wch: 12 }, // Cash Sales
+      { wch: 12 }, // Purchases
+      { wch: 12 }, // Salaries
+      { wch: 14 }, // Other Expenses
+      { wch: 14 }, // Total Expenses
+      { wch: 12 }, // Expected
+      { wch: 12 }, // Actual
+      { wch: 12 }, // Discrepancy
+    ];
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'Cash Register');
+    
+    // Generate and download file
+    XLSX.writeFile(wb, `cash-register-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
     toast.success(`Exported ${records.length} records`);
   };
 
