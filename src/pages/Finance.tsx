@@ -562,6 +562,7 @@ export default function Finance() {
     setShowExpenseDialog(false);
   };
 
+
   const handleAddPurchaseExpense = () => {
     const amount = parseInt(expenseAmount);
     if (!amount || amount <= 0) {
@@ -613,6 +614,7 @@ export default function Finance() {
       }
 
       toast.success('Deleted');
+      loadRecentExpenses();
       loadData(true);
     } catch (error) {
       console.error('Error deleting expense:', error);
@@ -1057,30 +1059,6 @@ export default function Finance() {
             <Button onClick={handleAddExpense} className="w-full h-12 bg-purple-600 hover:bg-purple-700">
               Add
             </Button>
-            
-            {/* Recent Expenses List */}
-            {recentExpenses.length > 0 && (
-              <div className="border-t pt-4 mt-4">
-                <h4 className="text-sm font-medium text-muted-foreground mb-2">Recent Expenses</h4>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {recentExpenses.map((expense) => (
-                    <div key={expense.id} className="flex justify-between items-center text-sm p-2 bg-muted/50 rounded">
-                      <div className="flex-1 min-w-0">
-                        <span className="text-muted-foreground truncate block">
-                          {expense.description || expense.category}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 ml-2">
-                        <Badge variant="outline" className="text-xs">
-                          {expense.shift === 'day' ? '☀️' : '🌙'}
-                        </Badge>
-                        <span className="font-medium whitespace-nowrap">₱{expense.amount}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -1405,20 +1383,34 @@ export default function Finance() {
             </Button>
           </div>
 
-          {/* Today's Expenses List */}
-          {todayExpenses.length > 0 && (
+          {/* Recent Expenses List */}
+          {recentExpenses.length > 0 && (
             <Card>
               <CardHeader className="py-2 pb-1">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Expenses</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Recent Expenses</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1 pt-0">
-                {todayExpenses.map((expense) => (
+                {recentExpenses.map((expense) => (
                   <div key={expense.id} className="flex items-center justify-between py-2 px-2 bg-secondary/30 rounded">
-                    <div className="flex items-center gap-2">
-                      {getCategoryIcon(expense.category)}
-                      <span className="text-sm">{expense.description || getCategoryLabel(expense.category)}</span>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Badge variant="outline" className="text-xs shrink-0">
+                        {expense.shift === 'day' ? '☀️' : '🌙'}
+                      </Badge>
+                      <span className="text-sm truncate">{expense.description || expense.category}</span>
                     </div>
-                    <span className="font-medium text-sm">₱{expense.amount.toLocaleString()}</span>
+                    <div className="flex items-center gap-2 ml-2">
+                      <span className="font-medium text-sm whitespace-nowrap">₱{expense.amount.toLocaleString()}</span>
+                      {isAdminMode && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => deleteExpense(expense.id, expense.category, expense.amount)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </CardContent>
