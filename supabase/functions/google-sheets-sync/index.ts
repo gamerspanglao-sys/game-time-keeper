@@ -80,6 +80,24 @@ async function getAccessToken(serviceAccountJson: string): Promise<string> {
   return tokenData.access_token;
 }
 
+// Get the first sheet name from the spreadsheet
+async function getFirstSheetName(spreadsheetId: string, accessToken: string): Promise<string> {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`;
+  const response = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${accessToken}` },
+  });
+  
+  if (!response.ok) {
+    console.log('Failed to get sheet info, using default name');
+    return 'Лист1'; // Default Russian name
+  }
+  
+  const data = await response.json();
+  const sheetName = data.sheets?.[0]?.properties?.title || 'Лист1';
+  console.log(`📋 Found sheet name: "${sheetName}"`);
+  return sheetName;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -99,6 +117,9 @@ serve(async (req) => {
     console.log('🔑 Getting access token...');
     const accessToken = await getAccessToken(SERVICE_ACCOUNT_JSON);
     console.log('✅ Access token obtained');
+
+    // Get the actual sheet name
+    const sheetName = await getFirstSheetName(SPREADSHEET_ID, accessToken);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -129,10 +150,10 @@ serve(async (req) => {
       );
     }
 
-    // Headers
+    // Headers - детальный формат с разбивкой по категориям
     const headers = [
       'Дата',
-      'Продажи (касса)',
+      'Доход (продажи)',
       'Себестоимость',
       'Валовая прибыль',
       'Закупки',
@@ -230,8 +251,8 @@ serve(async (req) => {
 
     console.log(`📤 Sending ${rows.length} rows to Google Sheets...`);
 
-    // Step 1: Clear the sheet
-    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/Sheet1!A:Z:clear`;
+    // Step 1: Clear the sheet using correct range format
+    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(sheetName)}:clear`;
     const clearResponse = await fetch(clearUrl, {
       method: 'POST',
       headers: {
@@ -248,7 +269,7 @@ serve(async (req) => {
     console.log('🧹 Sheet cleared');
 
     // Step 2: Write new data
-    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/Sheet1!A1?valueInputOption=RAW`;
+    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(sheetName)}!A1?valueInputOption=RAW`;
     const updateResponse = await fetch(updateUrl, {
       method: 'PUT',
       headers: {

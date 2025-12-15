@@ -438,6 +438,34 @@ serve(async (req) => {
       }
     }
     
+    // Sync to Google Sheets on morning report
+    if (action === 'morning') {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+        
+        console.log('📊 Syncing to Google Sheets...');
+        const sheetsResponse = await fetch(`${supabaseUrl}/functions/v1/google-sheets-sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`,
+            'apikey': supabaseKey,
+          },
+        });
+        
+        if (sheetsResponse.ok) {
+          const sheetsResult = await sheetsResponse.json();
+          console.log('✅ Google Sheets sync complete:', sheetsResult);
+          message += `\n\n📊 <i>Google Sheets updated: ${sheetsResult.recordCount} records</i>`;
+        } else {
+          console.error('❌ Google Sheets sync failed:', await sheetsResponse.text());
+        }
+      } catch (sheetsError) {
+        console.error('❌ Google Sheets sync error:', sheetsError);
+      }
+    }
+    
     if (action === 'test') {
       message = '🤖 <b>Test Message</b>\n\nTelegram notifications are working!\n\n';
       message += `📅 Time: ${new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}`;
