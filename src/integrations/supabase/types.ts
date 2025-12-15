@@ -79,6 +79,7 @@ export type Database = {
       cash_register: {
         Row: {
           actual_cash: number | null
+          cost: number
           created_at: string
           date: string
           discrepancy: number | null
@@ -93,6 +94,7 @@ export type Database = {
         }
         Insert: {
           actual_cash?: number | null
+          cost?: number
           created_at?: string
           date: string
           discrepancy?: number | null
@@ -107,6 +109,7 @@ export type Database = {
         }
         Update: {
           actual_cash?: number | null
+          cost?: number
           created_at?: string
           date?: string
           discrepancy?: number | null
