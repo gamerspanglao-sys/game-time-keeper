@@ -1,0 +1,232 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const STORE_ID = '77f9b0db-9be9-4907-b4ec-9d68653f7a21';
+
+// Business day starts at 5 AM Manila time
+function getBusinessDayDates(dateStr: string): { start: Date; end: Date } {
+  // Parse the date in Manila timezone
+  const date = new Date(dateStr + 'T05:00:00+08:00');
+  const nextDay = new Date(date);
+  nextDay.setDate(nextDay.getDate() + 1);
+  
+  return {
+    start: date,
+    end: nextDay
+  };
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const loyverseToken = Deno.env.get('LOYVERSE_ACCESS_TOKEN');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    if (!loyverseToken) {
+      throw new Error('LOYVERSE_ACCESS_TOKEN not configured');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { days = 30 } = await req.json().catch(() => ({ days: 30 }));
+
+    console.log(`📊 Starting historical sync for ${days} days...`);
+
+    // Fetch payment types first
+    const paymentTypesResponse = await fetch('https://api.loyverse.com/v1.0/payment_types', {
+      headers: { 'Authorization': `Bearer ${loyverseToken}` },
+    });
+    
+    let paymentTypesMap: Record<string, string> = {};
+    if (paymentTypesResponse.ok) {
+      const paymentTypesData = await paymentTypesResponse.json();
+      paymentTypesMap = (paymentTypesData.payment_types || []).reduce((acc: Record<string, string>, pt: { id: string; name: string }) => {
+        acc[pt.id] = pt.name;
+        return acc;
+      }, {});
+    }
+
+    const results: { date: string; cashSales: number; status: string }[] = [];
+    
+    // Process each day
+    for (let i = 0; i < days; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      const { start, end } = getBusinessDayDates(dateStr);
+      
+      console.log(`📅 Processing ${dateStr}: ${start.toISOString()} to ${end.toISOString()}`);
+      
+      try {
+        // Fetch receipts for this day
+        let dayReceipts: any[] = [];
+        let cursor: string | null = null;
+
+        while (true) {
+          let url = `https://api.loyverse.com/v1.0/receipts?store_id=${STORE_ID}&created_at_min=${encodeURIComponent(start.toISOString())}&created_at_max=${encodeURIComponent(end.toISOString())}&limit=250`;
+          
+          if (cursor) {
+            url += `&cursor=${cursor}`;
+          }
+
+          const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${loyverseToken}` },
+          });
+
+          if (!response.ok) {
+            console.error(`❌ Error fetching ${dateStr}: ${response.status}`);
+            break;
+          }
+
+          const data = await response.json();
+          dayReceipts = dayReceipts.concat(data.receipts || []);
+          cursor = data.cursor || null;
+
+          if (!cursor) break;
+        }
+
+        // Calculate cash sales for this day
+        let cashSales = 0;
+        
+        dayReceipts.forEach((receipt: any) => {
+          const isRefund = receipt.receipt_type === 'REFUND';
+          
+          (receipt.payments || []).forEach((payment: any) => {
+            const paymentName = paymentTypesMap[payment.payment_type_id] || '';
+            // Only count cash payments
+            if (paymentName.toLowerCase() === 'cash') {
+              if (isRefund) {
+                cashSales -= Math.abs(payment.money_amount || 0);
+              } else {
+                cashSales += payment.money_amount || 0;
+              }
+            }
+          });
+        });
+
+        console.log(`💵 ${dateStr}: ${dayReceipts.length} receipts, Cash: ₱${cashSales}`);
+
+        // Upsert to cash_register
+        const { error: upsertError } = await supabase
+          .from('cash_register')
+          .upsert({
+            date: dateStr,
+            expected_sales: Math.round(cashSales),
+            opening_balance: 0,
+            purchases: 0,
+            salaries: 0,
+            other_expenses: 0,
+          }, { 
+            onConflict: 'date',
+            ignoreDuplicates: false 
+          });
+
+        if (upsertError) {
+          console.error(`❌ Error upserting ${dateStr}:`, upsertError.message);
+          results.push({ date: dateStr, cashSales, status: 'error: ' + upsertError.message });
+        } else {
+          results.push({ date: dateStr, cashSales, status: 'synced' });
+        }
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+      } catch (dayError) {
+        const errMsg = dayError instanceof Error ? dayError.message : 'Unknown error';
+        console.error(`❌ Error processing ${dateStr}:`, errMsg);
+        results.push({ date: dateStr, cashSales: 0, status: 'error: ' + errMsg });
+      }
+    }
+
+    // Now sync to Google Sheets
+    const GOOGLE_SHEETS_URL = Deno.env.get('GOOGLE_SHEETS_WEBHOOK_URL');
+    let sheetsSynced = false;
+    
+    if (GOOGLE_SHEETS_URL) {
+      try {
+        console.log('📤 Syncing to Google Sheets...');
+        
+        const { data: allRecords } = await supabase
+          .from('cash_register')
+          .select('*')
+          .order('date', { ascending: true });
+        
+        if (allRecords && allRecords.length > 0) {
+          const rows = allRecords.map(r => {
+            const totalExp = (r.purchases || 0) + (r.salaries || 0) + (r.other_expenses || 0);
+            const expected = (r.opening_balance || 0) + (r.expected_sales || 0) - totalExp;
+            return [
+              r.date,
+              r.opening_balance || 0,
+              r.expected_sales || 0,
+              r.purchases || 0,
+              r.salaries || 0,
+              r.other_expenses || 0,
+              totalExp,
+              expected,
+              r.actual_cash ?? '',
+              r.discrepancy ?? ''
+            ];
+          });
+          
+          // Calculate totals
+          const totals = allRecords.reduce((acc, r) => ({
+            sales: acc.sales + (r.expected_sales || 0),
+            purchases: acc.purchases + (r.purchases || 0),
+            salaries: acc.salaries + (r.salaries || 0),
+            other: acc.other + (r.other_expenses || 0),
+            discrepancy: acc.discrepancy + (r.discrepancy || 0)
+          }), { sales: 0, purchases: 0, salaries: 0, other: 0, discrepancy: 0 });
+          
+          rows.push([
+            'TOTAL', '', totals.sales, totals.purchases, totals.salaries, totals.other,
+            totals.purchases + totals.salaries + totals.other, '', '', totals.discrepancy
+          ]);
+          
+          await fetch(GOOGLE_SHEETS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rows }),
+          });
+          
+          sheetsSynced = true;
+          console.log(`✅ Synced ${allRecords.length} records to Google Sheets`);
+        }
+      } catch (sheetsError) {
+        console.error('❌ Error syncing to Google Sheets:', sheetsError);
+      }
+    }
+
+    const successCount = results.filter(r => r.status === 'synced').length;
+    
+    console.log(`✅ Historical sync complete: ${successCount}/${days} days synced`);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: `Synced ${successCount} of ${days} days`,
+        sheetsSynced,
+        results,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('❌ Error in historical sync:', errorMessage);
+    return new Response(
+      JSON.stringify({ success: false, error: errorMessage }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});

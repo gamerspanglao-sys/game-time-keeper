@@ -776,6 +776,34 @@ export default function CashRegister() {
             Google Sheets
           </Button>
           <Button 
+            variant="outline" 
+            onClick={async () => {
+              setSyncing(true);
+              toast.info('Starting 30-day historical sync from Loyverse...');
+              try {
+                const { data, error } = await supabase.functions.invoke('loyverse-history-sync', {
+                  body: { days: 30 }
+                });
+                if (error) throw error;
+                toast.success(data?.message || 'Historical sync complete');
+                loadData(true);
+              } catch (error) {
+                console.error('Error in historical sync:', error);
+                toast.error('Failed to sync historical data');
+              } finally {
+                setSyncing(false);
+              }
+            }}
+            disabled={syncing}
+          >
+            {syncing ? (
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
+            )}
+            Sync 30 Days
+          </Button>
+          <Button 
             variant="ghost" 
             size="sm"
             onClick={() => setIsAdminMode(false)}
