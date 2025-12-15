@@ -436,6 +436,31 @@ export default function Finance() {
     }
   };
 
+  const syncAllFromLoyverse = async () => {
+    setSyncing(true);
+    try {
+      toast.info('Syncing sales data from Loyverse...');
+      
+      const { data, error } = await supabase.functions.invoke('loyverse-history-sync', {
+        body: { days: 7 }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        await loadData(true);
+        toast.success(`Synced ${data.message}`);
+      } else {
+        throw new Error(data?.error || 'Sync failed');
+      }
+    } catch (error) {
+      console.error('Error syncing from Loyverse:', error);
+      toast.error('Failed to sync from Loyverse');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const saveActualCash = async () => {
     if (!actualCashInput) {
       toast.error('Please enter amount');
@@ -2414,12 +2439,12 @@ export default function Finance() {
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={() => syncSalesFromLoyverse(format(new Date(), 'yyyy-MM-dd'), getCurrentShift())}
+                onClick={syncAllFromLoyverse}
                 disabled={syncing}
                 className="gap-2"
               >
                 {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                Sync
+                Sync Loyverse
               </Button>
               {isAdminMode && (
                 <Button 

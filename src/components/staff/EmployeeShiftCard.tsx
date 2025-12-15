@@ -365,6 +365,17 @@ export function EmployeeShiftCard() {
           });
       }
 
+      // Sync sales data from Loyverse for accurate expected values
+      console.log('📊 Auto-syncing sales data from Loyverse...');
+      try {
+        await supabase.functions.invoke('loyverse-history-sync', {
+          body: { days: 3 }
+        });
+        console.log('✅ Loyverse sync completed');
+      } catch (syncError) {
+        console.error('⚠️ Loyverse sync failed:', syncError);
+      }
+
       // Send Telegram notification
       const employeeName = 'employee_name' in shiftToEnd 
         ? (shiftToEnd as ActiveShiftWithEmployee).employee_name 
