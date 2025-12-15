@@ -326,7 +326,7 @@ async function fetchCashDiscrepancy(): Promise<{ date: string; discrepancy: numb
     .from('cash_register')
     .select('date, actual_cash, discrepancy')
     .eq('date', dateStr)
-    .single();
+    .maybeSingle();
   
   if (error || !data) {
     console.log(`ℹ️ No cash register entry for ${dateStr}`);
@@ -363,6 +363,130 @@ function formatDiscrepancyAlert(data: { date: string; discrepancy: number; actua
   
   if (isShortage && Math.abs(data.discrepancy) > 500) {
     message += `\n⚠️ Large shortage! Please investigate immediately.`;
+  }
+  
+  return message;
+}
+
+// Low stock alert - items with stock below daily average
+function formatLowStockAlert(data: any): string | null {
+  if (!data?.recommendations?.length) {
+    return null;
+  }
+  
+  // Filter items with critically low stock (less than 1 day of stock)
+  const criticalItems = data.recommendations.filter((item: any) => {
+    return item.inStock > 0 && item.inStock < item.avgPerDay && item.avgPerDay > 0;
+  });
+  
+  // Filter items that are out of stock
+  const outOfStock = data.recommendations.filter((item: any) => {
+    return item.inStock <= 0 && item.avgPerDay > 0;
+  });
+  
+  if (criticalItems.length === 0 && outOfStock.length === 0) {
+    return null;
+  }
+  
+  let message = `🚨 <b>LOW STOCK ALERT</b>\n`;
+  message += `━━━━━━━━━━━━━━━━━━━━\n`;
+  
+  if (outOfStock.length > 0) {
+    message += `\n❌ <b>OUT OF STOCK</b>\n`;
+    for (const item of outOfStock.slice(0, 10)) {
+      const name = item.name.replace(/\s*\(from towers\)/gi, '').replace(/\s*\(from baskets\)/gi, '');
+      message += `• ${name} (avg: ${item.avgPerDay}/day)\n`;
+    }
+  }
+  
+  if (criticalItems.length > 0) {
+    message += `\n⚠️ <b>CRITICAL (< 1 day)</b>\n`;
+    for (const item of criticalItems.slice(0, 10)) {
+      const name = item.name.replace(/\s*\(from towers\)/gi, '').replace(/\s*\(from baskets\)/gi, '');
+      const daysLeft = (item.inStock / item.avgPerDay).toFixed(1);
+      message += `• ${name}: ${item.inStock} left (~${daysLeft} days)\n`;
+    }
+  }
+  
+  message += `\n📦 Order ASAP to avoid stockouts!`;
+  
+  return message;
+}
+
+// Daily summary - profit and sales overview
+async function fetchDailySummary(): Promise<any | null> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  
+  // Get last 7 days of data
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 7);
+  
+  const { data, error } = await supabase
+    .from('cash_register')
+    .select('*')
+    .gte('date', startDate.toISOString().split('T')[0])
+    .order('date', { ascending: false });
+  
+  if (error || !data || data.length === 0) {
+    console.log('ℹ️ No cash register data for summary');
+    return null;
+  }
+  
+  const totalSales = data.reduce((sum, r) => sum + (r.expected_sales || 0), 0);
+  const totalCost = data.reduce((sum, r) => sum + (r.cost || 0), 0);
+  const totalExpenses = data.reduce((sum, r) => sum + (r.purchases || 0) + (r.salaries || 0) + (r.other_expenses || 0), 0);
+  const grossProfit = totalSales - totalCost;
+  const netProfit = grossProfit - totalExpenses;
+  
+  // Yesterday's data
+  const yesterday = data[0];
+  const yesterdayProfit = yesterday ? (yesterday.expected_sales - (yesterday.cost || 0) - yesterday.purchases - yesterday.salaries - yesterday.other_expenses) : 0;
+  
+  return {
+    days: data.length,
+    totalSales,
+    totalCost,
+    grossProfit,
+    totalExpenses,
+    netProfit,
+    yesterday: yesterday ? {
+      date: yesterday.date,
+      sales: yesterday.expected_sales,
+      cost: yesterday.cost || 0,
+      expenses: yesterday.purchases + yesterday.salaries + yesterday.other_expenses,
+      profit: yesterdayProfit
+    } : null
+  };
+}
+
+function formatDailySummary(data: any): string {
+  const formatMoney = (n: number) => `₱${n?.toLocaleString() || 0}`;
+  
+  let message = `📊 <b>WEEKLY SUMMARY</b>\n`;
+  message += `━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `📅 Last ${data.days} days\n\n`;
+  
+  message += `💵 Total Sales: ${formatMoney(data.totalSales)}\n`;
+  message += `💸 Total Cost: ${formatMoney(data.totalCost)}\n`;
+  message += `📈 Gross Profit: ${formatMoney(data.grossProfit)}\n`;
+  message += `📉 Expenses: ${formatMoney(data.totalExpenses)}\n`;
+  message += `━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `💰 <b>Net Profit: ${formatMoney(data.netProfit)}</b>\n`;
+  
+  if (data.yesterday) {
+    message += `\n📅 <b>Yesterday (${data.yesterday.date})</b>\n`;
+    message += `   Sales: ${formatMoney(data.yesterday.sales)}\n`;
+    message += `   Profit: ${formatMoney(data.yesterday.profit)}\n`;
+  }
+  
+  // Profit margin
+  if (data.totalSales > 0) {
+    const margin = ((data.netProfit / data.totalSales) * 100).toFixed(1);
+    message += `\n📊 Profit margin: ${margin}%`;
   }
   
   return message;
@@ -425,7 +549,7 @@ serve(async (req) => {
       message += formatCashReport(cashData);
     }
     
-    // Check for cash discrepancy and add to morning report
+    // Check for cash discrepancy alert
     if (action === 'morning' || action === 'discrepancy') {
       const discrepancy = await fetchCashDiscrepancy();
       if (discrepancy) {
@@ -438,31 +562,38 @@ serve(async (req) => {
       }
     }
     
-    // Sync to Google Sheets on morning report
-    if (action === 'morning') {
+    // Low stock alert
+    if (action === 'morning' || action === 'lowstock') {
       try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-        
-        console.log('📊 Syncing to Google Sheets...');
-        const sheetsResponse = await fetch(`${supabaseUrl}/functions/v1/google-sheets-sync`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`,
-            'apikey': supabaseKey,
-          },
-        });
-        
-        if (sheetsResponse.ok) {
-          const sheetsResult = await sheetsResponse.json();
-          console.log('✅ Google Sheets sync complete:', sheetsResult);
-          message += `\n\n📊 <i>Google Sheets updated: ${sheetsResult.recordCount} records</i>`;
-        } else {
-          console.error('❌ Google Sheets sync failed:', await sheetsResponse.text());
+        const purchaseData = await fetchPurchaseData();
+        const lowStockMsg = formatLowStockAlert(purchaseData);
+        if (lowStockMsg) {
+          if (message && action === 'morning') {
+            message += '\n\n━━━━━━━━━━━━━━━━━━\n\n';
+          }
+          message += lowStockMsg;
+        } else if (action === 'lowstock') {
+          message = '✅ All items have sufficient stock.';
         }
-      } catch (sheetsError) {
-        console.error('❌ Google Sheets sync error:', sheetsError);
+      } catch (e) {
+        console.error('Error checking low stock:', e);
+      }
+    }
+    
+    // Daily/Weekly summary
+    if (action === 'morning' || action === 'summary') {
+      try {
+        const summaryData = await fetchDailySummary();
+        if (summaryData) {
+          if (message && action === 'morning') {
+            message += '\n\n━━━━━━━━━━━━━━━━━━\n\n';
+          }
+          message += formatDailySummary(summaryData);
+        } else if (action === 'summary') {
+          message = 'ℹ️ No data available for summary.';
+        }
+      } catch (e) {
+        console.error('Error generating summary:', e);
       }
     }
     
@@ -472,7 +603,7 @@ serve(async (req) => {
     }
     
     if (!message) {
-      message = '❓ Unknown action. Use: test, purchase, cash, morning, or discrepancy';
+      message = '❓ Unknown action. Use: test, purchase, cash, morning, discrepancy, lowstock, or summary';
     }
     
     const success = await sendTelegramMessage(message);
