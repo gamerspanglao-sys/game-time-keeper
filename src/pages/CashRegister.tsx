@@ -23,8 +23,9 @@ import {
   RefreshCw,
   Trash2,
   Lock,
-  Eye,
-  EyeOff
+  EyeOff,
+  Download,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface CashRecord {
@@ -48,7 +49,7 @@ interface CashExpense {
   description: string | null;
 }
 
-const ADMIN_PIN = '1234';
+const ADMIN_PIN = '8808';
 
 export default function CashRegister() {
   const [records, setRecords] = useState<CashRecord[]>([]);
@@ -306,6 +307,46 @@ export default function CashRegister() {
   const expectedAfterExpenses = expectedTotal - totalExpenses;
   const currentExpenses = expenses.filter(e => e.cash_register_id === currentRecord?.id);
 
+  // Overall totals for summary
+  const overallTotals = records.reduce((acc, r) => ({
+    totalSales: acc.totalSales + r.expected_sales,
+    totalPurchases: acc.totalPurchases + r.purchases,
+    totalSalaries: acc.totalSalaries + r.salaries,
+    totalOther: acc.totalOther + r.other_expenses,
+    totalDiscrepancy: acc.totalDiscrepancy + (r.discrepancy || 0),
+    daysWithDiscrepancy: acc.daysWithDiscrepancy + (r.discrepancy && r.discrepancy !== 0 ? 1 : 0)
+  }), { totalSales: 0, totalPurchases: 0, totalSalaries: 0, totalOther: 0, totalDiscrepancy: 0, daysWithDiscrepancy: 0 });
+
+  const exportToCSV = () => {
+    const headers = ['Date', 'Opening Balance', 'Cash Sales', 'Purchases', 'Salaries', 'Other Expenses', 'Total Expenses', 'Expected', 'Actual', 'Discrepancy'];
+    const rows = records.map(r => {
+      const totalExp = r.purchases + r.salaries + r.other_expenses;
+      const expected = r.opening_balance + r.expected_sales - totalExp;
+      return [
+        r.date,
+        r.opening_balance,
+        r.expected_sales,
+        r.purchases,
+        r.salaries,
+        r.other_expenses,
+        totalExp,
+        expected,
+        r.actual_cash ?? '',
+        r.discrepancy ?? ''
+      ].join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cash-register-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Exported to CSV');
+  };
+
   const getCategoryLabel = (category: string) => {
     switch (category) {
       case 'purchases': return 'Purchases';
@@ -512,7 +553,7 @@ export default function CashRegister() {
           <h1 className="text-2xl font-bold">Cash Register</h1>
           <p className="text-muted-foreground text-sm">Admin View - Full Access</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Input
             type="date"
             value={selectedDate}
@@ -527,16 +568,63 @@ export default function CashRegister() {
             <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
             Sync
           </Button>
+          <Button variant="outline" onClick={exportToCSV}>
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
           <Button 
             variant="ghost" 
             size="sm"
             onClick={() => setIsAdminMode(false)}
           >
             <EyeOff className="w-4 h-4 mr-2" />
-            Exit Admin
+            Exit
           </Button>
         </div>
       </div>
+
+      {/* Overall Summary - 30 Day Totals */}
+      <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="w-5 h-5" />
+            30-Day Summary
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+            <div>
+              <div className="text-xs text-muted-foreground">Total Sales</div>
+              <div className="text-lg font-bold text-green-600">₱{overallTotals.totalSales.toLocaleString()}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Purchases</div>
+              <div className="text-lg font-bold text-red-600">₱{overallTotals.totalPurchases.toLocaleString()}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Salaries</div>
+              <div className="text-lg font-bold text-red-600">₱{overallTotals.totalSalaries.toLocaleString()}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Other</div>
+              <div className="text-lg font-bold text-red-600">₱{overallTotals.totalOther.toLocaleString()}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Net Total</div>
+              <div className="text-lg font-bold">
+                ₱{(overallTotals.totalSales - overallTotals.totalPurchases - overallTotals.totalSalaries - overallTotals.totalOther).toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Discrepancies</div>
+              <div className={`text-lg font-bold ${overallTotals.totalDiscrepancy < 0 ? 'text-red-600' : overallTotals.totalDiscrepancy > 0 ? 'text-green-600' : ''}`}>
+                {overallTotals.totalDiscrepancy >= 0 ? '+' : ''}₱{overallTotals.totalDiscrepancy.toLocaleString()}
+                <span className="text-xs text-muted-foreground ml-1">({overallTotals.daysWithDiscrepancy} days)</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
