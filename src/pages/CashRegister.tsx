@@ -70,6 +70,12 @@ export default function CashRegister() {
   const [showPinDialog, setShowPinDialog] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
+  
+  // Google Sheets
+  const [googleSheetsUrl, setGoogleSheetsUrl] = useState<string>(() => 
+    localStorage.getItem('cash_register_sheets_url') || ''
+  );
+  const [exportingToSheets, setExportingToSheets] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -449,6 +455,77 @@ export default function CashRegister() {
     toast.success(`Exported ${records.length} records`);
   };
 
+  const exportToGoogleSheets = async () => {
+    if (!googleSheetsUrl) {
+      toast.error('Please enter Google Sheets URL first');
+      return;
+    }
+    
+    if (records.length === 0) {
+      toast.error('No records to export');
+      return;
+    }
+    
+    setExportingToSheets(true);
+    
+    try {
+      // Sort by date ascending
+      const sortedRecords = [...records].sort((a, b) => a.date.localeCompare(b.date));
+      
+      // Prepare data rows
+      const rows = sortedRecords.map(r => {
+        const totalExp = r.purchases + r.salaries + r.other_expenses;
+        const expected = r.opening_balance + r.expected_sales - totalExp;
+        return [
+          r.date,
+          r.opening_balance,
+          r.expected_sales,
+          r.purchases,
+          r.salaries,
+          r.other_expenses,
+          totalExp,
+          expected,
+          r.actual_cash ?? 0,
+          r.discrepancy ?? 0
+        ];
+      });
+      
+      // Add totals row
+      rows.push([
+        'TOTAL',
+        0,
+        overallTotals.totalSales,
+        overallTotals.totalPurchases,
+        overallTotals.totalSalaries,
+        overallTotals.totalOther,
+        overallTotals.totalPurchases + overallTotals.totalSalaries + overallTotals.totalOther,
+        0,
+        0,
+        overallTotals.totalDiscrepancy
+      ]);
+      
+      // Save URL to localStorage
+      localStorage.setItem('cash_register_sheets_url', googleSheetsUrl);
+      
+      // Send to Google Sheets
+      await fetch(googleSheetsUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ rows }),
+      });
+      
+      toast.success(`Sent ${records.length} records to Google Sheets`);
+    } catch (error) {
+      console.error('Error exporting to Google Sheets:', error);
+      toast.error('Failed to export to Google Sheets');
+    } finally {
+      setExportingToSheets(false);
+    }
+  };
+
   const getCategoryLabel = (category: string) => {
     switch (category) {
       case 'purchases': return 'Purchases';
@@ -672,8 +749,51 @@ export default function CashRegister() {
           </Button>
           <Button variant="outline" onClick={exportToCSV}>
             <Download className="w-4 h-4 mr-2" />
-            Export CSV
+            Excel
           </Button>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                Google Sheets
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Export to Google Sheets</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Google Apps Script URL</label>
+                  <Input
+                    placeholder="https://script.google.com/macros/s/..."
+                    value={googleSheetsUrl}
+                    onChange={(e) => setGoogleSheetsUrl(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Paste your Google Apps Script web app URL
+                  </p>
+                </div>
+                <Button 
+                  onClick={exportToGoogleSheets} 
+                  disabled={exportingToSheets || !googleSheetsUrl}
+                  className="w-full"
+                >
+                  {exportingToSheets ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      Export {records.length} records
+                    </>
+                  )}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Button 
             variant="ghost" 
             size="sm"
