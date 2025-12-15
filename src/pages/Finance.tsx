@@ -1389,11 +1389,15 @@ export default function Finance() {
     
     const expectedCash = shiftRecord?.cash_expected || 0;
     const expectedGcash = shiftRecord?.gcash_expected || 0;
+    const expectedTotal = expectedCash + expectedGcash;
     const adminReceivedCash = shiftRecord?.cash_actual || 0;
     const adminReceivedGcash = shiftRecord?.gcash_actual || 0;
+    const adminReceivedTotal = adminReceivedCash + adminReceivedGcash;
     
-    const cashDiff = adminReceivedCash - totalEmployeeCash;
-    const gcashDiff = adminReceivedGcash - totalEmployeeGcash;
+    // Difference: Admin Received vs Expected (Loyverse)
+    const cashDiffVsExpected = adminReceivedCash - expectedCash;
+    const gcashDiffVsExpected = adminReceivedGcash - expectedGcash;
+    const totalDiffVsExpected = adminReceivedTotal - expectedTotal;
     
     return (
       <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
@@ -1405,71 +1409,114 @@ export default function Finance() {
             <span className="text-muted-foreground">Cash Verification</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {/* Three-column comparison */}
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="space-y-1">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Loyverse</div>
-              <div className="text-xs text-muted-foreground">Expected</div>
+        <CardContent className="space-y-4">
+          {/* Section 1: Expected from Loyverse */}
+          <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+            <div className="text-[10px] text-green-600 uppercase tracking-wider font-semibold mb-2">
+              📊 Loyverse Expected (POS)
             </div>
-            <div className="space-y-1">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Staff</div>
-              <div className="text-xs text-muted-foreground">Submitted</div>
-            </div>
-            <div className="space-y-1">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Admin</div>
-              <div className="text-xs text-muted-foreground">Received</div>
-            </div>
-          </div>
-          
-          {/* Cash Row */}
-          <div className="grid grid-cols-3 gap-2 text-center py-2 bg-secondary/30 rounded-lg">
-            <div>
-              <div className="text-[10px] text-muted-foreground">💵 Cash</div>
-              <div className="font-semibold text-green-600">₱{expectedCash.toLocaleString()}</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-muted-foreground">💵 Cash</div>
-              <div className="font-semibold text-blue-600">
-                {totalEmployeeCash > 0 ? `₱${totalEmployeeCash.toLocaleString()}` : '—'}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <div className="text-[10px] text-muted-foreground">💵 Cash</div>
+                <div className="font-bold text-lg text-green-600">₱{expectedCash.toLocaleString()}</div>
               </div>
-            </div>
-            <div>
-              <div className="text-[10px] text-muted-foreground">💵 Cash</div>
-              <div className={cn("font-semibold", adminReceivedCash > 0 ? "text-primary" : "text-muted-foreground")}>
-                {adminReceivedCash > 0 ? `₱${adminReceivedCash.toLocaleString()}` : '—'}
+              <div>
+                <div className="text-[10px] text-muted-foreground">📱 GCash</div>
+                <div className="font-bold text-lg text-green-600">₱{expectedGcash.toLocaleString()}</div>
               </div>
-            </div>
-          </div>
-          
-          {/* GCash Row */}
-          <div className="grid grid-cols-3 gap-2 text-center py-2 bg-secondary/30 rounded-lg">
-            <div>
-              <div className="text-[10px] text-muted-foreground">📱 GCash</div>
-              <div className="font-semibold text-green-600">₱{expectedGcash.toLocaleString()}</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-muted-foreground">📱 GCash</div>
-              <div className="font-semibold text-blue-600">
-                {totalEmployeeGcash > 0 ? `₱${totalEmployeeGcash.toLocaleString()}` : '—'}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] text-muted-foreground">📱 GCash</div>
-              <div className={cn("font-semibold", adminReceivedGcash > 0 ? "text-primary" : "text-muted-foreground")}>
-                {adminReceivedGcash > 0 ? `₱${adminReceivedGcash.toLocaleString()}` : '—'}
+              <div>
+                <div className="text-[10px] text-muted-foreground">💰 Total</div>
+                <div className="font-bold text-lg text-green-600">₱{expectedTotal.toLocaleString()}</div>
               </div>
             </div>
           </div>
 
-          {/* Employee breakdown */}
+          {/* Section 2: Admin Received */}
+          <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+            <div className="text-[10px] text-blue-600 uppercase tracking-wider font-semibold mb-2">
+              ✅ Admin Received (Actual)
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <div className="text-[10px] text-muted-foreground">💵 Cash</div>
+                <div className={cn("font-bold text-lg", adminReceivedCash > 0 ? "text-blue-600" : "text-muted-foreground")}>
+                  {adminReceivedCash > 0 ? `₱${adminReceivedCash.toLocaleString()}` : '—'}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] text-muted-foreground">📱 GCash</div>
+                <div className={cn("font-bold text-lg", adminReceivedGcash > 0 ? "text-blue-600" : "text-muted-foreground")}>
+                  {adminReceivedGcash > 0 ? `₱${adminReceivedGcash.toLocaleString()}` : '—'}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] text-muted-foreground">💰 Total</div>
+                <div className={cn("font-bold text-lg", adminReceivedTotal > 0 ? "text-blue-600" : "text-muted-foreground")}>
+                  {adminReceivedTotal > 0 ? `₱${adminReceivedTotal.toLocaleString()}` : '—'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Difference (Actual vs Expected) */}
+          {adminReceivedTotal > 0 && (
+            <div className={cn(
+              "p-3 rounded-lg border",
+              totalDiffVsExpected >= 0 
+                ? "bg-green-500/10 border-green-500/20" 
+                : "bg-red-500/10 border-red-500/20"
+            )}>
+              <div className={cn(
+                "text-[10px] uppercase tracking-wider font-semibold mb-2",
+                totalDiffVsExpected >= 0 ? "text-green-600" : "text-red-600"
+              )}>
+                📈 Difference (Actual - Expected)
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <div className="text-[10px] text-muted-foreground">💵 Cash</div>
+                  <div className={cn(
+                    "font-bold text-lg",
+                    cashDiffVsExpected >= 0 ? "text-green-600" : "text-red-600"
+                  )}>
+                    {cashDiffVsExpected >= 0 ? '+' : ''}₱{cashDiffVsExpected.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">📱 GCash</div>
+                  <div className={cn(
+                    "font-bold text-lg",
+                    gcashDiffVsExpected >= 0 ? "text-green-600" : "text-red-600"
+                  )}>
+                    {gcashDiffVsExpected >= 0 ? '+' : ''}₱{gcashDiffVsExpected.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">💰 Total</div>
+                  <div className={cn(
+                    "font-bold text-lg",
+                    totalDiffVsExpected >= 0 ? "text-green-600" : "text-red-600"
+                  )}>
+                    {totalDiffVsExpected >= 0 ? '+' : ''}₱{totalDiffVsExpected.toLocaleString()}
+                    <span className="text-xs ml-1">
+                      {totalDiffVsExpected > 0 ? 'OVER' : totalDiffVsExpected < 0 ? 'SHORT' : '✓'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Staff Handovers breakdown */}
           {currentShiftHandovers.length > 0 && (
             <div className="pt-2 border-t">
-              <div className="text-[10px] text-muted-foreground mb-1">Staff Handovers:</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
+                👥 Staff Handovers
+              </div>
               <div className="space-y-1">
                 {currentShiftHandovers.map((h, i) => (
-                  <div key={i} className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">{h.employee_name}</span>
+                  <div key={i} className="flex justify-between text-xs bg-secondary/30 p-2 rounded">
+                    <span className="font-medium">{h.employee_name}</span>
                     <span>
                       💵 ₱{(h.cash_handed_over || 0).toLocaleString()}
                       {(h.gcash_handed_over || 0) > 0 && (
@@ -1478,28 +1525,15 @@ export default function Finance() {
                     </span>
                   </div>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* Discrepancy section */}
-          {(adminReceivedCash > 0 || adminReceivedGcash > 0) && totalEmployeeCash > 0 && (
-            <div className="pt-2 border-t">
-              <div className="text-[10px] text-muted-foreground mb-1">Staff → Admin Difference:</div>
-              <div className="flex gap-4 text-sm">
-                {cashDiff !== 0 && (
-                  <span className={cn(cashDiff > 0 ? "text-green-600" : "text-red-600")}>
-                    💵 {cashDiff > 0 ? '+' : ''}₱{cashDiff.toLocaleString()}
+                <div className="flex justify-between text-xs font-bold pt-1 border-t">
+                  <span>Total from Staff</span>
+                  <span>
+                    💵 ₱{totalEmployeeCash.toLocaleString()}
+                    {totalEmployeeGcash > 0 && (
+                      <span className="ml-2">📱 ₱{totalEmployeeGcash.toLocaleString()}</span>
+                    )}
                   </span>
-                )}
-                {gcashDiff !== 0 && (
-                  <span className={cn(gcashDiff > 0 ? "text-green-600" : "text-red-600")}>
-                    📱 {gcashDiff > 0 ? '+' : ''}₱{gcashDiff.toLocaleString()}
-                  </span>
-                )}
-                {cashDiff === 0 && gcashDiff === 0 && (
-                  <span className="text-green-600">✓ Match</span>
-                )}
+                </div>
               </div>
             </div>
           )}
