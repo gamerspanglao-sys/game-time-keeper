@@ -33,7 +33,13 @@ serve(async (req) => {
       throw new Error(`Failed to fetch records: ${recordsError.message}`);
     }
 
-    console.log(`📋 Found ${records?.length || 0} records`);
+    // Fetch all expenses
+    const { data: expenses } = await supabase
+      .from('cash_expenses')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    console.log(`📋 Found ${records?.length || 0} records, ${expenses?.length || 0} expenses`);
 
     if (!records || records.length === 0) {
       return new Response(
@@ -42,11 +48,42 @@ serve(async (req) => {
       );
     }
 
+    // Header row with Russian labels
+    const headers = [
+      'Дата',
+      'Начальный баланс',
+      'Продажи (касса)',
+      'Закупки',
+      'Зарплаты',
+      'Прочие расходы',
+      'Всего расходов',
+      'Ожидаемая касса',
+      'Фактическая касса',
+      'Расхождение',
+      'Статус'
+    ];
+
     // Prepare rows for Google Sheets
-    const rows = records.map(r => {
+    const rows: (string | number)[][] = [headers];
+    
+    records.forEach(r => {
       const totalExp = (r.purchases || 0) + (r.salaries || 0) + (r.other_expenses || 0);
       const expected = (r.opening_balance || 0) + (r.expected_sales || 0) - totalExp;
-      return [
+      const discrepancy = r.discrepancy ?? '';
+      
+      // Determine status
+      let status = '';
+      if (r.actual_cash === null) {
+        status = '⏳ Ожидает';
+      } else if (r.discrepancy === 0) {
+        status = '✅ OK';
+      } else if (r.discrepancy !== null && r.discrepancy > 0) {
+        status = '⬆️ Излишек';
+      } else if (r.discrepancy !== null && r.discrepancy < 0) {
+        status = '⬇️ Недостача';
+      }
+      
+      rows.push([
         r.date,
         r.opening_balance || 0,
         r.expected_sales || 0,
@@ -54,34 +91,64 @@ serve(async (req) => {
         r.salaries || 0,
         r.other_expenses || 0,
         totalExp,
-        expected,
+        Math.round(expected),
         r.actual_cash ?? '',
-        r.discrepancy ?? ''
-      ];
+        discrepancy,
+        status
+      ]);
     });
 
     // Calculate totals
     const totals = records.reduce((acc, r) => ({
+      opening: acc.opening + (r.opening_balance || 0),
       sales: acc.sales + (r.expected_sales || 0),
       purchases: acc.purchases + (r.purchases || 0),
       salaries: acc.salaries + (r.salaries || 0),
       other: acc.other + (r.other_expenses || 0),
+      actual: acc.actual + (r.actual_cash || 0),
       discrepancy: acc.discrepancy + (r.discrepancy || 0)
-    }), { sales: 0, purchases: 0, salaries: 0, other: 0, discrepancy: 0 });
+    }), { opening: 0, sales: 0, purchases: 0, salaries: 0, other: 0, actual: 0, discrepancy: 0 });
+
+    const totalExpenses = totals.purchases + totals.salaries + totals.other;
+    const totalExpected = totals.opening + totals.sales - totalExpenses;
 
     // Add totals row
     rows.push([
-      'TOTAL',
-      '',
+      'ИТОГО',
+      totals.opening,
       totals.sales,
       totals.purchases,
       totals.salaries,
       totals.other,
-      totals.purchases + totals.salaries + totals.other,
-      '',
-      '',
-      totals.discrepancy
+      totalExpenses,
+      Math.round(totalExpected),
+      totals.actual || '',
+      totals.discrepancy || '',
+      ''
     ]);
+
+    // Add empty row
+    rows.push(['', '', '', '', '', '', '', '', '', '', '']);
+
+    // Add expenses detail section if there are expenses
+    if (expenses && expenses.length > 0) {
+      rows.push(['РАСХОДЫ (детализация)', '', '', '', '', '', '', '', '', '', '']);
+      rows.push(['Дата', 'Категория', 'Сумма', 'Описание', '', '', '', '', '', '', '']);
+      
+      expenses.forEach(exp => {
+        const record = records.find(r => r.id === exp.cash_register_id);
+        const date = record?.date || '';
+        const categoryLabel = exp.category === 'purchases' ? 'Закупки' : 
+                             exp.category === 'salaries' ? 'Зарплаты' : 'Прочее';
+        rows.push([
+          date,
+          categoryLabel,
+          exp.amount,
+          exp.description || '',
+          '', '', '', '', '', '', ''
+        ]);
+      });
+    }
 
     console.log(`📤 Sending ${rows.length} rows to Google Sheets...`);
 
@@ -94,14 +161,14 @@ serve(async (req) => {
       body: JSON.stringify({ rows }),
     });
 
-    // Google Apps Script returns redirect, so we check for success differently
     console.log(`✅ Data sent to Google Sheets (status: ${response.status})`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: `Synced ${records.length} records to Google Sheets`,
-        recordCount: records.length
+        recordCount: records.length,
+        expenseCount: expenses?.length || 0
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
