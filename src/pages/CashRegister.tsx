@@ -373,7 +373,7 @@ export default function CashRegister() {
   }), { totalSales: 0, totalPurchases: 0, totalSalaries: 0, totalOther: 0, totalDiscrepancy: 0, daysWithDiscrepancy: 0 });
 
   const exportToCSV = () => {
-    // Main cash register data
+    // Main cash register data - use semicolon for Mac compatibility
     const headers = ['Date', 'Opening Balance', 'Cash Sales', 'Purchases', 'Salaries', 'Other Expenses', 'Total Expenses', 'Expected', 'Actual', 'Discrepancy'];
     
     // Sort by date ascending for the export
@@ -393,7 +393,7 @@ export default function CashRegister() {
         expected,
         r.actual_cash ?? '',
         r.discrepancy ?? ''
-      ].join(',');
+      ].join(';');
     });
 
     // Add totals row
@@ -408,20 +408,21 @@ export default function CashRegister() {
       '',
       '',
       overallTotals.totalDiscrepancy
-    ].join(',');
+    ].join(';');
 
-    const csv = [headers.join(','), ...rows, '', totalsRow].join('\n');
+    const csv = [headers.join(';'), ...rows, '', totalsRow].join('\r\n');
     
-    // Add BOM for Excel to recognize UTF-8
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' });
+    // Create blob with proper encoding for Mac
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `cash-register-full-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `cash-register-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success(`Exported ${records.length} records to CSV`);
+    toast.success(`Exported ${records.length} records`);
   };
 
   const getCategoryLabel = (category: string) => {
