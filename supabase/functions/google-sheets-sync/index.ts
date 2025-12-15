@@ -80,22 +80,115 @@ async function getAccessToken(serviceAccountJson: string): Promise<string> {
   return tokenData.access_token;
 }
 
-// Get the first sheet name from the spreadsheet
-async function getFirstSheetName(spreadsheetId: string, accessToken: string): Promise<string> {
+// Get sheet names from the spreadsheet
+async function getSheetNames(spreadsheetId: string, accessToken: string): Promise<string[]> {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`;
   const response = await fetch(url, {
     headers: { 'Authorization': `Bearer ${accessToken}` },
   });
   
   if (!response.ok) {
-    console.log('Failed to get sheet info, using default name');
-    return 'Лист1'; // Default Russian name
+    console.log('Failed to get sheet info, using default names');
+    return ['Касса', 'Зарплаты'];
   }
   
   const data = await response.json();
-  const sheetName = data.sheets?.[0]?.properties?.title || 'Лист1';
-  console.log(`📋 Found sheet name: "${sheetName}"`);
-  return sheetName;
+  const sheets = data.sheets?.map((s: any) => s.properties.title) || [];
+  console.log(`📋 Found sheets: ${sheets.join(', ')}`);
+  return sheets;
+}
+
+// Create a new sheet in the spreadsheet
+async function createSheet(spreadsheetId: string, accessToken: string, sheetTitle: string): Promise<void> {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [{
+        addSheet: {
+          properties: { title: sheetTitle }
+        }
+      }]
+    }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.text();
+    console.error(`Failed to create sheet ${sheetTitle}:`, error);
+  } else {
+    console.log(`✅ Created sheet: ${sheetTitle}`);
+  }
+}
+
+// Rename sheet
+async function renameSheet(spreadsheetId: string, accessToken: string, oldName: string, newName: string): Promise<void> {
+  // First get sheet ID
+  const infoUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`;
+  const infoResponse = await fetch(infoUrl, {
+    headers: { 'Authorization': `Bearer ${accessToken}` },
+  });
+  
+  if (!infoResponse.ok) return;
+  
+  const data = await infoResponse.json();
+  const sheet = data.sheets?.find((s: any) => s.properties.title === oldName);
+  if (!sheet) return;
+  
+  const sheetId = sheet.properties.sheetId;
+  
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [{
+        updateSheetProperties: {
+          properties: { sheetId, title: newName },
+          fields: 'title'
+        }
+      }]
+    }),
+  });
+  console.log(`✅ Renamed sheet: ${oldName} -> ${newName}`);
+}
+
+// Clear and write data to a sheet
+async function writeToSheet(spreadsheetId: string, accessToken: string, sheetName: string, rows: (string | number)[][]): Promise<void> {
+  // Clear the sheet
+  const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}:clear`;
+  await fetch(clearUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  // Write new data
+  const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!A1?valueInputOption=RAW`;
+  const updateResponse = await fetch(updateUrl, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: rows }),
+  });
+
+  if (!updateResponse.ok) {
+    const error = await updateResponse.text();
+    throw new Error(`Failed to update sheet ${sheetName}: ${error}`);
+  }
+  
+  const result = await updateResponse.json();
+  console.log(`✅ Written ${result.updatedCells} cells to ${sheetName}`);
 }
 
 serve(async (req) => {
@@ -118,14 +211,30 @@ serve(async (req) => {
     const accessToken = await getAccessToken(SERVICE_ACCOUNT_JSON);
     console.log('✅ Access token obtained');
 
-    // Get the actual sheet name
-    const sheetName = await getFirstSheetName(SPREADSHEET_ID, accessToken);
+    // Get existing sheets
+    const existingSheets = await getSheetNames(SPREADSHEET_ID, accessToken);
+    
+    // Ensure we have the right sheet names
+    const CASH_SHEET = 'Касса';
+    const PAYROLL_SHEET = 'Зарплаты';
+    
+    // Rename first sheet if needed
+    if (existingSheets.length > 0 && existingSheets[0] !== CASH_SHEET && !existingSheets.includes(CASH_SHEET)) {
+      await renameSheet(SPREADSHEET_ID, accessToken, existingSheets[0], CASH_SHEET);
+    }
+    
+    // Create payroll sheet if doesn't exist
+    const updatedSheets = await getSheetNames(SPREADSHEET_ID, accessToken);
+    if (!updatedSheets.includes(PAYROLL_SHEET)) {
+      await createSheet(SPREADSHEET_ID, accessToken, PAYROLL_SHEET);
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('📊 Fetching all cash register data...');
+    // ========== SHEET 1: КАССА (Cash Register) ==========
+    console.log('📊 Fetching cash register data...');
 
     const { data: records, error: recordsError } = await supabase
       .from('cash_register')
@@ -142,168 +251,289 @@ serve(async (req) => {
       .select('*')
       .order('created_at', { ascending: true });
 
-    console.log(`📋 Found ${records?.length || 0} records, ${expenses?.length || 0} expenses`);
+    console.log(`📋 Found ${records?.length || 0} cash records, ${expenses?.length || 0} expenses`);
 
-    if (!records || records.length === 0) {
-      return new Response(
-        JSON.stringify({ success: true, message: 'No records to sync' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Headers - with shift column
-    const headers = [
+    // Build cash register rows
+    // FIXED: Net Profit = Gross Profit - Salaries - Other (Purchases NOT deducted)
+    const cashHeaders = [
       'Дата',
       'Смена',
-      'Доход (продажи)',
+      'Продажи',
       'Себестоимость',
       'Валовая прибыль',
-      'Закупки',
+      'Закупки (cash flow)',
       'Зарплаты',
       'Прочие расходы',
-      'Всего расходов',
+      'Расходы (без закупок)',
       'Чистая прибыль',
-      'Ожидаемая касса',
-      'Фактическая касса',
+      'Ожид. Cash',
+      'Ожид. GCash',
+      'Факт. Cash',
+      'Факт. GCash',
       'Расхождение',
       'Статус'
     ];
 
-    const rows: (string | number)[][] = [headers];
+    const cashRows: (string | number)[][] = [cashHeaders];
     
-    records.forEach(r => {
-      const totalExp = (r.purchases || 0) + (r.salaries || 0) + (r.other_expenses || 0);
-      const grossProfit = (r.expected_sales || 0) - (r.cost || 0);
-      const netProfit = grossProfit - totalExp;
-      const expectedCash = (r.opening_balance || 0) + (r.expected_sales || 0) - totalExp;
-      
-      const shiftLabel = r.shift === 'day' ? '☀️ День (5-17)' : '🌙 Ночь (17-5)';
-      
-      let status = '';
-      if (r.actual_cash === null) {
-        status = '⏳ Ожидает';
-      } else if (r.discrepancy === 0) {
-        status = '✅ OK';
-      } else if (r.discrepancy !== null && r.discrepancy > 0) {
-        status = '⬆️ Излишек';
-      } else if (r.discrepancy !== null && r.discrepancy < 0) {
-        status = '⬇️ Недостача';
-      }
-      
-      rows.push([
-        r.date,
-        shiftLabel,
-        r.expected_sales || 0,
-        r.cost || 0,
-        grossProfit,
-        r.purchases || 0,
-        r.salaries || 0,
-        r.other_expenses || 0,
-        totalExp,
-        netProfit,
-        Math.round(expectedCash),
-        r.actual_cash ?? '',
-        r.discrepancy ?? '',
-        status
-      ]);
-    });
-
-    // Totals
-    const totals = records.reduce((acc, r) => ({
-      sales: acc.sales + (r.expected_sales || 0),
-      cost: acc.cost + (r.cost || 0),
-      purchases: acc.purchases + (r.purchases || 0),
-      salaries: acc.salaries + (r.salaries || 0),
-      other: acc.other + (r.other_expenses || 0),
-      actual: acc.actual + (r.actual_cash || 0),
-      discrepancy: acc.discrepancy + (r.discrepancy || 0)
-    }), { sales: 0, cost: 0, purchases: 0, salaries: 0, other: 0, actual: 0, discrepancy: 0 });
-
-    const totalExpenses = totals.purchases + totals.salaries + totals.other;
-    const totalGrossProfit = totals.sales - totals.cost;
-    const totalNetProfit = totalGrossProfit - totalExpenses;
-
-    rows.push([
-      'ИТОГО',
-      '',
-      totals.sales,
-      totals.cost,
-      totalGrossProfit,
-      totals.purchases,
-      totals.salaries,
-      totals.other,
-      totalExpenses,
-      totalNetProfit,
-      '',
-      totals.actual || '',
-      totals.discrepancy || '',
-      ''
-    ]);
-
-    // Expenses detail section
-    if (expenses && expenses.length > 0) {
-      rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-      rows.push(['РАСХОДЫ (детализация)', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-      rows.push(['Дата', 'Смена', 'Категория', 'Сумма', 'Описание', '', '', '', '', '', '', '', '', '']);
-      
-      expenses.forEach(exp => {
-        const record = records.find(r => r.id === exp.cash_register_id);
-        const date = record?.date || '';
-        const shiftLabel = exp.shift === 'day' ? '☀️ День' : '🌙 Ночь';
-        const categoryLabel = exp.category === 'purchases' ? 'Закупки' : 
-                             exp.category === 'salaries' ? 'Зарплаты' : 'Прочее';
-        rows.push([date, shiftLabel, categoryLabel, exp.amount, exp.description || '', '', '', '', '', '', '', '', '', '']);
+    if (records && records.length > 0) {
+      records.forEach(r => {
+        // Expenses for operations (salaries + other) - NOT purchases
+        const operatingExp = (r.salaries || 0) + (r.other_expenses || 0);
+        const grossProfit = (r.expected_sales || 0) - (r.cost || 0);
+        // FIXED: Net profit doesn't include purchases (they are cash flow, not P&L expense)
+        const netProfit = grossProfit - operatingExp;
+        
+        const shiftLabel = r.shift === 'day' ? '☀️ День' : '🌙 Ночь';
+        
+        // Calculate total discrepancy
+        const cashDiff = (r.cash_actual ?? 0) - (r.cash_expected ?? 0);
+        const gcashDiff = (r.gcash_actual ?? 0) - (r.gcash_expected ?? 0);
+        const totalDisc = r.cash_actual !== null || r.gcash_actual !== null ? cashDiff + gcashDiff : null;
+        
+        let status = '';
+        if (r.cash_actual === null && r.gcash_actual === null) {
+          status = '⏳ Ожидает';
+        } else if (totalDisc === 0) {
+          status = '✅ OK';
+        } else if (totalDisc !== null && totalDisc > 0) {
+          status = '⬆️ Излишек';
+        } else if (totalDisc !== null && totalDisc < 0) {
+          status = '⬇️ Недостача';
+        }
+        
+        cashRows.push([
+          r.date,
+          shiftLabel,
+          r.expected_sales || 0,
+          r.cost || 0,
+          grossProfit,
+          r.purchases || 0,
+          r.salaries || 0,
+          r.other_expenses || 0,
+          operatingExp,
+          netProfit,
+          r.cash_expected || 0,
+          r.gcash_expected || 0,
+          r.cash_actual ?? '',
+          r.gcash_actual ?? '',
+          totalDisc ?? '',
+          status
+        ]);
       });
+
+      // Totals
+      const totals = records.reduce((acc, r) => ({
+        sales: acc.sales + (r.expected_sales || 0),
+        cost: acc.cost + (r.cost || 0),
+        purchases: acc.purchases + (r.purchases || 0),
+        salaries: acc.salaries + (r.salaries || 0),
+        other: acc.other + (r.other_expenses || 0),
+        cashExp: acc.cashExp + (r.cash_expected || 0),
+        gcashExp: acc.gcashExp + (r.gcash_expected || 0),
+        cashAct: acc.cashAct + (r.cash_actual || 0),
+        gcashAct: acc.gcashAct + (r.gcash_actual || 0),
+      }), { sales: 0, cost: 0, purchases: 0, salaries: 0, other: 0, cashExp: 0, gcashExp: 0, cashAct: 0, gcashAct: 0 });
+
+      const totalOperatingExp = totals.salaries + totals.other;
+      const totalGrossProfit = totals.sales - totals.cost;
+      const totalNetProfit = totalGrossProfit - totalOperatingExp;
+      const totalDiscrepancy = (totals.cashAct - totals.cashExp) + (totals.gcashAct - totals.gcashExp);
+
+      cashRows.push([
+        'ИТОГО',
+        '',
+        totals.sales,
+        totals.cost,
+        totalGrossProfit,
+        totals.purchases,
+        totals.salaries,
+        totals.other,
+        totalOperatingExp,
+        totalNetProfit,
+        totals.cashExp,
+        totals.gcashExp,
+        totals.cashAct || '',
+        totals.gcashAct || '',
+        totalDiscrepancy || '',
+        ''
+      ]);
+
+      // Expenses detail section
+      if (expenses && expenses.length > 0) {
+        cashRows.push(Array(16).fill(''));
+        cashRows.push(['РАСХОДЫ (детализация)', ...Array(15).fill('')]);
+        cashRows.push(['Дата', 'Смена', 'Категория', 'Сумма', 'Описание', ...Array(11).fill('')]);
+        
+        expenses.forEach(exp => {
+          const record = records.find(r => r.id === exp.cash_register_id);
+          const date = record?.date || '';
+          const shiftLabel = exp.shift === 'day' ? '☀️ День' : '🌙 Ночь';
+          const categoryLabel = exp.category === 'purchases' ? 'Закупки' : 
+                               exp.category === 'salaries' ? 'Зарплаты' : 'Прочее';
+          cashRows.push([date, shiftLabel, categoryLabel, exp.amount, exp.description || '', ...Array(11).fill('')]);
+        });
+      }
     }
 
-    console.log(`📤 Sending ${rows.length} rows to Google Sheets...`);
+    await writeToSheet(SPREADSHEET_ID, accessToken, CASH_SHEET, cashRows);
 
-    // Step 1: Clear the sheet using correct range format
-    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(sheetName)}:clear`;
-    const clearResponse = await fetch(clearUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    // ========== SHEET 2: ЗАРПЛАТЫ (Payroll) ==========
+    console.log('📊 Fetching payroll data...');
 
-    if (!clearResponse.ok) {
-      const clearError = await clearResponse.text();
-      console.error('❌ Failed to clear sheet:', clearError);
-      throw new Error(`Failed to clear sheet: ${clearError}`);
+    const { data: shifts } = await supabase
+      .from('shifts')
+      .select('*, employees(name)')
+      .order('date', { ascending: false })
+      .order('shift_start', { ascending: false });
+
+    const { data: bonuses } = await supabase
+      .from('bonuses')
+      .select('*, employees(name)')
+      .order('date', { ascending: false });
+
+    console.log(`📋 Found ${shifts?.length || 0} shifts, ${bonuses?.length || 0} bonuses`);
+
+    const payrollHeaders = [
+      'Дата',
+      'Сотрудник',
+      'Смена',
+      'Начало',
+      'Конец',
+      'Часы',
+      'Переработка',
+      'Опоздание',
+      'База',
+      'Бонусы',
+      'Недостача',
+      'Итого',
+      'Статус'
+    ];
+
+    const payrollRows: (string | number)[][] = [payrollHeaders];
+
+    if (shifts && shifts.length > 0) {
+      shifts.forEach(s => {
+        const employeeName = (s.employees as any)?.name || 'Unknown';
+        const shiftLabel = s.shift_type || (s.shift_start ? 'Custom' : '');
+        
+        // Format times
+        const formatTime = (ts: string | null) => {
+          if (!ts) return '';
+          const d = new Date(ts);
+          return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+        };
+        
+        const startTime = formatTime(s.shift_start);
+        const endTime = formatTime(s.shift_end);
+        
+        // Calculate hours worked
+        const hoursWorked = s.total_hours || 0;
+        
+        // Calculate overtime (anything over 12 hours for standard shifts)
+        const standardHours = 12;
+        const overtime = hoursWorked > standardHours ? hoursWorked - standardHours : 0;
+        
+        // Calculate lateness (if shift started after expected time)
+        // Day shift should start at 5 AM, Night at 5 PM
+        let lateness = 0;
+        if (s.shift_start) {
+          const start = new Date(s.shift_start);
+          const startHour = start.getHours();
+          const startMinute = start.getMinutes();
+          
+          // Expected start times
+          const expectedHour = s.shift_type?.includes('night') || s.shift_type === 'Night' ? 17 : 5;
+          
+          if (startHour > expectedHour || (startHour === expectedHour && startMinute > 0)) {
+            lateness = (startHour - expectedHour) + (startMinute / 60);
+          }
+        }
+        
+        // Get bonuses for this shift
+        const shiftBonuses = bonuses?.filter(b => b.shift_id === s.id) || [];
+        const totalBonuses = shiftBonuses.reduce((sum, b) => sum + (b.amount || 0), 0);
+        
+        // Cash discrepancy (negative means shortage)
+        const cashShortage = s.cash_difference && s.cash_difference < 0 ? Math.abs(s.cash_difference) : 0;
+        
+        // Calculate total pay
+        const baseSalary = s.base_salary || 500;
+        const totalPay = baseSalary + totalBonuses - cashShortage;
+        
+        const status = s.status === 'closed' ? '✅ Закрыта' : '🔄 Активна';
+        
+        payrollRows.push([
+          s.date,
+          employeeName,
+          shiftLabel,
+          startTime,
+          endTime,
+          Number(hoursWorked).toFixed(1),
+          overtime > 0 ? `+${overtime.toFixed(1)}h` : '',
+          lateness > 0 ? `-${lateness.toFixed(1)}h` : '',
+          baseSalary,
+          totalBonuses || '',
+          cashShortage || '',
+          totalPay,
+          status
+        ]);
+      });
+
+      // Summary section
+      const closedShifts = shifts.filter(s => s.status === 'closed');
+      const totalHours = closedShifts.reduce((sum, s) => sum + (Number(s.total_hours) || 0), 0);
+      const totalBase = closedShifts.reduce((sum, s) => sum + (s.base_salary || 500), 0);
+      const allBonuses = bonuses?.reduce((sum, b) => sum + (b.amount || 0), 0) || 0;
+      const totalShortage = closedShifts.reduce((sum, s) => sum + (s.cash_difference && s.cash_difference < 0 ? Math.abs(s.cash_difference) : 0), 0);
+      
+      payrollRows.push(Array(13).fill(''));
+      payrollRows.push([
+        'ИТОГО',
+        `${closedShifts.length} смен`,
+        '',
+        '',
+        '',
+        totalHours.toFixed(1),
+        '',
+        '',
+        totalBase,
+        allBonuses,
+        totalShortage,
+        totalBase + allBonuses - totalShortage,
+        ''
+      ]);
+
+      // Bonuses detail section
+      if (bonuses && bonuses.length > 0) {
+        payrollRows.push(Array(13).fill(''));
+        payrollRows.push(['БОНУСЫ (детализация)', ...Array(12).fill('')]);
+        payrollRows.push(['Дата', 'Сотрудник', 'Тип', 'Кол-во', 'Сумма', 'Комментарий', ...Array(7).fill('')]);
+        
+        bonuses.forEach(b => {
+          const employeeName = (b.employees as any)?.name || 'Unknown';
+          payrollRows.push([
+            b.date,
+            employeeName,
+            b.bonus_type,
+            b.quantity || 1,
+            b.amount,
+            b.comment || '',
+            ...Array(7).fill('')
+          ]);
+        });
+      }
     }
-    console.log('🧹 Sheet cleared');
 
-    // Step 2: Write new data
-    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(sheetName)}!A1?valueInputOption=RAW`;
-    const updateResponse = await fetch(updateUrl, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        values: rows,
-      }),
-    });
-
-    if (!updateResponse.ok) {
-      const updateError = await updateResponse.text();
-      console.error('❌ Failed to update sheet:', updateError);
-      throw new Error(`Failed to update sheet: ${updateError}`);
-    }
-
-    const result = await updateResponse.json();
-    console.log(`✅ Data written to Google Sheets: ${result.updatedCells} cells updated`);
+    await writeToSheet(SPREADSHEET_ID, accessToken, PAYROLL_SHEET, payrollRows);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Synced ${records.length} records to Google Sheets`,
-        recordCount: records.length,
-        expenseCount: expenses?.length || 0,
-        cellsUpdated: result.updatedCells
+        message: `Synced to Google Sheets: ${records?.length || 0} cash records, ${shifts?.length || 0} shifts`,
+        cashRecords: records?.length || 0,
+        shifts: shifts?.length || 0,
+        bonuses: bonuses?.length || 0
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
