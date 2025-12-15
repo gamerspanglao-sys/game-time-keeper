@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -7,12 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
-  Calculator, 
   Plus, 
   TrendingDown, 
   TrendingUp, 
@@ -30,11 +31,16 @@ import {
   FileSpreadsheet,
   Wallet,
   Receipt,
-  CreditCard,
-  Banknote,
+  Package,
   Coffee,
-  Package
+  Beer,
+  Droplets,
+  Send,
+  X,
+  Loader2
 } from 'lucide-react';
+
+// ============= TYPES =============
 
 interface CashRecord {
   id: string;
@@ -58,9 +64,44 @@ interface CashExpense {
   description: string | null;
 }
 
+interface PurchaseItem {
+  name: string;
+  totalQuantity: number;
+  avgPerDay: number;
+  recommendedQty: number;
+  inStock: number;
+  toOrder: number;
+  caseSize: number;
+  casesToOrder: number;
+  category: string;
+  supplier?: string;
+  note?: string;
+}
+
+interface PurchaseData {
+  period: { days: number; deliveryBuffer?: number };
+  totalReceipts: number;
+  towerSales?: number;
+  basketSales?: number;
+  recommendations: PurchaseItem[];
+}
+
+// ============= CONSTANTS =============
+
 const ADMIN_PIN = '8808';
 
-export default function CashRegister() {
+const SUPPLIER_CONFIG: Record<string, { label: string; color: string }> = {
+  'San Miguel': { label: 'San Miguel (Beer)', color: 'bg-amber-500/20 text-amber-500 border-amber-500/30' },
+  'Tanduay': { label: 'Tanduay', color: 'bg-orange-500/20 text-orange-500 border-orange-500/30' },
+  'Soft Drinks': { label: 'Soft Drinks', color: 'bg-blue-500/20 text-blue-500 border-blue-500/30' },
+  'Snacks': { label: 'Snacks', color: 'bg-purple-500/20 text-purple-500 border-purple-500/30' },
+  'Others': { label: 'Others', color: 'bg-muted text-muted-foreground border-muted' },
+};
+
+export default function Finance() {
+  const [activeTab, setActiveTab] = useState('cash');
+  
+  // ============= CASH REGISTER STATE =============
   const [records, setRecords] = useState<CashRecord[]>([]);
   const [expenses, setExpenses] = useState<CashExpense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +114,7 @@ export default function CashRegister() {
   // Dialogs
   const [showCashDialog, setShowCashDialog] = useState(false);
   const [showExpenseDialog, setShowExpenseDialog] = useState(false);
-  const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
+  const [showPurchaseExpenseDialog, setShowPurchaseExpenseDialog] = useState(false);
   const [showSalaryDialog, setShowSalaryDialog] = useState(false);
   
   // Admin mode
@@ -85,6 +126,16 @@ export default function CashRegister() {
   
   // Google Sheets
   const [exportingToSheets, setExportingToSheets] = useState(false);
+
+  // ============= PURCHASE ORDERS STATE =============
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [sendingPurchase, setSendingPurchase] = useState(false);
+  const [sendingCash, setSendingCash] = useState(false);
+  const [purchaseData, setPurchaseData] = useState<PurchaseData | null>(null);
+  const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
+  const [showAllItems, setShowAllItems] = useState(true);
+
+  // ============= EFFECTS =============
 
   useEffect(() => {
     loadData();
@@ -100,18 +151,19 @@ export default function CashRegister() {
     };
   }, []);
 
+  // ============= CASH REGISTER FUNCTIONS =============
+
   const CACHE_KEY_RECORDS = 'cash_register_records';
   const CACHE_KEY_EXPENSES = 'cash_register_expenses';
   const CACHE_KEY_LAST_SYNC = 'cash_register_last_sync';
 
   const loadData = async (forceRefresh = false) => {
     try {
-      // Try to load from cache first
       const cachedRecords = localStorage.getItem(CACHE_KEY_RECORDS);
       const cachedExpenses = localStorage.getItem(CACHE_KEY_EXPENSES);
       const lastSync = localStorage.getItem(CACHE_KEY_LAST_SYNC);
       const now = Date.now();
-      const cacheMaxAge = 5 * 60 * 1000; // 5 minutes
+      const cacheMaxAge = 5 * 60 * 1000;
 
       if (!forceRefresh && cachedRecords && cachedExpenses && lastSync && (now - parseInt(lastSync)) < cacheMaxAge) {
         setRecords(JSON.parse(cachedRecords));
@@ -134,13 +186,11 @@ export default function CashRegister() {
 
       if (expensesError) throw expensesError;
 
-      // Cache the data
       localStorage.setItem(CACHE_KEY_RECORDS, JSON.stringify(recordsData || []));
       localStorage.setItem(CACHE_KEY_EXPENSES, JSON.stringify(expensesData || []));
       localStorage.setItem(CACHE_KEY_LAST_SYNC, now.toString());
 
       setRecords(recordsData || []);
-      setExpenses((expensesData || []) as CashExpense[]);
       setExpenses(expensesData || []);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -154,7 +204,7 @@ export default function CashRegister() {
     if (pinInput === ADMIN_PIN) {
       if (pendingAdminAction === 'purchase') {
         setShowPinDialog(false);
-        setShowPurchaseDialog(true);
+        setShowPurchaseExpenseDialog(true);
       } else if (pendingAdminAction === 'salary') {
         setShowPinDialog(false);
         setShowSalaryDialog(true);
@@ -186,15 +236,9 @@ export default function CashRegister() {
   const syncSalesFromLoyverse = async (date: string) => {
     setSyncing(true);
     try {
-      // Calculate 5AM-5AM period for the date in Manila timezone
       const targetDate = new Date(date + 'T00:00:00');
-      const manilaOffset = 8 * 60;
-      
-      // Start: target date 5AM Manila = target date -3 hours UTC
       const startDate = new Date(targetDate.getTime());
       startDate.setHours(5 - 8, 0, 0, 0);
-      
-      // End: next day 5AM Manila
       const endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
       
       const { data, error } = await supabase.functions.invoke('loyverse-payments', {
@@ -204,7 +248,6 @@ export default function CashRegister() {
       if (error) throw error;
 
       if (data?.summary) {
-        // Check if record exists
         const { data: existing } = await supabase
           .from('cash_register')
           .select('id, purchases, salaries, other_expenses')
@@ -212,7 +255,6 @@ export default function CashRegister() {
           .single();
 
         if (existing) {
-          // Update existing record, preserve expense data
           await supabase
             .from('cash_register')
             .update({
@@ -221,7 +263,6 @@ export default function CashRegister() {
             })
             .eq('id', existing.id);
         } else {
-          // Create new record
           await supabase
             .from('cash_register')
             .insert({
@@ -253,7 +294,6 @@ export default function CashRegister() {
     const date = format(new Date(), 'yyyy-MM-dd');
 
     try {
-      // Get or create today's record
       let { data: existing } = await supabase
         .from('cash_register')
         .select('*')
@@ -261,7 +301,6 @@ export default function CashRegister() {
         .single();
 
       if (!existing) {
-        // Create new record with expected sales from Loyverse
         await syncSalesFromLoyverse(date);
         
         const { data: newRecord } = await supabase
@@ -301,7 +340,6 @@ export default function CashRegister() {
     const date = format(new Date(), 'yyyy-MM-dd');
 
     try {
-      // Get or create today's record
       let { data: existing } = await supabase
         .from('cash_register')
         .select('*')
@@ -322,7 +360,6 @@ export default function CashRegister() {
       }
 
       if (existing) {
-        // Add expense record
         await supabase
           .from('cash_expenses')
           .insert({
@@ -332,7 +369,6 @@ export default function CashRegister() {
             description
           });
 
-        // Update category total
         const field = category === 'purchases' ? 'purchases' : 
                       category === 'salaries' ? 'salaries' : 'other_expenses';
         const currentValue = existing[field] || 0;
@@ -363,7 +399,7 @@ export default function CashRegister() {
     setShowExpenseDialog(false);
   };
 
-  const handleAddPurchase = () => {
+  const handleAddPurchaseExpense = () => {
     const amount = parseInt(expenseAmount);
     if (!amount || amount <= 0) {
       toast.error('Enter valid amount');
@@ -372,7 +408,7 @@ export default function CashRegister() {
     addExpense('purchases', amount, expenseDescription);
     setExpenseAmount('');
     setExpenseDescription('');
-    setShowPurchaseDialog(false);
+    setShowPurchaseExpenseDialog(false);
   };
 
   const handleAddSalary = () => {
@@ -397,7 +433,6 @@ export default function CashRegister() {
         .delete()
         .eq('id', expenseId);
 
-      // Update the total in cash_register
       const record = records.find(r => r.id === expense.cash_register_id);
       if (record) {
         const field = category === 'purchases' ? 'purchases' : 
@@ -491,6 +526,121 @@ export default function CashRegister() {
     }
   };
 
+  // ============= PURCHASE ORDERS FUNCTIONS =============
+
+  const fetchPurchaseData = async () => {
+    setPurchaseLoading(true);
+    setRemovedItems(new Set());
+    
+    try {
+      const { data: response, error } = await supabase.functions.invoke('loyverse-purchase-request');
+
+      if (error) throw error;
+      if (!response.success) throw new Error(response.error);
+
+      setPurchaseData(response);
+      toast.success(`Analyzed ${response.totalReceipts} receipts, ${response.recommendations.length} products`);
+    } catch (error: any) {
+      console.error('Error fetching purchase data:', error);
+      toast.error(error.message || 'Failed to fetch data');
+    } finally {
+      setPurchaseLoading(false);
+    }
+  };
+
+  const sendToTelegram = async (action: 'purchase' | 'cash') => {
+    const isCash = action === 'cash';
+    if (isCash) {
+      setSendingCash(true);
+    } else {
+      setSendingPurchase(true);
+    }
+    
+    try {
+      const { data: response, error } = await supabase.functions.invoke('telegram-notify', {
+        body: { action }
+      });
+
+      if (error) throw error;
+      if (!response.success) throw new Error(response.error || 'Failed to send');
+
+      toast.success(isCash ? 'Cash report sent to Telegram' : 'Purchase order sent to Telegram');
+    } catch (error: any) {
+      console.error('Error sending to Telegram:', error);
+      toast.error(error.message || 'Failed to send to Telegram');
+    } finally {
+      if (isCash) {
+        setSendingCash(false);
+      } else {
+        setSendingPurchase(false);
+      }
+    }
+  };
+
+  const removeItem = (itemName: string) => {
+    setRemovedItems(prev => new Set([...prev, itemName]));
+  };
+
+  const cleanProductName = (name: string) => {
+    return name
+      .replace(/\s*\(from towers\)/gi, '')
+      .replace(/\s*\(from baskets\)/gi, '')
+      .trim();
+  };
+
+  const filteredRecommendations = purchaseData?.recommendations
+    .filter(item => !removedItems.has(item.name) && (showAllItems || item.toOrder > 0))
+    .sort((a, b) => {
+      const categoryOrder = ['beer', 'spirits', 'cocktails', 'soft', 'other'];
+      const catA = categoryOrder.indexOf(a.category);
+      const catB = categoryOrder.indexOf(b.category);
+      if (catA !== catB) return catA - catB;
+      if (b.toOrder !== a.toOrder) return b.toOrder - a.toOrder;
+      return cleanProductName(a.name).localeCompare(cleanProductName(b.name));
+    }) || [];
+
+  const exportPurchaseToCSV = () => {
+    if (!purchaseData) return;
+
+    const headers = ['Item', 'Supplier', 'Sold (3d)', 'Avg/Day', 'In Stock', 'Need', 'Case Size', 'Cases'];
+    const rows = filteredRecommendations.map(item => [
+      cleanProductName(item.name),
+      item.supplier || 'Other',
+      item.totalQuantity,
+      item.avgPerDay,
+      item.inStock,
+      item.toOrder,
+      item.caseSize,
+      item.casesToOrder,
+    ]);
+
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `purchase-order-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const totalUnits = filteredRecommendations.reduce((sum, item) => sum + item.toOrder, 0);
+  const totalCases = filteredRecommendations.reduce((sum, item) => sum + item.casesToOrder, 0);
+
+  const supplierOrder = ['San Miguel', 'Tanduay', 'Soft Drinks', 'Snacks', 'Others'];
+  const groupedBySupplier = filteredRecommendations.reduce((acc, item) => {
+    const supplier = item.supplier || 'Other';
+    if (!acc[supplier]) acc[supplier] = [];
+    acc[supplier].push(item);
+    return acc;
+  }, {} as Record<string, PurchaseItem[]>);
+  
+  const sortedSuppliers = Object.keys(groupedBySupplier).sort((a, b) => {
+    return supplierOrder.indexOf(a) - supplierOrder.indexOf(b);
+  });
+
+  // ============= RENDER =============
+
   if (loading) {
     return (
       <div className="p-6 space-y-6">
@@ -504,518 +654,788 @@ export default function CashRegister() {
     );
   }
 
-  // Employee View
-  if (!isAdminMode) {
-    return (
-      <div className="p-4 sm:p-6 space-y-6 max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold">Касса</h1>
-            <p className="text-muted-foreground text-sm">
-              {format(new Date(), 'dd MMMM yyyy')}
-            </p>
+  // ============= DIALOGS (shared) =============
+
+  const renderDialogs = () => (
+    <>
+      {/* Cash Input Dialog */}
+      <Dialog open={showCashDialog} onOpenChange={setShowCashDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-green-600" />
+              Внести кассу
+            </DialogTitle>
+            <DialogDescription>
+              Введите фактическую сумму в кассе
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <Input
+              type="number"
+              placeholder="Сумма"
+              value={actualCashInput}
+              onChange={(e) => setActualCashInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saveActualCash()}
+              className="text-2xl h-14 text-center"
+              autoFocus
+            />
+            <Button onClick={saveActualCash} className="w-full h-12 bg-green-600 hover:bg-green-700">
+              Сохранить
+            </Button>
           </div>
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => requestAdminAction('admin')}
-          >
-            <Lock className="w-4 h-4" />
-          </Button>
-        </div>
+        </DialogContent>
+      </Dialog>
 
-        {/* Today's Summary Card */}
-        {todayRecord && (
-          <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-            <CardContent className="pt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs text-muted-foreground">Продажи</div>
-                  <div className="text-xl font-bold text-green-600">₱{todayRecord.expected_sales.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Расходы</div>
-                  <div className="text-xl font-bold text-red-600">₱{todayTotalExpenses.toLocaleString()}</div>
-                </div>
-                {todayRecord.actual_cash != null && (
-                  <>
-                    <div>
-                      <div className="text-xs text-muted-foreground">В кассе</div>
-                      <div className="text-xl font-bold">₱{todayRecord.actual_cash.toLocaleString()}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Расхождение</div>
-                      <div className={cn(
-                        "text-xl font-bold",
-                        todayRecord.discrepancy === 0 ? "text-green-600" :
-                        todayRecord.discrepancy && todayRecord.discrepancy < 0 ? "text-red-600" : "text-green-600"
-                      )}>
-                        {todayRecord.discrepancy === 0 ? '✓' : 
-                          (todayRecord.discrepancy && todayRecord.discrepancy > 0 ? '+' : '') + 
-                          '₱' + Math.abs(todayRecord.discrepancy || 0).toLocaleString()}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+      {/* Expense Dialog */}
+      <Dialog open={showExpenseDialog} onOpenChange={setShowExpenseDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-purple-600" />
+              Добавить расход
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <Input
+              type="number"
+              placeholder="Сумма"
+              value={expenseAmount}
+              onChange={(e) => setExpenseAmount(e.target.value)}
+              className="text-xl h-12"
+              autoFocus
+            />
+            <Input
+              placeholder="Описание (что купили?)"
+              value={expenseDescription}
+              onChange={(e) => setExpenseDescription(e.target.value)}
+            />
+            <Button onClick={handleAddExpense} className="w-full h-12 bg-purple-600 hover:bg-purple-700">
+              Добавить
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-        {/* Big Action Buttons - Like Pause All */}
-        <div className="grid grid-cols-2 gap-4">
-          {/* Enter Cash Button */}
-          <Button
-            variant="default"
-            className="h-24 flex flex-col gap-2 text-lg font-semibold bg-green-600 hover:bg-green-700"
-            onClick={() => setShowCashDialog(true)}
-          >
-            <Wallet className="w-8 h-8" />
-            Внести кассу
-          </Button>
+      {/* Purchase Expense Dialog (Admin) */}
+      <Dialog open={showPurchaseExpenseDialog} onOpenChange={setShowPurchaseExpenseDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-orange-600" />
+              Добавить закупку
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <Input
+              type="number"
+              placeholder="Сумма"
+              value={expenseAmount}
+              onChange={(e) => setExpenseAmount(e.target.value)}
+              className="text-xl h-12"
+              autoFocus
+            />
+            <Input
+              placeholder="Описание"
+              value={expenseDescription}
+              onChange={(e) => setExpenseDescription(e.target.value)}
+            />
+            <Button onClick={handleAddPurchaseExpense} className="w-full h-12 bg-orange-600 hover:bg-orange-700">
+              Добавить закупку
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-          {/* Add Expense Button */}
-          <Button
-            variant="default"
-            className="h-24 flex flex-col gap-2 text-lg font-semibold bg-purple-600 hover:bg-purple-700"
-            onClick={() => setShowExpenseDialog(true)}
-          >
-            <Receipt className="w-8 h-8" />
-            Расход
-          </Button>
+      {/* Salary Dialog (Admin) */}
+      <Dialog open={showSalaryDialog} onOpenChange={setShowSalaryDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-blue-600" />
+              Добавить зарплату
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <Input
+              type="number"
+              placeholder="Сумма"
+              value={expenseAmount}
+              onChange={(e) => setExpenseAmount(e.target.value)}
+              className="text-xl h-12"
+              autoFocus
+            />
+            <Input
+              placeholder="Кому (имя)"
+              value={expenseDescription}
+              onChange={(e) => setExpenseDescription(e.target.value)}
+            />
+            <Button onClick={handleAddSalary} className="w-full h-12 bg-blue-600 hover:bg-blue-700">
+              Добавить зарплату
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-          {/* Add Purchase Button - Requires Admin */}
-          <Button
-            variant="outline"
-            className="h-24 flex flex-col gap-2 text-lg font-semibold border-orange-500/50 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950"
-            onClick={() => requestAdminAction('purchase')}
-          >
-            <Package className="w-8 h-8" />
-            <div className="flex items-center gap-1">
-              Закупки
-              <Lock className="w-3 h-3" />
+      {/* PIN Dialog */}
+      <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-5 h-5" />
+              Введите PIN
+            </DialogTitle>
+            <DialogDescription>
+              {pendingAdminAction === 'purchase' && 'Для добавления закупок требуется PIN'}
+              {pendingAdminAction === 'salary' && 'Для добавления зарплат требуется PIN'}
+              {pendingAdminAction === 'admin' && 'Войти в режим администратора'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <Input
+              type="password"
+              placeholder="PIN"
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
+              className={cn("text-center text-2xl h-14", pinError && 'border-destructive')}
+              autoFocus
+            />
+            {pinError && <p className="text-sm text-destructive text-center">{pinError}</p>}
+            <Button onClick={handleAdminLogin} className="w-full h-12">
+              Подтвердить
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+
+  // ============= CASH REGISTER VIEW =============
+
+  const renderCashRegister = () => {
+    // Employee View
+    if (!isAdminMode) {
+      return (
+        <div className="space-y-6 max-w-2xl mx-auto">
+          {/* Header */}
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-bold">Касса</h2>
+              <p className="text-muted-foreground text-sm">
+                {format(new Date(), 'dd MMMM yyyy')}
+              </p>
             </div>
-          </Button>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => requestAdminAction('admin')}
+            >
+              <Lock className="w-4 h-4" />
+            </Button>
+          </div>
 
-          {/* Add Salary Button - Requires Admin */}
-          <Button
-            variant="outline"
-            className="h-24 flex flex-col gap-2 text-lg font-semibold border-blue-500/50 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
-            onClick={() => requestAdminAction('salary')}
-          >
-            <Users className="w-8 h-8" />
-            <div className="flex items-center gap-1">
-              Зарплаты
-              <Lock className="w-3 h-3" />
-            </div>
-          </Button>
-        </div>
-
-        {/* Today's Expenses List */}
-        {todayExpenses.length > 0 && (
-          <Card>
-            <CardHeader className="py-3">
-              <CardTitle className="text-base">Расходы сегодня</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {todayExpenses.map((expense) => (
-                <div key={expense.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    {getCategoryIcon(expense.category)}
-                    <div>
-                      <div className="font-medium">₱{expense.amount.toLocaleString()}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {expense.description || getCategoryLabel(expense.category)}
-                      </div>
-                    </div>
+          {/* Today's Summary Card */}
+          {todayRecord && (
+            <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+              <CardContent className="pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Продажи</div>
+                    <div className="text-xl font-bold text-green-600">₱{todayRecord.expected_sales.toLocaleString()}</div>
                   </div>
-                  <Badge variant="secondary">
-                    {getCategoryLabel(expense.category)}
-                  </Badge>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Расходы</div>
+                    <div className="text-xl font-bold text-red-600">₱{todayTotalExpenses.toLocaleString()}</div>
+                  </div>
+                  {todayRecord.actual_cash != null && (
+                    <>
+                      <div>
+                        <div className="text-xs text-muted-foreground">В кассе</div>
+                        <div className="text-xl font-bold">₱{todayRecord.actual_cash.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Расхождение</div>
+                        <div className={cn(
+                          "text-xl font-bold",
+                          todayRecord.discrepancy === 0 ? "text-green-600" :
+                          todayRecord.discrepancy && todayRecord.discrepancy < 0 ? "text-red-600" : "text-green-600"
+                        )}>
+                          {todayRecord.discrepancy === 0 ? '✓' : 
+                            (todayRecord.discrepancy && todayRecord.discrepancy > 0 ? '+' : '') + 
+                            '₱' + Math.abs(todayRecord.discrepancy || 0).toLocaleString()}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+              </CardContent>
+            </Card>
+          )}
 
-        {/* Cash Input Dialog */}
-        <Dialog open={showCashDialog} onOpenChange={setShowCashDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-green-600" />
-                Внести кассу
-              </DialogTitle>
-              <DialogDescription>
-                Введите фактическую сумму в кассе
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <Input
-                type="number"
-                placeholder="Сумма"
-                value={actualCashInput}
-                onChange={(e) => setActualCashInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && saveActualCash()}
-                className="text-2xl h-14 text-center"
-                autoFocus
-              />
-              <Button onClick={saveActualCash} className="w-full h-12 bg-green-600 hover:bg-green-700">
-                Сохранить
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+          {/* Big Action Buttons */}
+          <div className="grid grid-cols-2 gap-4">
+            <Button
+              variant="default"
+              className="h-24 flex flex-col gap-2 text-lg font-semibold bg-green-600 hover:bg-green-700"
+              onClick={() => setShowCashDialog(true)}
+            >
+              <Wallet className="w-8 h-8" />
+              Внести кассу
+            </Button>
 
-        {/* Expense Dialog */}
-        <Dialog open={showExpenseDialog} onOpenChange={setShowExpenseDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-purple-600" />
-                Добавить расход
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <Input
-                type="number"
-                placeholder="Сумма"
-                value={expenseAmount}
-                onChange={(e) => setExpenseAmount(e.target.value)}
-                className="text-xl h-12"
-                autoFocus
-              />
-              <Input
-                placeholder="Описание (что купили?)"
-                value={expenseDescription}
-                onChange={(e) => setExpenseDescription(e.target.value)}
-              />
-              <Button onClick={handleAddExpense} className="w-full h-12 bg-purple-600 hover:bg-purple-700">
-                Добавить
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            <Button
+              variant="default"
+              className="h-24 flex flex-col gap-2 text-lg font-semibold bg-purple-600 hover:bg-purple-700"
+              onClick={() => setShowExpenseDialog(true)}
+            >
+              <Receipt className="w-8 h-8" />
+              Расход
+            </Button>
 
-        {/* Purchase Dialog (Admin) */}
-        <Dialog open={showPurchaseDialog} onOpenChange={setShowPurchaseDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Package className="w-5 h-5 text-orange-600" />
-                Добавить закупку
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <Input
-                type="number"
-                placeholder="Сумма"
-                value={expenseAmount}
-                onChange={(e) => setExpenseAmount(e.target.value)}
-                className="text-xl h-12"
-                autoFocus
-              />
-              <Input
-                placeholder="Описание"
-                value={expenseDescription}
-                onChange={(e) => setExpenseDescription(e.target.value)}
-              />
-              <Button onClick={handleAddPurchase} className="w-full h-12 bg-orange-600 hover:bg-orange-700">
-                Добавить закупку
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Salary Dialog (Admin) */}
-        <Dialog open={showSalaryDialog} onOpenChange={setShowSalaryDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-blue-600" />
-                Добавить зарплату
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <Input
-                type="number"
-                placeholder="Сумма"
-                value={expenseAmount}
-                onChange={(e) => setExpenseAmount(e.target.value)}
-                className="text-xl h-12"
-                autoFocus
-              />
-              <Input
-                placeholder="Кому (имя)"
-                value={expenseDescription}
-                onChange={(e) => setExpenseDescription(e.target.value)}
-              />
-              <Button onClick={handleAddSalary} className="w-full h-12 bg-blue-600 hover:bg-blue-700">
-                Добавить зарплату
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* PIN Dialog */}
-        <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Lock className="w-5 h-5" />
-                Введите PIN
-              </DialogTitle>
-              <DialogDescription>
-                {pendingAdminAction === 'purchase' && 'Для добавления закупок требуется PIN'}
-                {pendingAdminAction === 'salary' && 'Для добавления зарплат требуется PIN'}
-                {pendingAdminAction === 'admin' && 'Войти в режим администратора'}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <Input
-                type="password"
-                placeholder="PIN"
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
-                className={cn("text-center text-2xl h-14", pinError && 'border-destructive')}
-                autoFocus
-              />
-              {pinError && <p className="text-sm text-destructive text-center">{pinError}</p>}
-              <Button onClick={handleAdminLogin} className="w-full h-12">
-                Подтвердить
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-    );
-  }
-
-  // Admin View (Full)
-  return (
-    <div className="p-4 sm:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Касса</h1>
-          <p className="text-muted-foreground text-sm">Режим администратора</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-40"
-          />
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => syncSalesFromLoyverse(selectedDate)}
-            disabled={syncing}
-          >
-            <RefreshCw className={cn("w-4 h-4 mr-2", syncing && 'animate-spin')} />
-            Sync
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportToCSV}>
-            <Download className="w-4 h-4 mr-2" />
-            Excel
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={async () => {
-              setExportingToSheets(true);
-              try {
-                const { data, error } = await supabase.functions.invoke('google-sheets-sync');
-                if (error) throw error;
-                toast.success(data?.message || 'Synced to Google Sheets');
-              } catch (error) {
-                console.error('Error syncing to Google Sheets:', error);
-                toast.error('Failed to sync');
-              } finally {
-                setExportingToSheets(false);
-              }
-            }}
-            disabled={exportingToSheets}
-          >
-            {exportingToSheets ? (
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
-            )}
-            Sheets
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => setIsAdminMode(false)}
-          >
-            <EyeOff className="w-4 h-4 mr-2" />
-            Выйти
-          </Button>
-        </div>
-      </div>
-
-      {/* Overall Summary */}
-      <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <FileSpreadsheet className="w-5 h-5" />
-            Итого за {records.length} дней
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div>
-              <div className="text-xs text-muted-foreground">Продажи</div>
-              <div className="text-lg font-bold text-green-600">₱{overallTotals.totalSales.toLocaleString()}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Себестоимость</div>
-              <div className="text-lg font-bold text-muted-foreground">₱{overallTotals.totalCost.toLocaleString()}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Валовая прибыль</div>
-              <div className="text-lg font-bold text-green-600">₱{(overallTotals.totalSales - overallTotals.totalCost).toLocaleString()}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Расходы</div>
-              <div className="text-lg font-bold text-red-600">₱{(overallTotals.totalPurchases + overallTotals.totalSalaries + overallTotals.totalOther).toLocaleString()}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Чистая прибыль</div>
-              <div className="text-lg font-bold">
-                ₱{(overallTotals.totalSales - overallTotals.totalCost - overallTotals.totalPurchases - overallTotals.totalSalaries - overallTotals.totalOther).toLocaleString()}
+            <Button
+              variant="outline"
+              className="h-24 flex flex-col gap-2 text-lg font-semibold border-orange-500/50 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950"
+              onClick={() => requestAdminAction('purchase')}
+            >
+              <Package className="w-8 h-8" />
+              <div className="flex items-center gap-1">
+                Закупки
+                <Lock className="w-3 h-3" />
               </div>
-            </div>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-24 flex flex-col gap-2 text-lg font-semibold border-blue-500/50 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
+              onClick={() => requestAdminAction('salary')}
+            >
+              <Users className="w-8 h-8" />
+              <div className="flex items-center gap-1">
+                Зарплаты
+                <Lock className="w-3 h-3" />
+              </div>
+            </Button>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Quick Actions for Admin */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Button
-          variant="outline"
-          className="h-16 flex flex-col gap-1 border-green-500/50 hover:bg-green-50 dark:hover:bg-green-950"
-          onClick={() => setShowCashDialog(true)}
-        >
-          <Wallet className="w-5 h-5 text-green-600" />
-          <span className="text-sm">Внести кассу</span>
-        </Button>
-        <Button
-          variant="outline"
-          className="h-16 flex flex-col gap-1 border-purple-500/50 hover:bg-purple-50 dark:hover:bg-purple-950"
-          onClick={() => setShowExpenseDialog(true)}
-        >
-          <Receipt className="w-5 h-5 text-purple-600" />
-          <span className="text-sm">Расход</span>
-        </Button>
-        <Button
-          variant="outline"
-          className="h-16 flex flex-col gap-1 border-orange-500/50 hover:bg-orange-50 dark:hover:bg-orange-950"
-          onClick={() => setShowPurchaseDialog(true)}
-        >
-          <Package className="w-5 h-5 text-orange-600" />
-          <span className="text-sm">Закупки</span>
-        </Button>
-        <Button
-          variant="outline"
-          className="h-16 flex flex-col gap-1 border-blue-500/50 hover:bg-blue-50 dark:hover:bg-blue-950"
-          onClick={() => setShowSalaryDialog(true)}
-        >
-          <Users className="w-5 h-5 text-blue-600" />
-          <span className="text-sm">Зарплаты</span>
-        </Button>
-      </div>
-
-      {/* History Table */}
-      <Card>
-        <CardHeader className="py-3">
-          <CardTitle className="text-base">История</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 px-2">Дата</th>
-                  <th className="text-right py-2 px-2">Продажи</th>
-                  <th className="text-right py-2 px-2">Расходы</th>
-                  <th className="text-right py-2 px-2">Касса</th>
-                  <th className="text-right py-2 px-2">Расх.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.slice(0, 30).map((record) => {
-                  const totalExp = record.purchases + record.salaries + record.other_expenses;
-                  return (
-                    <tr key={record.id} className="border-b hover:bg-muted/50">
-                      <td className="py-2 px-2">{record.date}</td>
-                      <td className="text-right py-2 px-2 text-green-600">₱{record.expected_sales.toLocaleString()}</td>
-                      <td className="text-right py-2 px-2 text-red-600">₱{totalExp.toLocaleString()}</td>
-                      <td className="text-right py-2 px-2">
-                        {record.actual_cash != null ? `₱${record.actual_cash.toLocaleString()}` : '—'}
-                      </td>
-                      <td className={cn(
-                        "text-right py-2 px-2",
-                        record.discrepancy === 0 ? "text-green-600" :
-                        record.discrepancy && record.discrepancy < 0 ? "text-red-600" : "text-green-600"
-                      )}>
-                        {record.discrepancy != null ? (
-                          record.discrepancy === 0 ? '✓' : 
-                          (record.discrepancy > 0 ? '+' : '') + `₱${record.discrepancy.toLocaleString()}`
-                        ) : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Expenses Detail */}
-      {expenses.length > 0 && (
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-base">Последние расходы</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {expenses.slice(0, 20).map((expense) => {
-              const record = records.find(r => r.id === expense.cash_register_id);
-              return (
-                <div key={expense.id} className="flex items-center justify-between p-2 bg-secondary/50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    {getCategoryIcon(expense.category)}
-                    <div>
-                      <div className="font-medium">₱{expense.amount.toLocaleString()}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {record?.date} • {expense.description || getCategoryLabel(expense.category)}
+          {/* Today's Expenses List */}
+          {todayExpenses.length > 0 && (
+            <Card>
+              <CardHeader className="py-3">
+                <CardTitle className="text-base">Расходы сегодня</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {todayExpenses.map((expense) => (
+                  <div key={expense.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      {getCategoryIcon(expense.category)}
+                      <div>
+                        <div className="font-medium">₱{expense.amount.toLocaleString()}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {expense.description || getCategoryLabel(expense.category)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="secondary">
                       {getCategoryLabel(expense.category)}
                     </Badge>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => deleteExpense(expense.id, expense.category, expense.amount)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
                   </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      );
+    }
+
+    // Admin View
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold">Касса</h2>
+            <p className="text-muted-foreground text-sm">Режим администратора</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-40"
+            />
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => syncSalesFromLoyverse(selectedDate)}
+              disabled={syncing}
+            >
+              <RefreshCw className={cn("w-4 h-4 mr-2", syncing && 'animate-spin')} />
+              Sync
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportToCSV}>
+              <Download className="w-4 h-4 mr-2" />
+              Excel
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={async () => {
+                setExportingToSheets(true);
+                try {
+                  const { data, error } = await supabase.functions.invoke('google-sheets-sync');
+                  if (error) throw error;
+                  toast.success(data?.message || 'Synced to Google Sheets');
+                } catch (error) {
+                  console.error('Error syncing to Google Sheets:', error);
+                  toast.error('Failed to sync');
+                } finally {
+                  setExportingToSheets(false);
+                }
+              }}
+              disabled={exportingToSheets}
+            >
+              {exportingToSheets ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+              )}
+              Sheets
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setIsAdminMode(false)}
+            >
+              <EyeOff className="w-4 h-4 mr-2" />
+              Выйти
+            </Button>
+          </div>
+        </div>
+
+        {/* Overall Summary */}
+        <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FileSpreadsheet className="w-5 h-5" />
+              Итого за {records.length} дней
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div>
+                <div className="text-xs text-muted-foreground">Продажи</div>
+                <div className="text-lg font-bold text-green-600">₱{overallTotals.totalSales.toLocaleString()}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Себестоимость</div>
+                <div className="text-lg font-bold text-muted-foreground">₱{overallTotals.totalCost.toLocaleString()}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Валовая прибыль</div>
+                <div className="text-lg font-bold text-green-600">₱{(overallTotals.totalSales - overallTotals.totalCost).toLocaleString()}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Расходы</div>
+                <div className="text-lg font-bold text-red-600">₱{(overallTotals.totalPurchases + overallTotals.totalSalaries + overallTotals.totalOther).toLocaleString()}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Чистая прибыль</div>
+                <div className="text-lg font-bold">
+                  ₱{(overallTotals.totalSales - overallTotals.totalCost - overallTotals.totalPurchases - overallTotals.totalSalaries - overallTotals.totalOther).toLocaleString()}
                 </div>
-              );
-            })}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Button
+            variant="outline"
+            className="h-16 flex flex-col gap-1 border-green-500/50 hover:bg-green-50 dark:hover:bg-green-950"
+            onClick={() => setShowCashDialog(true)}
+          >
+            <Wallet className="w-5 h-5 text-green-600" />
+            <span className="text-sm">Внести кассу</span>
+          </Button>
+          <Button
+            variant="outline"
+            className="h-16 flex flex-col gap-1 border-purple-500/50 hover:bg-purple-50 dark:hover:bg-purple-950"
+            onClick={() => setShowExpenseDialog(true)}
+          >
+            <Receipt className="w-5 h-5 text-purple-600" />
+            <span className="text-sm">Расход</span>
+          </Button>
+          <Button
+            variant="outline"
+            className="h-16 flex flex-col gap-1 border-orange-500/50 hover:bg-orange-50 dark:hover:bg-orange-950"
+            onClick={() => setShowPurchaseExpenseDialog(true)}
+          >
+            <Package className="w-5 h-5 text-orange-600" />
+            <span className="text-sm">Закупки</span>
+          </Button>
+          <Button
+            variant="outline"
+            className="h-16 flex flex-col gap-1 border-blue-500/50 hover:bg-blue-50 dark:hover:bg-blue-950"
+            onClick={() => setShowSalaryDialog(true)}
+          >
+            <Users className="w-5 h-5 text-blue-600" />
+            <span className="text-sm">Зарплаты</span>
+          </Button>
+        </div>
+
+        {/* History Table */}
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base">История</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-2">Дата</th>
+                    <th className="text-right py-2 px-2">Продажи</th>
+                    <th className="text-right py-2 px-2">Расходы</th>
+                    <th className="text-right py-2 px-2">Касса</th>
+                    <th className="text-right py-2 px-2">Расх.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.slice(0, 30).map((record) => {
+                    const totalExp = record.purchases + record.salaries + record.other_expenses;
+                    return (
+                      <tr key={record.id} className="border-b hover:bg-muted/50">
+                        <td className="py-2 px-2">{record.date}</td>
+                        <td className="text-right py-2 px-2 text-green-600">₱{record.expected_sales.toLocaleString()}</td>
+                        <td className="text-right py-2 px-2 text-red-600">₱{totalExp.toLocaleString()}</td>
+                        <td className="text-right py-2 px-2">
+                          {record.actual_cash != null ? `₱${record.actual_cash.toLocaleString()}` : '—'}
+                        </td>
+                        <td className={cn(
+                          "text-right py-2 px-2",
+                          record.discrepancy === 0 ? "text-green-600" :
+                          record.discrepancy && record.discrepancy < 0 ? "text-red-600" : "text-green-600"
+                        )}>
+                          {record.discrepancy != null ? (
+                            record.discrepancy === 0 ? '✓' : 
+                            (record.discrepancy > 0 ? '+' : '') + `₱${record.discrepancy.toLocaleString()}`
+                          ) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Expenses Detail */}
+        {expenses.length > 0 && (
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-base">Последние расходы</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {expenses.slice(0, 20).map((expense) => {
+                const record = records.find(r => r.id === expense.cash_register_id);
+                return (
+                  <div key={expense.id} className="flex items-center justify-between p-2 bg-secondary/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      {getCategoryIcon(expense.category)}
+                      <div>
+                        <div className="font-medium">₱{expense.amount.toLocaleString()}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {record?.date} • {expense.description || getCategoryLabel(expense.category)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-xs">
+                        {getCategoryLabel(expense.category)}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => deleteExpense(expense.id, expense.category, expense.amount)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  };
+
+  // ============= PURCHASE ORDERS VIEW =============
+
+  const renderPurchaseOrders = () => (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Заказ закупок</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            На основе {purchaseData?.period.days || 3}-дневного анализа продаж
+          </p>
+        </div>
+        
+        <div className="flex flex-wrap gap-3 items-center">
+          <Button 
+            onClick={fetchPurchaseData} 
+            disabled={purchaseLoading} 
+            size="lg"
+            className="shadow-lg hover:shadow-xl transition-shadow"
+          >
+            {purchaseLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShoppingCart className="h-4 w-4 mr-2" />}
+            Сформировать
+          </Button>
+
+          {purchaseData && filteredRecommendations.length > 0 && (
+            <Button variant="outline" onClick={exportPurchaseToCSV} className="shadow-sm">
+              <Download className="h-4 w-4 mr-2" />
+              CSV
+            </Button>
+          )}
+          
+          {purchaseData && (
+            <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
+              <Switch 
+                id="show-all" 
+                checked={showAllItems} 
+                onCheckedChange={setShowAllItems}
+              />
+              <Label htmlFor="show-all" className="text-sm cursor-pointer">
+                {showAllItems ? "Все" : "Только заказ"}
+              </Label>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Telegram Buttons */}
+      <div className="flex flex-wrap gap-3">
+        <Button 
+          variant="outline" 
+          onClick={() => sendToTelegram('purchase')} 
+          disabled={sendingPurchase}
+          className="bg-blue-500/10 border-blue-500/30 text-blue-500 hover:bg-blue-500/20 hover:text-blue-400"
+        >
+          {sendingPurchase ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+          Отправить заказ
+        </Button>
+        <Button 
+          variant="outline" 
+          onClick={() => sendToTelegram('cash')} 
+          disabled={sendingCash}
+          className="bg-green-500/10 border-green-500/30 text-green-500 hover:bg-green-500/20 hover:text-green-400"
+        >
+          {sendingCash ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+          Отправить кассу
+        </Button>
+      </div>
+
+      {purchaseData && (
+        <>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="bg-gradient-to-br from-card to-muted/30 border-0 shadow-md">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Период анализа
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{purchaseData.period.days} <span className="text-lg font-normal text-muted-foreground">дней</span></p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  +{purchaseData.period.deliveryBuffer || 2} дня буфер
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-card to-muted/30 border-0 shadow-md">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Чеков
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{purchaseData.totalReceipts.toLocaleString()}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 shadow-md">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-primary uppercase tracking-wide">
+                  Единиц к заказу
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-primary">{totalUnits}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-card to-muted/30 border-0 shadow-md">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Коробок
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{totalCases}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Supplier Groups */}
+          {sortedSuppliers.map((supplier) => {
+            const items = groupedBySupplier[supplier];
+            const supplierConfig = SUPPLIER_CONFIG[supplier] || SUPPLIER_CONFIG['Others'];
+            const typedItems = items as PurchaseItem[];
+            const supplierCases = typedItems.reduce((sum, item) => sum + item.casesToOrder, 0);
+            
+            return (
+              <Card key={supplier} className="shadow-md border-0 overflow-hidden">
+                <CardHeader className="pb-3 bg-gradient-to-r from-muted/50 to-transparent">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Badge className={cn("text-sm px-3 py-1", supplierConfig.color)}>
+                        {supplierConfig.label}
+                      </Badge>
+                      <span className="text-muted-foreground text-sm font-normal">
+                        {typedItems.length} товаров
+                      </span>
+                    </div>
+                    <div className="text-sm font-medium text-muted-foreground">
+                      {supplierCases} коробок
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {typedItems.map((item, index) => (
+                      <div
+                        key={index}
+                        className={cn(
+                          "flex items-center justify-between p-3 rounded-lg gap-2 transition-all",
+                          item.toOrder > 0 
+                            ? "bg-gradient-to-r from-primary/5 to-transparent border border-primary/10" 
+                            : "bg-muted/30"
+                        )}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {cleanProductName(item.name)}
+                          </div>
+                          <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2">
+                            <span>S:{item.totalQuantity}</span>
+                            <span>A:{item.avgPerDay}/d</span>
+                            <span className={cn(
+                              "font-medium",
+                              item.inStock >= item.recommendedQty ? "text-green-500" : item.inStock > 0 ? "text-amber-500" : "text-red-500"
+                            )}>St:{item.inStock}</span>
+                          </div>
+                          {item.note && (
+                            <div className="text-xs text-primary/80 truncate italic">
+                              {item.note}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className={cn(
+                            "text-center px-2 py-1 rounded min-w-[45px]",
+                            item.toOrder > 0 ? "bg-primary/10" : "bg-muted/50"
+                          )}>
+                            <div className="text-[10px] text-muted-foreground">NEED</div>
+                            <div className={cn(
+                              "text-base font-bold",
+                              item.toOrder > 0 ? "text-primary" : "text-muted-foreground"
+                            )}>{item.toOrder}</div>
+                          </div>
+                          {item.caseSize > 1 && (
+                            <div className="text-center px-2 py-1 rounded bg-muted/50 min-w-[50px]">
+                              <div className="text-[10px] text-muted-foreground">CS({item.caseSize})</div>
+                              <div className="text-base font-bold">{item.casesToOrder}</div>
+                            </div>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 rounded-full"
+                            onClick={() => removeItem(item.name)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          {filteredRecommendations.length === 0 && (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                {removedItems.size > 0 
+                  ? "Все товары удалены. Нажмите Сформировать для обновления."
+                  : "Все товары в наличии!"
+                }
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+
+      {!purchaseData && !purchaseLoading && (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">Сформировать заказ</h3>
+            <p className="text-muted-foreground mb-4">
+              Анализирует 7-дневные продажи, сравнивает со складом и рекомендует что заказать.
+            </p>
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+
+  // ============= MAIN RENDER =============
+
+  return (
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="cash" className="flex items-center gap-2">
+            <Wallet className="w-4 h-4" />
+            Касса
+          </TabsTrigger>
+          <TabsTrigger value="purchases" className="flex items-center gap-2">
+            <ShoppingCart className="w-4 h-4" />
+            Закупки
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="cash">
+          {renderCashRegister()}
+        </TabsContent>
+
+        <TabsContent value="purchases">
+          {renderPurchaseOrders()}
+        </TabsContent>
+      </Tabs>
+
+      {renderDialogs()}
     </div>
   );
 }
