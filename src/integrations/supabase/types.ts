@@ -41,6 +41,57 @@ export type Database = {
         }
         Relationships: []
       }
+      bonuses: {
+        Row: {
+          amount: number
+          bonus_type: string
+          comment: string | null
+          created_at: string
+          date: string
+          employee_id: string
+          id: string
+          quantity: number | null
+          shift_id: string | null
+        }
+        Insert: {
+          amount: number
+          bonus_type: string
+          comment?: string | null
+          created_at?: string
+          date?: string
+          employee_id: string
+          id?: string
+          quantity?: number | null
+          shift_id?: string | null
+        }
+        Update: {
+          amount?: number
+          bonus_type?: string
+          comment?: string | null
+          created_at?: string
+          date?: string
+          employee_id?: string
+          id?: string
+          quantity?: number | null
+          shift_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonuses_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonuses_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cash_expenses: {
         Row: {
           amount: number
@@ -154,6 +205,33 @@ export type Database = {
         }
         Relationships: []
       }
+      employees: {
+        Row: {
+          active: boolean | null
+          created_at: string
+          id: string
+          name: string
+          position: string | null
+          telegram_id: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string
+          id?: string
+          name: string
+          position?: string | null
+          telegram_id?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string
+          id?: string
+          name?: string
+          position?: string | null
+          telegram_id?: string | null
+        }
+        Relationships: []
+      }
       queue: {
         Row: {
           added_at: number
@@ -180,6 +258,68 @@ export type Database = {
           timer_id?: string
         }
         Relationships: []
+      }
+      shifts: {
+        Row: {
+          base_salary: number | null
+          cash_approved: boolean | null
+          cash_comment: string | null
+          cash_difference: number | null
+          cash_handed_over: number | null
+          created_at: string
+          date: string
+          employee_id: string
+          expected_cash: number | null
+          id: string
+          shift_end: string | null
+          shift_start: string | null
+          shift_type: string | null
+          status: string | null
+          total_hours: number | null
+        }
+        Insert: {
+          base_salary?: number | null
+          cash_approved?: boolean | null
+          cash_comment?: string | null
+          cash_difference?: number | null
+          cash_handed_over?: number | null
+          created_at?: string
+          date?: string
+          employee_id: string
+          expected_cash?: number | null
+          id?: string
+          shift_end?: string | null
+          shift_start?: string | null
+          shift_type?: string | null
+          status?: string | null
+          total_hours?: number | null
+        }
+        Update: {
+          base_salary?: number | null
+          cash_approved?: boolean | null
+          cash_comment?: string | null
+          cash_difference?: number | null
+          cash_handed_over?: number | null
+          created_at?: string
+          date?: string
+          employee_id?: string
+          expected_cash?: number | null
+          id?: string
+          shift_end?: string | null
+          shift_start?: string | null
+          shift_type?: string | null
+          status?: string | null
+          total_hours?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shifts_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       timers: {
         Row: {

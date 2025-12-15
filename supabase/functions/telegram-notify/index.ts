@@ -510,11 +510,62 @@ serve(async (req) => {
   }
 
   try {
-    const { action, shift } = await req.json().catch(() => ({ action: 'test', shift: undefined }));
+    const body = await req.json().catch(() => ({ action: 'test' }));
+    const { action, shift, employeeName, time, totalHours, cashHandedOver, expectedCash, difference, bonuses, baseSalary, bonusType, amount } = body;
     
-    console.log(`📱 Telegram notify action: ${action}, shift: ${shift}`);
+    console.log(`📱 Telegram notify action: ${action}`);
     
     let message = '';
+    
+    // Employee shift notifications
+    if (action === 'shift_start') {
+      message = `🟢 <b>SHIFT STARTED</b>\n`;
+      message += `━━━━━━━━━━━━━━━━━━\n`;
+      message += `👤 Employee: <b>${employeeName || 'Unknown'}</b>\n`;
+      message += `⏰ Time: ${time || new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' })}\n`;
+      message += `\n✅ Shift is now active!`;
+    }
+    
+    if (action === 'shift_end') {
+      const formatMoney = (n: number) => `₱${n?.toLocaleString() || 0}`;
+      const diff = difference || 0;
+      const isShort = diff < 0;
+      
+      message = `🔴 <b>SHIFT ENDED</b>\n`;
+      message += `━━━━━━━━━━━━━━━━━━\n`;
+      message += `👤 Employee: <b>${employeeName || 'Unknown'}</b>\n`;
+      message += `⏱ Hours: ${totalHours || 0}h\n`;
+      message += `\n💰 <b>CASH</b>\n`;
+      message += `   Expected: ${formatMoney(expectedCash || 0)}\n`;
+      message += `   Handed: ${formatMoney(cashHandedOver || 0)}\n`;
+      
+      if (diff !== 0) {
+        message += `   ${isShort ? '📉' : '📈'} Difference: <b>${formatMoney(Math.abs(diff))}</b> ${isShort ? 'SHORT ⚠️' : 'OVER'}\n`;
+      } else {
+        message += `   ✅ No difference\n`;
+      }
+      
+      message += `\n💵 <b>EARNINGS</b>\n`;
+      message += `   Base: ${formatMoney(baseSalary || 500)}\n`;
+      message += `   Bonuses: ${formatMoney(bonuses || 0)}\n`;
+      message += `   Total: <b>${formatMoney((baseSalary || 500) + (bonuses || 0))}</b>`;
+    }
+    
+    if (action === 'bonus_added') {
+      const formatMoney = (n: number) => `₱${n?.toLocaleString() || 0}`;
+      const bonusLabels: Record<string, string> = {
+        'sold_goods': '🛍 Sold Goods',
+        'vip_room': '👑 VIP Room',
+        'hookah': '💨 Hookah',
+        'other': '📦 Other'
+      };
+      
+      message = `🎁 <b>BONUS ADDED</b>\n`;
+      message += `━━━━━━━━━━━━━━━━━━\n`;
+      message += `👤 Employee: <b>${employeeName || 'Unknown'}</b>\n`;
+      message += `📝 Type: ${bonusLabels[bonusType] || bonusType}\n`;
+      message += `💰 Amount: <b>${formatMoney(amount || 0)}</b>`;
+    }
     
     if (action === 'purchase' || action === 'all' || action === 'morning') {
       // Fetch purchase order data
