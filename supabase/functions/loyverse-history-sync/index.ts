@@ -49,7 +49,7 @@ serve(async (req) => {
       }, {});
     }
 
-    const results: { date: string; cashSales: number; totalSales: number; cost: number; status: string }[] = [];
+    const results: { date: string; cashSales: number; gcashSales: number; totalSales: number; cost: number; status: string }[] = [];
     
     for (let i = 0; i < days; i++) {
       const date = new Date();
@@ -84,8 +84,9 @@ serve(async (req) => {
           if (!cursor) break;
         }
 
-        // Calculate cash sales, total sales, and cost
+        // Calculate cash sales, gcash sales, total sales, and cost
         let cashSales = 0;
+        let gcashSales = 0;
         let totalSales = 0;
         let totalCost = 0;
         
@@ -107,20 +108,28 @@ serve(async (req) => {
             totalCost += receiptCost;
           }
           
-          // Calculate cash payments
+          // Calculate cash and gcash payments
           (receipt.payments || []).forEach((payment: any) => {
-            const paymentName = paymentTypesMap[payment.payment_type_id] || '';
-            if (paymentName.toLowerCase() === 'cash') {
+            const paymentName = (paymentTypesMap[payment.payment_type_id] || '').toLowerCase();
+            const amount = payment.money_amount || 0;
+            
+            if (paymentName === 'cash') {
               if (isRefund) {
-                cashSales -= Math.abs(payment.money_amount || 0);
+                cashSales -= Math.abs(amount);
               } else {
-                cashSales += payment.money_amount || 0;
+                cashSales += amount;
+              }
+            } else if (paymentName === 'gcash' || paymentName === 'g-cash' || paymentName.includes('gcash')) {
+              if (isRefund) {
+                gcashSales -= Math.abs(amount);
+              } else {
+                gcashSales += amount;
               }
             }
           });
         });
 
-        console.log(`💵 ${dateStr}: ${dayReceipts.length} receipts, Sales: ₱${Math.round(totalSales)}, Cost: ₱${Math.round(totalCost)}, Cash: ₱${Math.round(cashSales)}`);
+        console.log(`💵 ${dateStr}: ${dayReceipts.length} receipts, Sales: ₱${Math.round(totalSales)}, Cost: ₱${Math.round(totalCost)}, Cash: ₱${Math.round(cashSales)}, GCash: ₱${Math.round(gcashSales)}`);
 
         // Check if record exists to preserve expenses
         const { data: existingRecord } = await supabase
@@ -132,7 +141,9 @@ serve(async (req) => {
         // Upsert - preserve existing expenses
         const upsertData: Record<string, any> = {
           date: dateStr,
-          expected_sales: Math.round(cashSales),
+          expected_sales: Math.round(cashSales + gcashSales),
+          cash_expected: Math.round(cashSales),
+          gcash_expected: Math.round(gcashSales),
           cost: Math.round(totalCost),
         };
         
@@ -152,9 +163,9 @@ serve(async (req) => {
 
         if (upsertError) {
           console.error(`❌ Error upserting ${dateStr}:`, upsertError.message);
-          results.push({ date: dateStr, cashSales, totalSales, cost: totalCost, status: 'error: ' + upsertError.message });
+          results.push({ date: dateStr, cashSales, gcashSales, totalSales, cost: totalCost, status: 'error: ' + upsertError.message });
         } else {
-          results.push({ date: dateStr, cashSales, totalSales, cost: totalCost, status: 'synced' });
+          results.push({ date: dateStr, cashSales, gcashSales, totalSales, cost: totalCost, status: 'synced' });
         }
 
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -162,7 +173,7 @@ serve(async (req) => {
       } catch (dayError) {
         const errMsg = dayError instanceof Error ? dayError.message : 'Unknown error';
         console.error(`❌ Error processing ${dateStr}:`, errMsg);
-        results.push({ date: dateStr, cashSales: 0, totalSales: 0, cost: 0, status: 'error: ' + errMsg });
+        results.push({ date: dateStr, cashSales: 0, gcashSales: 0, totalSales: 0, cost: 0, status: 'error: ' + errMsg });
       }
     }
 
