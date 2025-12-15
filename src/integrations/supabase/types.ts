@@ -41,6 +41,86 @@ export type Database = {
         }
         Relationships: []
       }
+      cash_expenses: {
+        Row: {
+          amount: number
+          cash_register_id: string
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+        }
+        Insert: {
+          amount: number
+          cash_register_id: string
+          category: string
+          created_at?: string
+          description?: string | null
+          id?: string
+        }
+        Update: {
+          amount?: number
+          cash_register_id?: string
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_expenses_cash_register_id_fkey"
+            columns: ["cash_register_id"]
+            isOneToOne: false
+            referencedRelation: "cash_register"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_register: {
+        Row: {
+          actual_cash: number | null
+          created_at: string
+          date: string
+          discrepancy: number | null
+          expected_sales: number
+          id: string
+          notes: string | null
+          opening_balance: number
+          other_expenses: number
+          purchases: number
+          salaries: number
+          updated_at: string
+        }
+        Insert: {
+          actual_cash?: number | null
+          created_at?: string
+          date: string
+          discrepancy?: number | null
+          expected_sales?: number
+          id?: string
+          notes?: string | null
+          opening_balance?: number
+          other_expenses?: number
+          purchases?: number
+          salaries?: number
+          updated_at?: string
+        }
+        Update: {
+          actual_cash?: number | null
+          created_at?: string
+          date?: string
+          discrepancy?: number | null
+          expected_sales?: number
+          id?: string
+          notes?: string | null
+          opening_balance?: number
+          other_expenses?: number
+          purchases?: number
+          salaries?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       daily_stats: {
         Row: {
           created_at: string
