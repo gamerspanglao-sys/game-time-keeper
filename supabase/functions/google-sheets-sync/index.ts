@@ -507,6 +507,16 @@ serve(async (req) => {
           }
         }
         
+        // Format time duration as hours:minutes
+        const formatDuration = (hours: number, prefix: string): string => {
+          if (hours === 0) return '';
+          const h = Math.floor(hours);
+          const m = Math.round((hours - h) * 60);
+          if (h > 0 && m > 0) return `${prefix}${h}:${m.toString().padStart(2, '0')}`;
+          if (h > 0) return `${prefix}${h}:00`;
+          return `${prefix}0:${m.toString().padStart(2, '0')}`;
+        };
+        
         // Get bonuses for this shift
         const shiftBonuses = bonuses?.filter(b => b.shift_id === s.id) || [];
         const totalBonuses = shiftBonuses.reduce((sum, b) => sum + (b.amount || 0), 0);
@@ -527,8 +537,8 @@ serve(async (req) => {
           startTime,
           endTime,
           Number(hoursWorked).toFixed(1),
-          overtime > 0 ? `+${overtime.toFixed(1)}h` : '',
-          lateness > 0 ? `-${lateness.toFixed(1)}h` : '',
+          formatDuration(overtime, '+'),
+          formatDuration(lateness, '-'),
           baseSalary,
           totalBonuses || '',
           cashShortage || '',
