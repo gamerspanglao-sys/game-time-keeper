@@ -150,6 +150,7 @@ export default function Finance() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
   const [pendingAdminAction, setPendingAdminAction] = useState<'purchase' | 'salary' | 'admin' | null>(null);
+  const [viewMode, setViewMode] = useState<'shifts' | 'daily'>('daily'); // Default to daily view
   
   // Google Sheets
   const [exportingToSheets, setExportingToSheets] = useState(false);
@@ -560,6 +561,56 @@ export default function Finance() {
     totalDiscrepancy: acc.totalDiscrepancy + (r.discrepancy || 0),
     daysWithDiscrepancy: acc.daysWithDiscrepancy + (r.discrepancy && r.discrepancy !== 0 ? 1 : 0)
   }), { totalSales: 0, totalCost: 0, totalPurchases: 0, totalSalaries: 0, totalOther: 0, totalDiscrepancy: 0, daysWithDiscrepancy: 0 });
+
+  // Daily aggregated records (combines day + night shifts into single daily record)
+  interface DailyRecord {
+    date: string;
+    expected_sales: number;
+    cost: number;
+    purchases: number;
+    salaries: number;
+    other_expenses: number;
+    actual_cash: number | null;
+    discrepancy: number | null;
+    shifts: number; // how many shifts have data
+  }
+
+  const dailyRecords = React.useMemo(() => {
+    const dailyMap = new Map<string, DailyRecord>();
+    
+    records.forEach(r => {
+      const existing = dailyMap.get(r.date);
+      if (existing) {
+        existing.expected_sales += r.expected_sales;
+        existing.cost += (r.cost || 0);
+        existing.purchases += r.purchases;
+        existing.salaries += r.salaries;
+        existing.other_expenses += r.other_expenses;
+        existing.shifts += 1;
+        // Combine actual cash if both shifts have it
+        if (r.actual_cash != null) {
+          existing.actual_cash = (existing.actual_cash || 0) + r.actual_cash;
+        }
+        if (r.discrepancy != null) {
+          existing.discrepancy = (existing.discrepancy || 0) + r.discrepancy;
+        }
+      } else {
+        dailyMap.set(r.date, {
+          date: r.date,
+          expected_sales: r.expected_sales,
+          cost: r.cost || 0,
+          purchases: r.purchases,
+          salaries: r.salaries,
+          other_expenses: r.other_expenses,
+          actual_cash: r.actual_cash,
+          discrepancy: r.discrepancy,
+          shifts: 1
+        });
+      }
+    });
+    
+    return Array.from(dailyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }, [records]);
 
   const exportToCSV = () => {
     if (records.length === 0) {
@@ -1232,8 +1283,28 @@ export default function Finance() {
 
         {/* History Table */}
         <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-base">History ({records.length} records)</CardTitle>
+          <CardHeader className="py-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-base">
+              History ({viewMode === 'daily' ? `${dailyRecords.length} days` : `${records.length} shifts`})
+            </CardTitle>
+            <div className="flex border rounded-md overflow-hidden">
+              <Button
+                variant={viewMode === 'daily' ? 'default' : 'ghost'}
+                size="sm"
+                className="rounded-none text-xs"
+                onClick={() => setViewMode('daily')}
+              >
+                By Day
+              </Button>
+              <Button
+                variant={viewMode === 'shifts' ? 'default' : 'ghost'}
+                size="sm"
+                className="rounded-none text-xs"
+                onClick={() => setViewMode('shifts')}
+              >
+                By Shift
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -1241,7 +1312,7 @@ export default function Finance() {
                 <thead>
                   <tr className="border-b bg-muted/30">
                     <th className="text-left py-2 px-2 font-semibold">Date</th>
-                    <th className="text-left py-2 px-2 font-semibold">Shift</th>
+                    {viewMode === 'shifts' && <th className="text-left py-2 px-2 font-semibold">Shift</th>}
                     <th className="text-right py-2 px-2 font-semibold">Sales</th>
                     <th className="text-right py-2 px-2 font-semibold">Cost</th>
                     <th className="text-right py-2 px-2 font-semibold text-green-600">Gross</th>
@@ -1255,52 +1326,93 @@ export default function Finance() {
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map((record) => {
-                    const totalExp = record.purchases + record.salaries + record.other_expenses;
-                    const grossProfit = record.expected_sales - (record.cost || 0);
-                    const netProfit = grossProfit - totalExp;
-                    return (
-                      <tr key={record.id} className="border-b hover:bg-muted/50">
-                        <td className="py-2 px-2 whitespace-nowrap">{record.date}</td>
-                        <td className="py-2 px-2">
-                          <Badge variant={record.shift === 'day' ? 'default' : 'secondary'} className="text-xs">
-                            {record.shift === 'day' ? <Sun className="w-3 h-3 mr-1" /> : <Moon className="w-3 h-3 mr-1" />}
-                            {record.shift === 'day' ? 'D' : 'N'}
-                          </Badge>
-                        </td>
-                        <td className="text-right py-2 px-2 text-green-600">₱{record.expected_sales.toLocaleString()}</td>
-                        <td className="text-right py-2 px-2 text-muted-foreground">₱{(record.cost || 0).toLocaleString()}</td>
-                        <td className="text-right py-2 px-2 text-green-600 font-medium">₱{grossProfit.toLocaleString()}</td>
-                        <td className="text-right py-2 px-2 text-orange-500">{record.purchases > 0 ? `₱${record.purchases.toLocaleString()}` : '—'}</td>
-                        <td className="text-right py-2 px-2 text-blue-500">{record.salaries > 0 ? `₱${record.salaries.toLocaleString()}` : '—'}</td>
-                        <td className="text-right py-2 px-2 text-purple-500">{record.other_expenses > 0 ? `₱${record.other_expenses.toLocaleString()}` : '—'}</td>
-                        <td className="text-right py-2 px-2 text-red-500 font-medium">₱{totalExp.toLocaleString()}</td>
-                        <td className={cn(
-                          "text-right py-2 px-2 font-bold",
-                          netProfit >= 0 ? "text-green-600" : "text-red-600"
-                        )}>
-                          {netProfit >= 0 ? '+' : ''}₱{netProfit.toLocaleString()}
-                        </td>
-                        <td className="text-right py-2 px-2">
-                          {record.actual_cash != null ? `₱${record.actual_cash.toLocaleString()}` : '—'}
-                        </td>
-                        <td className={cn(
-                          "text-right py-2 px-2",
-                          record.discrepancy === 0 ? "text-green-600" :
-                          record.discrepancy && record.discrepancy < 0 ? "text-red-600" : "text-green-600"
-                        )}>
-                          {record.discrepancy != null ? (
-                            record.discrepancy === 0 ? '✓' : 
-                            (record.discrepancy > 0 ? '+' : '') + `₱${record.discrepancy.toLocaleString()}`
-                          ) : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {viewMode === 'daily' ? (
+                    // Daily aggregated view
+                    dailyRecords.map((record) => {
+                      const totalExp = record.purchases + record.salaries + record.other_expenses;
+                      const grossProfit = record.expected_sales - record.cost;
+                      const netProfit = grossProfit - totalExp;
+                      return (
+                        <tr key={record.date} className="border-b hover:bg-muted/50">
+                          <td className="py-2 px-2 whitespace-nowrap font-medium">{record.date}</td>
+                          <td className="text-right py-2 px-2 text-green-600">₱{record.expected_sales.toLocaleString()}</td>
+                          <td className="text-right py-2 px-2 text-muted-foreground">₱{record.cost.toLocaleString()}</td>
+                          <td className="text-right py-2 px-2 text-green-600 font-medium">₱{grossProfit.toLocaleString()}</td>
+                          <td className="text-right py-2 px-2 text-orange-500">{record.purchases > 0 ? `₱${record.purchases.toLocaleString()}` : '—'}</td>
+                          <td className="text-right py-2 px-2 text-blue-500">{record.salaries > 0 ? `₱${record.salaries.toLocaleString()}` : '—'}</td>
+                          <td className="text-right py-2 px-2 text-purple-500">{record.other_expenses > 0 ? `₱${record.other_expenses.toLocaleString()}` : '—'}</td>
+                          <td className="text-right py-2 px-2 text-red-500 font-medium">₱{totalExp.toLocaleString()}</td>
+                          <td className={cn(
+                            "text-right py-2 px-2 font-bold",
+                            netProfit >= 0 ? "text-green-600" : "text-red-600"
+                          )}>
+                            {netProfit >= 0 ? '+' : ''}₱{netProfit.toLocaleString()}
+                          </td>
+                          <td className="text-right py-2 px-2">
+                            {record.actual_cash != null ? `₱${record.actual_cash.toLocaleString()}` : '—'}
+                          </td>
+                          <td className={cn(
+                            "text-right py-2 px-2",
+                            record.discrepancy === 0 ? "text-green-600" :
+                            record.discrepancy && record.discrepancy < 0 ? "text-red-600" : "text-green-600"
+                          )}>
+                            {record.discrepancy != null ? (
+                              record.discrepancy === 0 ? '✓' : 
+                              (record.discrepancy > 0 ? '+' : '') + `₱${record.discrepancy.toLocaleString()}`
+                            ) : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    // Shift-by-shift view
+                    records.map((record) => {
+                      const totalExp = record.purchases + record.salaries + record.other_expenses;
+                      const grossProfit = record.expected_sales - (record.cost || 0);
+                      const netProfit = grossProfit - totalExp;
+                      return (
+                        <tr key={record.id} className="border-b hover:bg-muted/50">
+                          <td className="py-2 px-2 whitespace-nowrap">{record.date}</td>
+                          <td className="py-2 px-2">
+                            <Badge variant={record.shift === 'day' ? 'default' : 'secondary'} className="text-xs">
+                              {record.shift === 'day' ? <Sun className="w-3 h-3 mr-1" /> : <Moon className="w-3 h-3 mr-1" />}
+                              {record.shift === 'day' ? 'D' : 'N'}
+                            </Badge>
+                          </td>
+                          <td className="text-right py-2 px-2 text-green-600">₱{record.expected_sales.toLocaleString()}</td>
+                          <td className="text-right py-2 px-2 text-muted-foreground">₱{(record.cost || 0).toLocaleString()}</td>
+                          <td className="text-right py-2 px-2 text-green-600 font-medium">₱{grossProfit.toLocaleString()}</td>
+                          <td className="text-right py-2 px-2 text-orange-500">{record.purchases > 0 ? `₱${record.purchases.toLocaleString()}` : '—'}</td>
+                          <td className="text-right py-2 px-2 text-blue-500">{record.salaries > 0 ? `₱${record.salaries.toLocaleString()}` : '—'}</td>
+                          <td className="text-right py-2 px-2 text-purple-500">{record.other_expenses > 0 ? `₱${record.other_expenses.toLocaleString()}` : '—'}</td>
+                          <td className="text-right py-2 px-2 text-red-500 font-medium">₱{totalExp.toLocaleString()}</td>
+                          <td className={cn(
+                            "text-right py-2 px-2 font-bold",
+                            netProfit >= 0 ? "text-green-600" : "text-red-600"
+                          )}>
+                            {netProfit >= 0 ? '+' : ''}₱{netProfit.toLocaleString()}
+                          </td>
+                          <td className="text-right py-2 px-2">
+                            {record.actual_cash != null ? `₱${record.actual_cash.toLocaleString()}` : '—'}
+                          </td>
+                          <td className={cn(
+                            "text-right py-2 px-2",
+                            record.discrepancy === 0 ? "text-green-600" :
+                            record.discrepancy && record.discrepancy < 0 ? "text-red-600" : "text-green-600"
+                          )}>
+                            {record.discrepancy != null ? (
+                              record.discrepancy === 0 ? '✓' : 
+                              (record.discrepancy > 0 ? '+' : '') + `₱${record.discrepancy.toLocaleString()}`
+                            ) : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
                 <tfoot className="bg-muted/50 font-bold">
                   <tr className="border-t-2">
-                    <td className="py-2 px-2" colSpan={2}>TOTAL</td>
+                    <td className="py-2 px-2" colSpan={viewMode === 'shifts' ? 2 : 1}>TOTAL</td>
                     <td className="text-right py-2 px-2 text-green-600">₱{overallTotals.totalSales.toLocaleString()}</td>
                     <td className="text-right py-2 px-2 text-muted-foreground">₱{overallTotals.totalCost.toLocaleString()}</td>
                     <td className="text-right py-2 px-2 text-green-600">₱{(overallTotals.totalSales - overallTotals.totalCost).toLocaleString()}</td>
