@@ -2147,8 +2147,15 @@ export default function Finance() {
             value="finance" 
             className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all"
           >
+            <Receipt className="w-4 h-4" />
+            <span className="hidden sm:inline">Expenses</span>
+          </TabsTrigger>
+          <TabsTrigger 
+            value="cash" 
+            className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all"
+          >
             <Wallet className="w-4 h-4" />
-            <span className="hidden sm:inline">Finance</span>
+            <span className="hidden sm:inline">Cash</span>
           </TabsTrigger>
           <TabsTrigger 
             value="purchases" 
@@ -2391,52 +2398,84 @@ export default function Finance() {
             </CardContent>
           </Card>
 
-          {/* Admin: Full Cash Register History */}
-          {isAdminMode && (
-            <Card className="border-border/50 overflow-hidden">
-              <CardHeader className="pb-4 bg-gradient-to-r from-green-500/5 to-transparent border-b border-border/50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
-                      <Wallet className="w-5 h-5 text-green-500" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">Cash History</CardTitle>
-                      <p className="text-xs text-muted-foreground">Recent register entries</p>
-                    </div>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => syncToGoogleSheets(true)}
-                    disabled={exportingToSheets}
-                    className="gap-2"
-                  >
-                    {exportingToSheets ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-                    Sync
-                  </Button>
+        </TabsContent>
+
+        {/* CASH TAB */}
+        <TabsContent value="cash" className="space-y-6 animate-fade-in">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
+                Cash Register
+              </h2>
+              <p className="text-sm text-muted-foreground">Cash and GCash tracking</p>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => syncSalesFromLoyverse(format(new Date(), 'yyyy-MM-dd'), getCurrentShift())}
+                disabled={syncing}
+                className="gap-2"
+              >
+                {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Sync
+              </Button>
+              {isAdminMode && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => syncToGoogleSheets(true)}
+                  disabled={exportingToSheets}
+                  className="gap-2"
+                >
+                  {exportingToSheets ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                  Sheets
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Cash History Table */}
+          <Card className="border-border/50 overflow-hidden">
+            <CardHeader className="pb-4 bg-gradient-to-r from-green-500/5 to-transparent border-b border-border/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                  <Wallet className="w-5 h-5 text-green-500" />
                 </div>
-              </CardHeader>
-              <CardContent className="pt-4">
+                <div>
+                  <CardTitle className="text-lg">Cash History</CardTitle>
+                  <p className="text-xs text-muted-foreground">All register entries</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {records.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Wallet className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                  <p>No cash records yet</p>
+                  <p className="text-sm">Data will appear after shift ends</p>
+                </div>
+              ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border/50">
                         <th className="text-left py-3 px-2 font-semibold text-muted-foreground">Date</th>
                         <th className="text-left py-3 px-2 font-semibold text-muted-foreground">Shift</th>
-                        <th className="text-right py-3 px-1 font-semibold text-green-500">
-                          <div className="text-xs">Cash</div>
-                          <div className="text-[10px] text-muted-foreground">exp / act</div>
-                        </th>
-                        <th className="text-right py-3 px-1 font-semibold text-blue-500">
-                          <div className="text-xs">GCash</div>
-                          <div className="text-[10px] text-muted-foreground">exp / act</div>
-                        </th>
+                        <th className="text-right py-3 px-2 font-semibold text-muted-foreground">Sales</th>
+                        <th className="text-right py-3 px-1 font-semibold text-green-500">Cash</th>
+                        <th className="text-right py-3 px-1 font-semibold text-blue-500">GCash</th>
                         <th className="text-right py-3 px-2 font-semibold text-muted-foreground">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {records.slice(0, 10).map((record, index) => {
+                      {records.slice(0, isAdminMode ? 30 : 10).map((record) => {
+                        // Use expected_sales as total, cash_actual or actual_cash for handed over
+                        const cashHandedOver = record.cash_actual || 0;
+                        const gcashHandedOver = record.gcash_actual || 0;
+                        const totalHandedOver = record.actual_cash || (cashHandedOver + gcashHandedOver);
+                        
                         return (
                           <tr 
                             key={record.id} 
@@ -2451,21 +2490,15 @@ export default function Finance() {
                                 {record.shift === 'day' ? '☀️' : '🌙'}
                               </span>
                             </td>
-                            <td className="py-3 px-1 text-right">
-                              <div className="text-xs text-muted-foreground">
-                                {record.cash_expected !== null ? `₱${record.cash_expected.toLocaleString()}` : '-'}
-                              </div>
-                              <div className="font-semibold text-green-500">
-                                {record.cash_actual !== null ? `₱${record.cash_actual.toLocaleString()}` : '-'}
-                              </div>
+                            <td className="py-3 px-2 text-right font-semibold">
+                              ₱{record.expected_sales.toLocaleString()}
                             </td>
-                            <td className="py-3 px-1 text-right">
-                              <div className="text-xs text-muted-foreground">
-                                {record.gcash_expected !== null ? `₱${record.gcash_expected.toLocaleString()}` : '-'}
-                              </div>
-                              <div className="font-semibold text-blue-500">
-                                {record.gcash_actual !== null && record.gcash_actual > 0 ? `₱${record.gcash_actual.toLocaleString()}` : '-'}
-                              </div>
+                            <td className="py-3 px-1 text-right font-semibold text-green-500">
+                              {cashHandedOver > 0 ? `₱${cashHandedOver.toLocaleString()}` : 
+                               (totalHandedOver > 0 && gcashHandedOver === 0) ? `₱${totalHandedOver.toLocaleString()}` : '-'}
+                            </td>
+                            <td className="py-3 px-1 text-right font-semibold text-blue-500">
+                              {gcashHandedOver > 0 ? `₱${gcashHandedOver.toLocaleString()}` : '-'}
                             </td>
                             <td className={cn(
                               "py-3 px-2 text-right font-bold",
@@ -2482,9 +2515,9 @@ export default function Finance() {
                     </tbody>
                   </table>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ORDERS TAB */}
