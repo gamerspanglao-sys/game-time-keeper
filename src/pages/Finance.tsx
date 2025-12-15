@@ -49,6 +49,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 type ShiftType = 'day' | 'night';
 
+const EXPENSE_TYPES = [
+  { value: 'employee_food', label: 'Еда сотрудникам', category: 'other' as const },
+  { value: 'purchases', label: 'Закупки', category: 'purchases' as const },
+  { value: 'advance', label: 'Аванс', category: 'salaries' as const },
+  { value: 'food_hunters', label: 'Food Hunters', category: 'other' as const },
+  { value: 'other', label: 'Другое', category: 'other' as const },
+];
+
 interface CashRecord {
   id: string;
   date: string;
@@ -148,6 +156,7 @@ export default function Finance() {
   const [expenseDescription, setExpenseDescription] = useState<string>('');
   const [expenseDate, setExpenseDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [expenseShift, setExpenseShift] = useState<ShiftType>(getCurrentShift());
+  const [expenseType, setExpenseType] = useState<string>('other');
   const [syncing, setSyncing] = useState(false);
   
   // Date range filter for stats
@@ -505,11 +514,14 @@ export default function Finance() {
       toast.error('Enter valid amount');
       return;
     }
-    addExpense('other', amount, expenseDescription, expenseDate, expenseShift);
+    const typeConfig = EXPENSE_TYPES.find(t => t.value === expenseType) || EXPENSE_TYPES[4];
+    const fullDescription = `[${typeConfig.label}] ${expenseDescription}`.trim();
+    addExpense(typeConfig.category, amount, fullDescription, expenseDate, expenseShift);
     setExpenseAmount('');
     setExpenseDescription('');
     setExpenseDate(format(new Date(), 'yyyy-MM-dd'));
     setExpenseShift(getCurrentShift());
+    setExpenseType('other');
     setShowExpenseDialog(false);
   };
 
@@ -938,7 +950,7 @@ export default function Finance() {
                     {format(new Date(expenseDate), 'dd.MM.yyyy')}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0 z-50" align="start">
                   <Calendar
                     mode="single"
                     selected={new Date(expenseDate)}
@@ -952,7 +964,7 @@ export default function Finance() {
                 <SelectTrigger className="w-[130px]">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-50 bg-background">
                   <SelectItem value="day">
                     <span className="flex items-center gap-2">
                       <Sun className="w-4 h-4" /> Day
@@ -966,16 +978,27 @@ export default function Finance() {
                 </SelectContent>
               </Select>
             </div>
+            <Select value={expenseType} onValueChange={setExpenseType}>
+              <SelectTrigger className="w-full h-12">
+                <SelectValue placeholder="Тип расхода" />
+              </SelectTrigger>
+              <SelectContent className="z-50 bg-background">
+                {EXPENSE_TYPES.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Input
               type="number"
               placeholder="Amount"
               value={expenseAmount}
               onChange={(e) => setExpenseAmount(e.target.value)}
               className="text-xl h-12"
-              autoFocus
             />
             <Input
-              placeholder="Description (what was bought?)"
+              placeholder="Description (optional)"
               value={expenseDescription}
               onChange={(e) => setExpenseDescription(e.target.value)}
             />
@@ -1004,7 +1027,7 @@ export default function Finance() {
                     {format(new Date(expenseDate), 'dd.MM.yyyy')}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0 z-50" align="start">
                   <Calendar
                     mode="single"
                     selected={new Date(expenseDate)}
@@ -1018,7 +1041,7 @@ export default function Finance() {
                 <SelectTrigger className="w-[130px]">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-50 bg-background">
                   <SelectItem value="day">
                     <span className="flex items-center gap-2">
                       <Sun className="w-4 h-4" /> Day
@@ -1070,7 +1093,7 @@ export default function Finance() {
                     {format(new Date(expenseDate), 'dd.MM.yyyy')}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0 z-50" align="start">
                   <Calendar
                     mode="single"
                     selected={new Date(expenseDate)}
@@ -1084,7 +1107,7 @@ export default function Finance() {
                 <SelectTrigger className="w-[130px]">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-50 bg-background">
                   <SelectItem value="day">
                     <span className="flex items-center gap-2">
                       <Sun className="w-4 h-4" /> Day
