@@ -374,45 +374,55 @@ export default function CashRegister() {
   }), { totalSales: 0, totalPurchases: 0, totalSalaries: 0, totalOther: 0, totalDiscrepancy: 0, daysWithDiscrepancy: 0 });
 
   const exportToCSV = () => {
-    // Main cash register data - use comma for Mac Excel compatibility
+    if (records.length === 0) {
+      toast.error('No records to export');
+      return;
+    }
+    
+    // Main cash register data
     const headers = ['Date', 'Opening Balance', 'Cash Sales', 'Purchases', 'Salaries', 'Other Expenses', 'Total Expenses', 'Expected', 'Actual', 'Discrepancy'];
     
     // Sort by date ascending for the export
     const sortedRecords = [...records].sort((a, b) => a.date.localeCompare(b.date));
     
+    console.log('Exporting records:', sortedRecords);
+    
     // Create worksheet data
-    const wsData = [
-      headers, // Header row
-      ...sortedRecords.map(r => {
-        const totalExp = r.purchases + r.salaries + r.other_expenses;
-        const expected = r.opening_balance + r.expected_sales - totalExp;
-        return [
-          r.date,
-          r.opening_balance,
-          r.expected_sales,
-          r.purchases,
-          r.salaries,
-          r.other_expenses,
-          totalExp,
-          expected,
-          r.actual_cash ?? '',
-          r.discrepancy ?? ''
-        ];
-      }),
-      [], // Empty row
-      [ // Totals row
-        'TOTAL',
-        '',
-        overallTotals.totalSales,
-        overallTotals.totalPurchases,
-        overallTotals.totalSalaries,
-        overallTotals.totalOther,
-        overallTotals.totalPurchases + overallTotals.totalSalaries + overallTotals.totalOther,
-        '',
-        '',
-        overallTotals.totalDiscrepancy
-      ]
-    ];
+    const wsData: (string | number)[][] = [headers];
+    
+    sortedRecords.forEach(r => {
+      const totalExp = r.purchases + r.salaries + r.other_expenses;
+      const expected = r.opening_balance + r.expected_sales - totalExp;
+      wsData.push([
+        r.date,
+        r.opening_balance,
+        r.expected_sales,
+        r.purchases,
+        r.salaries,
+        r.other_expenses,
+        totalExp,
+        expected,
+        r.actual_cash ?? 0,
+        r.discrepancy ?? 0
+      ]);
+    });
+    
+    // Add empty row and totals
+    wsData.push([]);
+    wsData.push([
+      'TOTAL',
+      0,
+      overallTotals.totalSales,
+      overallTotals.totalPurchases,
+      overallTotals.totalSalaries,
+      overallTotals.totalOther,
+      overallTotals.totalPurchases + overallTotals.totalSalaries + overallTotals.totalOther,
+      0,
+      0,
+      overallTotals.totalDiscrepancy
+    ]);
+
+    console.log('Worksheet data:', wsData);
 
     // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
