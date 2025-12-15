@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import DailyStats from "./pages/DailyStats";
 import Finance from "./pages/Finance";
-import PurchaseRequests from "./pages/PurchaseRequests";
 import NotFound from "./pages/NotFound";
 import { AdminGuard } from "./components/AdminGuard";
 import { Layout } from "./components/Layout";
@@ -23,7 +22,6 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/stats" element={<AdminGuard><DailyStats /></AdminGuard>} />
           <Route path="/finance" element={<Layout><Finance /></Layout>} />
-          <Route path="/purchases" element={<AdminGuard><Layout><PurchaseRequests /></Layout></AdminGuard>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
