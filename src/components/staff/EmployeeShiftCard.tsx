@@ -282,27 +282,25 @@ export function EmployeeShiftCard() {
       const totalHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
       
       // Determine the shift type based on when shift started (not current time)
-      const startHour = (() => {
-        const manilaOffset = 8 * 60;
-        const utcTime = startTime.getTime() + (startTime.getTimezoneOffset() * 60000);
-        const manilaTime = new Date(utcTime + (manilaOffset * 60000));
-        return manilaTime.getHours();
-      })();
+      const manilaOffset = 8 * 60;
+      const startUtcTime = startTime.getTime() + (startTime.getTimezoneOffset() * 60000);
+      const startManilaTime = new Date(startUtcTime + (manilaOffset * 60000));
+      const startHour = startManilaTime.getHours();
       const shiftType = startHour >= 5 && startHour < 17 ? 'day' : 'night';
       
       // For shift date, use the date when the shift started (for day shifts)
       // For night shifts that started after 5 PM, use the NEXT day's date for the cash register
-      const shiftDate = (() => {
-        const manilaOffset = 8 * 60;
-        const utcTime = startTime.getTime() + (startTime.getTimezoneOffset() * 60000);
-        const manilaTime = new Date(utcTime + (manilaOffset * 60000));
-        
-        // Night shift belongs to the next calendar day
-        if (shiftType === 'night' && manilaTime.getHours() >= 17) {
-          manilaTime.setDate(manilaTime.getDate() + 1);
-        }
-        return format(manilaTime, 'yyyy-MM-dd');
-      })();
+      let shiftDate: string;
+      if (shiftType === 'night' && startHour >= 17) {
+        // Night shift that started after 5 PM belongs to next calendar day
+        const nextDay = new Date(startManilaTime);
+        nextDay.setDate(nextDay.getDate() + 1);
+        shiftDate = format(nextDay, 'yyyy-MM-dd');
+      } else {
+        shiftDate = format(startManilaTime, 'yyyy-MM-dd');
+      }
+      
+      console.log(`📊 End shift: startHour=${startHour}, shiftType=${shiftType}, shiftDate=${shiftDate}`);
       
       // Get expected cash from cash_register for this shift
       const { data: cashRecord } = await supabase
