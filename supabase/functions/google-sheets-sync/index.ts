@@ -23,7 +23,6 @@ serve(async (req) => {
 
     console.log('📊 Fetching all cash register data...');
 
-    // Fetch all cash register records
     const { data: records, error: recordsError } = await supabase
       .from('cash_register')
       .select('*')
@@ -33,7 +32,6 @@ serve(async (req) => {
       throw new Error(`Failed to fetch records: ${recordsError.message}`);
     }
 
-    // Fetch all expenses
     const { data: expenses } = await supabase
       .from('cash_expenses')
       .select('*')
@@ -48,30 +46,31 @@ serve(async (req) => {
       );
     }
 
-    // Header row with Russian labels
+    // Headers
     const headers = [
       'Дата',
-      'Начальный баланс',
       'Продажи (касса)',
+      'Себестоимость',
+      'Валовая прибыль',
       'Закупки',
       'Зарплаты',
       'Прочие расходы',
       'Всего расходов',
+      'Чистая прибыль',
       'Ожидаемая касса',
       'Фактическая касса',
       'Расхождение',
       'Статус'
     ];
 
-    // Prepare rows for Google Sheets
     const rows: (string | number)[][] = [headers];
     
     records.forEach(r => {
       const totalExp = (r.purchases || 0) + (r.salaries || 0) + (r.other_expenses || 0);
-      const expected = (r.opening_balance || 0) + (r.expected_sales || 0) - totalExp;
-      const discrepancy = r.discrepancy ?? '';
+      const grossProfit = (r.expected_sales || 0) - (r.cost || 0);
+      const netProfit = grossProfit - totalExp;
+      const expectedCash = (r.opening_balance || 0) + (r.expected_sales || 0) - totalExp;
       
-      // Determine status
       let status = '';
       if (r.actual_cash === null) {
         status = '⏳ Ожидает';
@@ -85,79 +84,72 @@ serve(async (req) => {
       
       rows.push([
         r.date,
-        r.opening_balance || 0,
         r.expected_sales || 0,
+        r.cost || 0,
+        grossProfit,
         r.purchases || 0,
         r.salaries || 0,
         r.other_expenses || 0,
         totalExp,
-        Math.round(expected),
+        netProfit,
+        Math.round(expectedCash),
         r.actual_cash ?? '',
-        discrepancy,
+        r.discrepancy ?? '',
         status
       ]);
     });
 
-    // Calculate totals
+    // Totals
     const totals = records.reduce((acc, r) => ({
-      opening: acc.opening + (r.opening_balance || 0),
       sales: acc.sales + (r.expected_sales || 0),
+      cost: acc.cost + (r.cost || 0),
       purchases: acc.purchases + (r.purchases || 0),
       salaries: acc.salaries + (r.salaries || 0),
       other: acc.other + (r.other_expenses || 0),
       actual: acc.actual + (r.actual_cash || 0),
       discrepancy: acc.discrepancy + (r.discrepancy || 0)
-    }), { opening: 0, sales: 0, purchases: 0, salaries: 0, other: 0, actual: 0, discrepancy: 0 });
+    }), { sales: 0, cost: 0, purchases: 0, salaries: 0, other: 0, actual: 0, discrepancy: 0 });
 
     const totalExpenses = totals.purchases + totals.salaries + totals.other;
-    const totalExpected = totals.opening + totals.sales - totalExpenses;
+    const totalGrossProfit = totals.sales - totals.cost;
+    const totalNetProfit = totalGrossProfit - totalExpenses;
 
-    // Add totals row
     rows.push([
       'ИТОГО',
-      totals.opening,
       totals.sales,
+      totals.cost,
+      totalGrossProfit,
       totals.purchases,
       totals.salaries,
       totals.other,
       totalExpenses,
-      Math.round(totalExpected),
+      totalNetProfit,
+      '',
       totals.actual || '',
       totals.discrepancy || '',
       ''
     ]);
 
-    // Add empty row
-    rows.push(['', '', '', '', '', '', '', '', '', '', '']);
-
-    // Add expenses detail section if there are expenses
+    // Expenses detail section
     if (expenses && expenses.length > 0) {
-      rows.push(['РАСХОДЫ (детализация)', '', '', '', '', '', '', '', '', '', '']);
-      rows.push(['Дата', 'Категория', 'Сумма', 'Описание', '', '', '', '', '', '', '']);
+      rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '']);
+      rows.push(['РАСХОДЫ (детализация)', '', '', '', '', '', '', '', '', '', '', '', '']);
+      rows.push(['Дата', 'Категория', 'Сумма', 'Описание', '', '', '', '', '', '', '', '', '']);
       
       expenses.forEach(exp => {
         const record = records.find(r => r.id === exp.cash_register_id);
         const date = record?.date || '';
         const categoryLabel = exp.category === 'purchases' ? 'Закупки' : 
                              exp.category === 'salaries' ? 'Зарплаты' : 'Прочее';
-        rows.push([
-          date,
-          categoryLabel,
-          exp.amount,
-          exp.description || '',
-          '', '', '', '', '', '', ''
-        ]);
+        rows.push([date, categoryLabel, exp.amount, exp.description || '', '', '', '', '', '', '', '', '', '']);
       });
     }
 
     console.log(`📤 Sending ${rows.length} rows to Google Sheets...`);
 
-    // Send to Google Sheets
     const response = await fetch(GOOGLE_SHEETS_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rows }),
     });
 
