@@ -1312,48 +1312,53 @@ export default function Finance() {
     if (!isAdminMode) {
       return (
         <div className="space-y-4 max-w-2xl mx-auto">
+          {/* Header with Admin Toggle */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Cash Register</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => requestAdminAction('admin')}
+              className="gap-2"
+            >
+              <Lock className="w-4 h-4" />
+              Admin
+            </Button>
+          </div>
+
           {/* Today's Summary Card - only if has data */}
           {todayRecord && todayRecord.expected_sales > 0 && (
             <Card className="bg-secondary/30">
               <CardContent className="py-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <div className="text-xs text-muted-foreground">Sales</div>
-                      <div className="text-lg font-bold text-green-600">₱{todayRecord.expected_sales.toLocaleString()}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Expenses</div>
-                      <div className="text-lg font-bold text-red-600">₱{todayTotalExpenses.toLocaleString()}</div>
-                    </div>
-                    {todayRecord.actual_cash != null && todayRecord.discrepancy !== null && (
-                      <div>
-                        <div className="text-xs text-muted-foreground">Discrepancy</div>
-                        <div className={cn(
-                          "text-lg font-bold",
-                          todayRecord.discrepancy === 0 ? "text-green-600" :
-                          todayRecord.discrepancy < 0 ? "text-red-600" : "text-amber-600"
-                        )}>
-                          {todayRecord.discrepancy === 0 ? '✓ OK' : 
-                            (todayRecord.discrepancy > 0 ? '+' : '') + 
-                            '₱' + todayRecord.discrepancy.toLocaleString()}
-                        </div>
-                      </div>
-                    )}
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Sales</div>
+                    <div className="text-lg font-bold text-green-600">₱{todayRecord.expected_sales.toLocaleString()}</div>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => requestAdminAction('admin')}
-                  >
-                    <Lock className="w-4 h-4" />
-                  </Button>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Expenses</div>
+                    <div className="text-lg font-bold text-red-600">₱{todayTotalExpenses.toLocaleString()}</div>
+                  </div>
+                  {todayRecord.actual_cash != null && todayRecord.discrepancy !== null && (
+                    <div>
+                      <div className="text-xs text-muted-foreground">Discrepancy</div>
+                      <div className={cn(
+                        "text-lg font-bold",
+                        todayRecord.discrepancy === 0 ? "text-green-600" :
+                        todayRecord.discrepancy < 0 ? "text-red-600" : "text-amber-600"
+                      )}>
+                        {todayRecord.discrepancy === 0 ? '✓ OK' : 
+                          (todayRecord.discrepancy > 0 ? '+' : '') + 
+                          '₱' + todayRecord.discrepancy.toLocaleString()}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Expense Buttons - compact */}
+          {/* Expense Buttons */}
           <div className="grid grid-cols-3 gap-2">
             <Button
               variant="outline"
