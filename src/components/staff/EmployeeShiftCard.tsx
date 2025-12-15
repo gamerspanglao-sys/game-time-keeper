@@ -47,6 +47,9 @@ export function EmployeeShiftCard() {
   const [starting, setStarting] = useState(false);
   const [ending, setEnding] = useState(false);
   
+  // Live timer
+  const [elapsedTime, setElapsedTime] = useState<string>('00:00:00');
+  
   // End shift dialog
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [cashInput, setCashInput] = useState('');
@@ -67,6 +70,33 @@ export function EmployeeShiftCard() {
       loadActiveShift();
     }
   }, [selectedEmployee]);
+
+  // Live timer effect
+  useEffect(() => {
+    if (!activeShift?.shift_start) {
+      setElapsedTime('00:00:00');
+      return;
+    }
+    
+    const updateTimer = () => {
+      const start = new Date(activeShift.shift_start!).getTime();
+      const now = Date.now();
+      const diff = now - start;
+      
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      
+      setElapsedTime(
+        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      );
+    };
+    
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    
+    return () => clearInterval(interval);
+  }, [activeShift?.shift_start]);
 
   const loadEmployees = async () => {
     try {
@@ -318,12 +348,18 @@ export function EmployeeShiftCard() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Clock className="w-5 h-5 text-green-500" />
+                      <Clock className="w-5 h-5 text-green-500 animate-pulse" />
                       <span className="font-medium">Shift Active</span>
                     </div>
                     <Badge variant="default" className="bg-green-500">
                       Started {format(new Date(activeShift.shift_start!), 'HH:mm')}
                     </Badge>
+                  </div>
+                  
+                  {/* Live Timer */}
+                  <div className="text-center py-4 bg-green-500/10 rounded-lg border border-green-500/30">
+                    <div className="text-4xl font-mono font-bold text-green-500">{elapsedTime}</div>
+                    <div className="text-sm text-muted-foreground mt-1">Shift Duration</div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4 text-sm">
