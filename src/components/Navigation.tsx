@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Timer, BarChart3, ScrollText, Gamepad2, Maximize, Minimize, Trophy, Wallet, ShoppingCart, Calculator } from 'lucide-react';
+import { Timer, BarChart3, Gamepad2, Maximize, Minimize, Wallet, ShoppingCart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { GlobalPauseButton } from './GlobalPauseButton';
@@ -107,41 +107,11 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
           }
         >
           <BarChart3 className="w-5 h-5" />
-          <span>Daily Stats</span>
+          <span>Stats</span>
         </NavLink>
 
         <NavLink
-          to="/log"
-          className={({ isActive }) =>
-            cn(
-              'flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 py-3 md:py-0 px-2 md:px-3 md:h-10 text-xs md:text-sm font-medium transition-all',
-              isActive
-                ? 'text-primary bg-primary/10 md:rounded-lg md:border md:border-primary/20'
-                : 'text-muted-foreground hover:text-foreground hover:bg-secondary md:rounded-lg'
-            )
-          }
-        >
-          <ScrollText className="w-5 h-5" />
-          <span>Activity</span>
-        </NavLink>
-
-        <NavLink
-          to="/tournaments"
-          className={({ isActive }) =>
-            cn(
-              'flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 py-3 md:py-0 px-2 md:px-3 md:h-10 text-xs md:text-sm font-medium transition-all',
-              isActive
-                ? 'text-primary bg-primary/10 md:rounded-lg md:border md:border-primary/20'
-                : 'text-muted-foreground hover:text-foreground hover:bg-secondary md:rounded-lg'
-            )
-          }
-        >
-          <Trophy className="w-5 h-5" />
-          <span>Tournaments</span>
-        </NavLink>
-
-        <NavLink
-          to="/payments"
+          to="/finance"
           className={({ isActive }) =>
             cn(
               'flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 py-3 md:py-0 px-2 md:px-3 md:h-10 text-xs md:text-sm font-medium transition-all',
@@ -152,7 +122,7 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
           }
         >
           <Wallet className="w-5 h-5" />
-          <span>Payments</span>
+          <span>Finance</span>
         </NavLink>
 
         <NavLink
@@ -168,21 +138,6 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
         >
           <ShoppingCart className="w-5 h-5" />
           <span>Purchases</span>
-        </NavLink>
-
-        <NavLink
-          to="/cash"
-          className={({ isActive }) =>
-            cn(
-              'flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 py-3 md:py-0 px-2 md:px-3 md:h-10 text-xs md:text-sm font-medium transition-all',
-              isActive
-                ? 'text-primary bg-primary/10 md:rounded-lg md:border md:border-primary/20'
-                : 'text-muted-foreground hover:text-foreground hover:bg-secondary md:rounded-lg'
-            )
-          }
-        >
-          <Calculator className="w-5 h-5" />
-          <span>Cash</span>
         </NavLink>
       </div>
     </nav>
