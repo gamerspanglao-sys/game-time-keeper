@@ -5,11 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import DailyStats from "./pages/DailyStats";
-import ActivityLog from "./pages/ActivityLog";
-import Tournaments from "./pages/Tournaments";
-import PaymentsReport from "./pages/PaymentsReport";
+import Finance from "./pages/Finance";
 import PurchaseRequests from "./pages/PurchaseRequests";
-import CashRegister from "./pages/CashRegister";
 import NotFound from "./pages/NotFound";
 import { AdminGuard } from "./components/AdminGuard";
 import { Layout } from "./components/Layout";
@@ -25,11 +22,8 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/stats" element={<AdminGuard><DailyStats /></AdminGuard>} />
-          <Route path="/log" element={<AdminGuard><ActivityLog /></AdminGuard>} />
-          <Route path="/tournaments" element={<Tournaments />} />
-          <Route path="/payments" element={<AdminGuard><Layout><PaymentsReport /></Layout></AdminGuard>} />
+          <Route path="/finance" element={<Layout><Finance /></Layout>} />
           <Route path="/purchases" element={<AdminGuard><Layout><PurchaseRequests /></Layout></AdminGuard>} />
-          <Route path="/cash" element={<Layout><CashRegister /></Layout>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
