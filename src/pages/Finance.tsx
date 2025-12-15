@@ -2005,17 +2005,11 @@ export default function Finance() {
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold">My Shift</h2>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => requestAdminAction('admin')}
-                >
-                  <Lock className="w-4 h-4" />
-                </Button>
-              </div>
+              {/* Shift Management at Top */}
               <EmployeeShiftCard />
+              
+              {/* Cash Register Below */}
+              {renderCashRegister()}
             </div>
           )}
         </TabsContent>
