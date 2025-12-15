@@ -9,7 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Play, Square, Clock, Wallet, Gift, Plus, Loader2, Users, Pencil, Sun, Moon } from 'lucide-react';
+import { Play, Square, Clock, Wallet, Gift, Plus, Loader2, Users, Pencil, Sun, Moon, Lock } from 'lucide-react';
+
+const ADMIN_PIN = '8808';
 
 interface Employee {
   id: string;
@@ -69,6 +71,11 @@ export function EmployeeShiftCard() {
   // End shift dialog
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [cashInput, setCashInput] = useState('');
+  
+  // PIN dialog for admin
+  const [showPinDialog, setShowPinDialog] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
   
   // Edit shift dialog
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -257,23 +264,59 @@ export function EmployeeShiftCard() {
       const startTime = new Date(activeShift.shift_start!);
       const totalHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
       const cashAmount = parseInt(cashInput);
-      const difference = cashAmount - (activeShift.expected_cash || 0);
+      
+      // Get expected cash from cash_register for this shift
+      const shiftDate = format(startTime, 'yyyy-MM-dd');
+      const { data: cashRecord } = await supabase
+        .from('cash_register')
+        .select('*')
+        .eq('date', shiftDate)
+        .eq('shift', currentShiftType)
+        .maybeSingle();
+      
+      const expectedCash = cashRecord?.expected_sales || 0;
+      const totalExpenses = (cashRecord?.purchases || 0) + (cashRecord?.salaries || 0) + (cashRecord?.other_expenses || 0);
+      const calculatedExpected = (cashRecord?.opening_balance || 0) + expectedCash - totalExpenses;
+      const discrepancy = cashAmount - calculatedExpected;
 
+      // Update shift with cash data
       const { error } = await supabase
         .from('shifts')
         .update({
           shift_end: now.toISOString(),
           total_hours: Math.round(totalHours * 100) / 100,
           cash_handed_over: cashAmount,
-          cash_difference: difference,
+          cash_difference: discrepancy,
+          expected_cash: calculatedExpected,
           status: 'closed'
         })
         .eq('id', activeShift.id);
 
       if (error) throw error;
 
+      // Update cash_register with actual cash
+      if (cashRecord) {
+        await supabase
+          .from('cash_register')
+          .update({
+            actual_cash: cashAmount,
+            discrepancy: discrepancy
+          })
+          .eq('id', cashRecord.id);
+      } else {
+        // Create new cash_register entry if doesn't exist
+        await supabase
+          .from('cash_register')
+          .insert({
+            date: shiftDate,
+            shift: currentShiftType,
+            actual_cash: cashAmount,
+            discrepancy: discrepancy
+          });
+      }
+
       // Calculate total bonuses
-      const totalBonuses = shiftBonuses.reduce((sum, b) => sum + b.amount, 0);
+      const totalBonusAmount = shiftBonuses.reduce((sum, b) => sum + b.amount, 0);
 
       // Send Telegram notification
       const employee = employees.find(e => e.id === selectedEmployee);
@@ -283,23 +326,47 @@ export function EmployeeShiftCard() {
           employeeName: employee?.name,
           totalHours: totalHours.toFixed(1),
           cashHandedOver: cashAmount,
-          expectedCash: activeShift.expected_cash || 0,
-          difference: difference,
-          bonuses: totalBonuses,
+          expectedCash: calculatedExpected,
+          difference: discrepancy,
+          bonuses: totalBonusAmount,
           baseSalary: activeShift.base_salary
         }
       });
 
-      toast.success('Shift ended!');
+      // Show success with discrepancy info
+      if (discrepancy !== 0) {
+        toast.warning(`Shift ended! Cash discrepancy: ${discrepancy > 0 ? '+' : ''}₱${discrepancy.toLocaleString()}`);
+      } else {
+        toast.success('Shift ended! Cash matches expected.');
+      }
+      
       setActiveShift(null);
       setShiftBonuses([]);
       setCashInput('');
       setShowEndDialog(false);
+      loadAllActiveShifts();
     } catch (error) {
       console.error('Error ending shift:', error);
       toast.error('Failed to end shift');
     } finally {
       setEnding(false);
+    }
+  };
+
+  const requestAdminEdit = () => {
+    setShowPinDialog(true);
+    setPinInput('');
+    setPinError('');
+  };
+
+  const handlePinSubmit = () => {
+    if (pinInput === ADMIN_PIN) {
+      setShowPinDialog(false);
+      setShowEditDialog(true);
+      setPinInput('');
+      setPinError('');
+    } else {
+      setPinError('Wrong PIN');
     }
   };
 
@@ -427,8 +494,8 @@ export function EmployeeShiftCard() {
                 {currentShiftType === 'day' ? '5AM - 5PM' : '5PM - 5AM'}
               </Badge>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setShowEditDialog(true)}>
-              <Pencil className="w-4 h-4 mr-1" />
+            <Button variant="ghost" size="sm" onClick={requestAdminEdit}>
+              <Lock className="w-4 h-4 mr-1" />
               Edit
             </Button>
           </CardTitle>
@@ -445,8 +512,7 @@ export function EmployeeShiftCard() {
                   <Badge 
                     key={shift.id} 
                     variant="default" 
-                    className="px-3 py-1.5 cursor-pointer hover:opacity-80"
-                    onClick={() => openEditDialog(shift)}
+                    className="px-3 py-1.5"
                   >
                     <Clock className="w-3 h-3 mr-1.5" />
                     {shift.employee_name}
@@ -770,6 +836,41 @@ export function EmployeeShiftCard() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* PIN Dialog */}
+      <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-5 h-5" />
+              Admin Access
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label>Enter PIN</Label>
+              <Input
+                type="password"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                placeholder="****"
+                className="text-center text-2xl tracking-widest mt-2"
+                maxLength={4}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handlePinSubmit();
+                }}
+              />
+              {pinError && (
+                <p className="text-sm text-destructive mt-2">{pinError}</p>
+              )}
+            </div>
+            <Button onClick={handlePinSubmit} className="w-full">
+              Continue
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
