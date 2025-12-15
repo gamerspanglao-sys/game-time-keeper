@@ -86,11 +86,11 @@ export default function CashRegister() {
 
   const loadData = async () => {
     try {
+      // Load ALL records for complete history
       const { data: recordsData, error: recordsError } = await supabase
         .from('cash_register')
         .select('*')
-        .order('date', { ascending: false })
-        .limit(30);
+        .order('date', { ascending: false });
 
       if (recordsError) throw recordsError;
       setRecords(recordsData || []);
@@ -583,12 +583,12 @@ export default function CashRegister() {
         </div>
       </div>
 
-      {/* Overall Summary - 30 Day Totals */}
+      {/* Overall Summary - All Time Totals */}
       <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2">
             <FileSpreadsheet className="w-5 h-5" />
-            30-Day Summary
+            All-Time Summary ({records.length} days)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -836,7 +836,7 @@ export default function CashRegister() {
       {/* History Table - Admin Only */}
       <Card>
         <CardHeader>
-          <CardTitle>History (Last 30 Days)</CardTitle>
+          <CardTitle>Full History ({records.length} records)</CardTitle>
         </CardHeader>
         <CardContent>
           {records.length === 0 ? (
