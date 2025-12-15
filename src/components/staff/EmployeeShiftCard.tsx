@@ -80,7 +80,7 @@ export function EmployeeShiftCard() {
   // Edit shift dialog
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingShift, setEditingShift] = useState<ActiveShiftWithEmployee | null>(null);
-  const [editHours, setEditHours] = useState('');
+  const [editStartTime, setEditStartTime] = useState('');
   const [editSalary, setEditSalary] = useState('');
   const [saving, setSaving] = useState(false);
   
@@ -430,20 +430,40 @@ export function EmployeeShiftCard() {
 
   const openEditDialog = (shift: ActiveShiftWithEmployee) => {
     setEditingShift(shift);
-    setEditHours(shift.total_hours?.toString() || '');
+    // Format start time for input
+    if (shift.shift_start) {
+      const startDate = new Date(shift.shift_start);
+      setEditStartTime(format(startDate, 'HH:mm'));
+    } else {
+      setEditStartTime('');
+    }
     setEditSalary(shift.base_salary?.toString() || '500');
     setShowEditDialog(true);
   };
 
   const saveShiftEdit = async () => {
-    if (!editingShift) return;
+    if (!editingShift || !editStartTime) return;
 
     setSaving(true);
     try {
+      // Parse the new start time and combine with the shift date
+      const [hours, minutes] = editStartTime.split(':').map(Number);
+      const shiftDate = new Date(editingShift.date + 'T00:00:00');
+      shiftDate.setHours(hours, minutes, 0, 0);
+      
+      // Calculate hours if shift is closed
+      let totalHours = editingShift.total_hours;
+      if (editingShift.status === 'closed' && editingShift.shift_end) {
+        const endTime = new Date(editingShift.shift_end);
+        totalHours = (endTime.getTime() - shiftDate.getTime()) / (1000 * 60 * 60);
+        totalHours = Math.round(totalHours * 100) / 100;
+      }
+
       const { error } = await supabase
         .from('shifts')
         .update({
-          total_hours: parseFloat(editHours) || 0,
+          shift_start: shiftDate.toISOString(),
+          total_hours: totalHours,
           base_salary: parseInt(editSalary) || 500
         })
         .eq('id', editingShift.id);
@@ -776,12 +796,11 @@ export function EmployeeShiftCard() {
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Total Hours</Label>
+                  <Label>Shift Start Time</Label>
                   <Input
-                    type="number"
-                    step="0.1"
-                    value={editHours}
-                    onChange={(e) => setEditHours(e.target.value)}
+                    type="time"
+                    value={editStartTime}
+                    onChange={(e) => setEditStartTime(e.target.value)}
                     className="mt-2"
                   />
                 </div>

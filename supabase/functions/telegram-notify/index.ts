@@ -519,11 +519,17 @@ serve(async (req) => {
     
     // Employee shift notifications
     if (action === 'shift_start') {
+      const now = new Date();
+      const manilaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+      const hour = manilaTime.getHours();
+      const shiftType = hour >= 5 && hour < 17 ? '☀️ Day Shift' : '🌙 Night Shift';
+      
       message = `🟢 <b>SHIFT STARTED</b>\n`;
       message += `━━━━━━━━━━━━━━━━━━\n`;
       message += `👤 Employee: <b>${employeeName || 'Unknown'}</b>\n`;
-      message += `⏰ Time: ${time || new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' })}\n`;
-      message += `\n✅ Shift is now active!`;
+      message += `📅 Shift: ${shiftType}\n`;
+      message += `⏰ Started: ${time || manilaTime.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}\n`;
+      message += `\n✅ Ready to work!`;
     }
     
     if (action === 'shift_end') {
@@ -531,24 +537,31 @@ serve(async (req) => {
       const diff = difference || 0;
       const isShort = diff < 0;
       
-      message = `🔴 <b>SHIFT ENDED</b>\n`;
+      message = `🔴 <b>SHIFT ENDED - CASH HANDOVER</b>\n`;
       message += `━━━━━━━━━━━━━━━━━━\n`;
       message += `👤 Employee: <b>${employeeName || 'Unknown'}</b>\n`;
-      message += `⏱ Hours: ${totalHours || 0}h\n`;
-      message += `\n💰 <b>CASH</b>\n`;
-      message += `   Expected: ${formatMoney(expectedCash || 0)}\n`;
-      message += `   Handed: ${formatMoney(cashHandedOver || 0)}\n`;
+      message += `⏱ Worked: ${totalHours || 0} hours\n`;
+      message += `\n💰 <b>CASH REPORT</b>\n`;
+      message += `   📊 Expected: ${formatMoney(expectedCash || 0)}\n`;
+      message += `   💵 Handed Over: ${formatMoney(cashHandedOver || 0)}\n`;
       
       if (diff !== 0) {
-        message += `   ${isShort ? '📉' : '📈'} Difference: <b>${formatMoney(Math.abs(diff))}</b> ${isShort ? 'SHORT ⚠️' : 'OVER'}\n`;
+        message += `\n${isShort ? '⚠️' : '✅'} <b>Discrepancy: ${diff > 0 ? '+' : ''}${formatMoney(diff)}</b>\n`;
+        if (isShort) {
+          message += `   Cash is SHORT by ${formatMoney(Math.abs(diff))}\n`;
+        } else {
+          message += `   Cash is OVER by ${formatMoney(diff)}\n`;
+        }
       } else {
-        message += `   ✅ No difference\n`;
+        message += `\n✅ <b>Cash matches expected!</b>\n`;
       }
       
-      message += `\n💵 <b>EARNINGS</b>\n`;
-      message += `   Base: ${formatMoney(baseSalary || 500)}\n`;
-      message += `   Bonuses: ${formatMoney(bonuses || 0)}\n`;
-      message += `   Total: <b>${formatMoney((baseSalary || 500) + (bonuses || 0))}</b>`;
+      message += `\n💵 <b>EMPLOYEE EARNINGS</b>\n`;
+      message += `   Base Salary: ${formatMoney(baseSalary || 500)}\n`;
+      if ((bonuses || 0) > 0) {
+        message += `   Bonuses: +${formatMoney(bonuses || 0)}\n`;
+      }
+      message += `   <b>Total: ${formatMoney((baseSalary || 500) + (bonuses || 0))}</b>`;
     }
     
     if (action === 'bonus_added') {
