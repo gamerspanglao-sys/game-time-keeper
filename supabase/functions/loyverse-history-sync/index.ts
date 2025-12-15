@@ -116,17 +116,30 @@ serve(async (req) => {
 
         console.log(`💵 ${dateStr}: ${dayReceipts.length} receipts, Cash: ₱${cashSales}`);
 
-        // Upsert to cash_register
+        // Check if record exists
+        const { data: existingRecord } = await supabase
+          .from('cash_register')
+          .select('id, purchases, salaries, other_expenses')
+          .eq('date', dateStr)
+          .maybeSingle();
+
+        // Upsert to cash_register - preserve existing expenses if record exists
+        const upsertData: Record<string, any> = {
+          date: dateStr,
+          expected_sales: Math.round(cashSales),
+        };
+        
+        // Only set defaults for new records
+        if (!existingRecord) {
+          upsertData.opening_balance = 0;
+          upsertData.purchases = 0;
+          upsertData.salaries = 0;
+          upsertData.other_expenses = 0;
+        }
+
         const { error: upsertError } = await supabase
           .from('cash_register')
-          .upsert({
-            date: dateStr,
-            expected_sales: Math.round(cashSales),
-            opening_balance: 0,
-            purchases: 0,
-            salaries: 0,
-            other_expenses: 0,
-          }, { 
+          .upsert(upsertData, { 
             onConflict: 'date',
             ignoreDuplicates: false 
           });
