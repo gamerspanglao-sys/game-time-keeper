@@ -410,10 +410,12 @@ export default function CashRegister() {
       overallTotals.totalDiscrepancy
     ].join(';');
 
-    const csv = [headers.join(';'), ...rows, '', totalsRow].join('\r\n');
+    // Use simple \n for Mac compatibility (not \r\n)
+    const csv = [headers.join(';'), ...rows, '', totalsRow].join('\n');
     
-    // Create blob with proper encoding for Mac
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    // Add BOM for Excel UTF-8 recognition
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
