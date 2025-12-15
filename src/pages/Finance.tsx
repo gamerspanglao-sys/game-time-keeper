@@ -83,6 +83,12 @@ interface CashRecord {
   notes: string | null;
 }
 
+interface ShiftHandover {
+  employee_name: string;
+  cash_handed_over: number | null;
+  gcash_handed_over: number | null;
+}
+
 interface CashExpense {
   id: string;
   cash_register_id: string;
@@ -212,6 +218,9 @@ export default function Finance() {
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
   const [showAllItems, setShowAllItems] = useState(true);
 
+  // ============= CASH VERIFICATION STATE =============
+  const [currentShiftHandovers, setCurrentShiftHandovers] = useState<ShiftHandover[]>([]);
+
   // ============= SYNC FUNCTIONS =============
 
   // Throttled sync - max once per 2 minutes to avoid rate limits
@@ -268,21 +277,55 @@ export default function Finance() {
     if (data) setRecentExpenses(data);
   };
 
+  // Load shift handovers for current shift verification
+  const loadCurrentShiftHandovers = async () => {
+    const currentDate = getShiftDate();
+    const currentShift = getCurrentShift();
+    
+    // Map shift type to shifts table format
+    const shiftTypeFilter = currentShift === 'day' ? 'Day (5AM-5PM)' : 'Night (5PM-5AM)';
+    
+    const { data } = await supabase
+      .from('shifts')
+      .select(`
+        cash_handed_over,
+        gcash_handed_over,
+        employees!inner(name)
+      `)
+      .eq('date', currentDate)
+      .eq('shift_type', shiftTypeFilter)
+      .not('cash_handed_over', 'is', null);
+    
+    if (data) {
+      const handovers: ShiftHandover[] = data.map((s: any) => ({
+        employee_name: s.employees?.name || 'Unknown',
+        cash_handed_over: s.cash_handed_over,
+        gcash_handed_over: s.gcash_handed_over || 0
+      }));
+      setCurrentShiftHandovers(handovers);
+    }
+  };
+
   useEffect(() => {
     loadData();
     loadEmployees();
     loadRecentExpenses();
+    loadCurrentShiftHandovers();
     
     const channel = supabase
       .channel('cash-register-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_register' }, () => {
         loadData(true);
+        loadCurrentShiftHandovers();
         debouncedSync();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, () => {
         loadData(true);
         loadRecentExpenses();
         debouncedSync();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => {
+        loadCurrentShiftHandovers();
       })
       .subscribe();
 
@@ -1335,6 +1378,136 @@ export default function Finance() {
 
   // ============= CASH REGISTER VIEW =============
 
+  // Calculate totals from employee handovers
+  const totalEmployeeCash = currentShiftHandovers.reduce((sum, h) => sum + (h.cash_handed_over || 0), 0);
+  const totalEmployeeGcash = currentShiftHandovers.reduce((sum, h) => sum + (h.gcash_handed_over || 0), 0);
+
+  const renderCashVerificationTracker = () => {
+    const currentDate = getShiftDate();
+    const currentShift = getCurrentShift();
+    const shiftRecord = records.find(r => r.date === currentDate && r.shift === currentShift);
+    
+    const expectedCash = shiftRecord?.cash_expected || 0;
+    const expectedGcash = shiftRecord?.gcash_expected || 0;
+    const adminReceivedCash = shiftRecord?.cash_actual || 0;
+    const adminReceivedGcash = shiftRecord?.gcash_actual || 0;
+    
+    const cashDiff = adminReceivedCash - totalEmployeeCash;
+    const gcashDiff = adminReceivedGcash - totalEmployeeGcash;
+    
+    return (
+      <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">
+              {currentShift === 'day' ? '☀️ Day' : '🌙 Night'} {currentDate}
+            </Badge>
+            <span className="text-muted-foreground">Cash Verification</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {/* Three-column comparison */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="space-y-1">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Loyverse</div>
+              <div className="text-xs text-muted-foreground">Expected</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Staff</div>
+              <div className="text-xs text-muted-foreground">Submitted</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Admin</div>
+              <div className="text-xs text-muted-foreground">Received</div>
+            </div>
+          </div>
+          
+          {/* Cash Row */}
+          <div className="grid grid-cols-3 gap-2 text-center py-2 bg-secondary/30 rounded-lg">
+            <div>
+              <div className="text-[10px] text-muted-foreground">💵 Cash</div>
+              <div className="font-semibold text-green-600">₱{expectedCash.toLocaleString()}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground">💵 Cash</div>
+              <div className="font-semibold text-blue-600">
+                {totalEmployeeCash > 0 ? `₱${totalEmployeeCash.toLocaleString()}` : '—'}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground">💵 Cash</div>
+              <div className={cn("font-semibold", adminReceivedCash > 0 ? "text-primary" : "text-muted-foreground")}>
+                {adminReceivedCash > 0 ? `₱${adminReceivedCash.toLocaleString()}` : '—'}
+              </div>
+            </div>
+          </div>
+          
+          {/* GCash Row */}
+          <div className="grid grid-cols-3 gap-2 text-center py-2 bg-secondary/30 rounded-lg">
+            <div>
+              <div className="text-[10px] text-muted-foreground">📱 GCash</div>
+              <div className="font-semibold text-green-600">₱{expectedGcash.toLocaleString()}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground">📱 GCash</div>
+              <div className="font-semibold text-blue-600">
+                {totalEmployeeGcash > 0 ? `₱${totalEmployeeGcash.toLocaleString()}` : '—'}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground">📱 GCash</div>
+              <div className={cn("font-semibold", adminReceivedGcash > 0 ? "text-primary" : "text-muted-foreground")}>
+                {adminReceivedGcash > 0 ? `₱${adminReceivedGcash.toLocaleString()}` : '—'}
+              </div>
+            </div>
+          </div>
+
+          {/* Employee breakdown */}
+          {currentShiftHandovers.length > 0 && (
+            <div className="pt-2 border-t">
+              <div className="text-[10px] text-muted-foreground mb-1">Staff Handovers:</div>
+              <div className="space-y-1">
+                {currentShiftHandovers.map((h, i) => (
+                  <div key={i} className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">{h.employee_name}</span>
+                    <span>
+                      💵 ₱{(h.cash_handed_over || 0).toLocaleString()}
+                      {(h.gcash_handed_over || 0) > 0 && (
+                        <span className="ml-2">📱 ₱{h.gcash_handed_over?.toLocaleString()}</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Discrepancy section */}
+          {(adminReceivedCash > 0 || adminReceivedGcash > 0) && totalEmployeeCash > 0 && (
+            <div className="pt-2 border-t">
+              <div className="text-[10px] text-muted-foreground mb-1">Staff → Admin Difference:</div>
+              <div className="flex gap-4 text-sm">
+                {cashDiff !== 0 && (
+                  <span className={cn(cashDiff > 0 ? "text-green-600" : "text-red-600")}>
+                    💵 {cashDiff > 0 ? '+' : ''}₱{cashDiff.toLocaleString()}
+                  </span>
+                )}
+                {gcashDiff !== 0 && (
+                  <span className={cn(gcashDiff > 0 ? "text-green-600" : "text-red-600")}>
+                    📱 {gcashDiff > 0 ? '+' : ''}₱{gcashDiff.toLocaleString()}
+                  </span>
+                )}
+                {cashDiff === 0 && gcashDiff === 0 && (
+                  <span className="text-green-600">✓ Match</span>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
   const renderCashRegister = () => {
     // Employee View - simplified, no duplicate cash entry
     if (!isAdminMode) {
@@ -1353,6 +1526,9 @@ export default function Finance() {
               Admin
             </Button>
           </div>
+
+          {/* Cash Verification Tracker */}
+          {renderCashVerificationTracker()}
 
           {/* Today's Summary Card - only if has data */}
           {todayRecord && todayRecord.expected_sales > 0 && (
