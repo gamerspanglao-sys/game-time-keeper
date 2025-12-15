@@ -73,6 +73,8 @@ interface CashRecord {
   expected_sales: number;
   cost: number;
   actual_cash: number | null;
+  cash_actual: number | null;
+  gcash_actual: number | null;
   discrepancy: number | null;
   purchases: number;
   salaries: number;
@@ -2421,14 +2423,13 @@ export default function Finance() {
                         <th className="text-left py-3 px-2 font-semibold text-muted-foreground">Date</th>
                         <th className="text-left py-3 px-2 font-semibold text-muted-foreground">Shift</th>
                         <th className="text-right py-3 px-2 font-semibold text-muted-foreground">Sales</th>
-                        <th className="text-right py-3 px-2 font-semibold text-muted-foreground">Expenses</th>
+                        <th className="text-right py-3 px-2 font-semibold text-green-500">Cash</th>
+                        <th className="text-right py-3 px-2 font-semibold text-blue-500">GCash</th>
                         <th className="text-right py-3 px-2 font-semibold text-muted-foreground">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
                       {records.slice(0, 10).map((record, index) => {
-                        const recordExpenses = expenses.filter(e => e.cash_register_id === record.id);
-                        const totalExp = recordExpenses.reduce((sum, e) => sum + e.amount, 0);
                         return (
                           <tr 
                             key={record.id} 
@@ -2443,8 +2444,13 @@ export default function Finance() {
                                 {record.shift === 'day' ? '☀️' : '🌙'}
                               </span>
                             </td>
-                            <td className="py-3 px-2 text-right font-semibold text-green-500">₱{record.expected_sales.toLocaleString()}</td>
-                            <td className="py-3 px-2 text-right font-semibold text-red-500">₱{totalExp.toLocaleString()}</td>
+                            <td className="py-3 px-2 text-right font-semibold">₱{record.expected_sales.toLocaleString()}</td>
+                            <td className="py-3 px-2 text-right font-semibold text-green-500">
+                              {record.cash_actual !== null ? `₱${record.cash_actual.toLocaleString()}` : '-'}
+                            </td>
+                            <td className="py-3 px-2 text-right font-semibold text-blue-500">
+                              {record.gcash_actual !== null && record.gcash_actual > 0 ? `₱${record.gcash_actual.toLocaleString()}` : '-'}
+                            </td>
                             <td className={cn(
                               "py-3 px-2 text-right font-bold",
                               record.discrepancy === 0 ? "text-green-500" :

@@ -133,11 +133,15 @@ export type Database = {
       cash_register: {
         Row: {
           actual_cash: number | null
+          cash_actual: number | null
+          cash_expected: number | null
           cost: number
           created_at: string
           date: string
           discrepancy: number | null
           expected_sales: number
+          gcash_actual: number | null
+          gcash_expected: number | null
           id: string
           notes: string | null
           opening_balance: number
@@ -149,11 +153,15 @@ export type Database = {
         }
         Insert: {
           actual_cash?: number | null
+          cash_actual?: number | null
+          cash_expected?: number | null
           cost?: number
           created_at?: string
           date: string
           discrepancy?: number | null
           expected_sales?: number
+          gcash_actual?: number | null
+          gcash_expected?: number | null
           id?: string
           notes?: string | null
           opening_balance?: number
@@ -165,11 +173,15 @@ export type Database = {
         }
         Update: {
           actual_cash?: number | null
+          cash_actual?: number | null
+          cash_expected?: number | null
           cost?: number
           created_at?: string
           date?: string
           discrepancy?: number | null
           expected_sales?: number
+          gcash_actual?: number | null
+          gcash_expected?: number | null
           id?: string
           notes?: string | null
           opening_balance?: number
@@ -270,6 +282,7 @@ export type Database = {
           date: string
           employee_id: string
           expected_cash: number | null
+          gcash_handed_over: number | null
           id: string
           shift_end: string | null
           shift_start: string | null
@@ -287,6 +300,7 @@ export type Database = {
           date?: string
           employee_id: string
           expected_cash?: number | null
+          gcash_handed_over?: number | null
           id?: string
           shift_end?: string | null
           shift_start?: string | null
@@ -304,6 +318,7 @@ export type Database = {
           date?: string
           employee_id?: string
           expected_cash?: number | null
+          gcash_handed_over?: number | null
           id?: string
           shift_end?: string | null
           shift_start?: string | null

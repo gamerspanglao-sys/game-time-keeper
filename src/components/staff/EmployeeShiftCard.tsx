@@ -74,6 +74,7 @@ export function EmployeeShiftCard() {
   // End shift dialog
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [cashInput, setCashInput] = useState('');
+  const [gcashInput, setGcashInput] = useState('');
   const [selectedShiftToEnd, setSelectedShiftToEnd] = useState<ActiveShiftWithEmployee | null>(null);
   
   // PIN dialog for admin
@@ -260,8 +261,17 @@ export function EmployeeShiftCard() {
 
   const endShift = async () => {
     const shiftToEnd = selectedShiftToEnd || activeShift;
-    if (!shiftToEnd || !cashInput) {
-      toast.error('Enter cash amount');
+    if (!shiftToEnd) {
+      toast.error('No shift selected');
+      return;
+    }
+    
+    const cashAmount = parseInt(cashInput) || 0;
+    const gcashAmount = parseInt(gcashInput) || 0;
+    const totalAmount = cashAmount + gcashAmount;
+    
+    if (totalAmount === 0) {
+      toast.error('Enter Cash or GCash amount');
       return;
     }
 
@@ -270,7 +280,6 @@ export function EmployeeShiftCard() {
       const now = new Date();
       const startTime = new Date(shiftToEnd.shift_start!);
       const totalHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
-      const cashAmount = parseInt(cashInput);
       
       // Determine the shift type based on when shift started (not current time)
       const startHour = (() => {
@@ -306,7 +315,7 @@ export function EmployeeShiftCard() {
       const expectedCash = cashRecord?.expected_sales || 0;
       const totalExpenses = (cashRecord?.purchases || 0) + (cashRecord?.salaries || 0) + (cashRecord?.other_expenses || 0);
       const calculatedExpected = (cashRecord?.opening_balance || 0) + expectedCash - totalExpenses;
-      const discrepancy = cashAmount - calculatedExpected;
+      const discrepancy = totalAmount - calculatedExpected;
 
       // Get bonuses for this shift
       const { data: bonuses } = await supabase
@@ -316,13 +325,14 @@ export function EmployeeShiftCard() {
       
       const totalBonusAmount = bonuses?.reduce((sum, b) => sum + b.amount, 0) || 0;
 
-      // Update shift with cash data
+      // Update shift with cash data (total = cash + gcash)
       const { error } = await supabase
         .from('shifts')
         .update({
           shift_end: now.toISOString(),
           total_hours: Math.round(totalHours * 100) / 100,
-          cash_handed_over: cashAmount,
+          cash_handed_over: totalAmount,
+          gcash_handed_over: gcashAmount,
           cash_difference: discrepancy,
           expected_cash: calculatedExpected,
           status: 'closed'
@@ -331,12 +341,14 @@ export function EmployeeShiftCard() {
 
       if (error) throw error;
 
-      // Update cash_register with actual cash
+      // Update cash_register with actual cash and gcash
       if (cashRecord) {
         await supabase
           .from('cash_register')
           .update({
-            actual_cash: cashAmount,
+            actual_cash: totalAmount,
+            cash_actual: cashAmount,
+            gcash_actual: gcashAmount,
             discrepancy: discrepancy
           })
           .eq('id', cashRecord.id);
@@ -346,7 +358,9 @@ export function EmployeeShiftCard() {
           .insert({
             date: shiftDate,
             shift: shiftType,
-            actual_cash: cashAmount,
+            actual_cash: totalAmount,
+            cash_actual: cashAmount,
+            gcash_actual: gcashAmount,
             discrepancy: discrepancy
           });
       }
@@ -361,7 +375,9 @@ export function EmployeeShiftCard() {
           action: 'shift_end',
           employeeName,
           totalHours: totalHours.toFixed(1),
-          cashHandedOver: cashAmount,
+          cashHandedOver: totalAmount,
+          cashAmount: cashAmount,
+          gcashAmount: gcashAmount,
           expectedCash: calculatedExpected,
           difference: discrepancy,
           bonuses: totalBonusAmount,
@@ -371,15 +387,16 @@ export function EmployeeShiftCard() {
 
       // Show success with discrepancy info
       if (discrepancy !== 0) {
-        toast.warning(`Shift ended! Cash discrepancy: ${discrepancy > 0 ? '+' : ''}₱${discrepancy.toLocaleString()}`);
+        toast.warning(`Shift ended! Discrepancy: ${discrepancy > 0 ? '+' : ''}₱${discrepancy.toLocaleString()}`);
       } else {
-        toast.success('Shift ended! Cash matches expected.');
+        toast.success('Shift ended! Total matches expected.');
       }
       
       setActiveShift(null);
       setSelectedShiftToEnd(null);
       setShiftBonuses([]);
       setCashInput('');
+      setGcashInput('');
       setShowEndDialog(false);
       loadAllActiveShifts();
     } catch (error) {
@@ -543,6 +560,7 @@ export function EmployeeShiftCard() {
     setSelectedShiftToEnd(shift);
     setSelectedEmployee(shift.employee_id);
     setCashInput('');
+    setGcashInput('');
     setShowEndDialog(true);
   };
 
@@ -725,23 +743,51 @@ export function EmployeeShiftCard() {
             )}
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm">
               <p className="text-amber-500 font-medium">⚠️ Important:</p>
-              <p className="text-muted-foreground">Enter cash <strong>excluding</strong> ₱2,000 change fund</p>
+              <p className="text-muted-foreground">Enter amounts <strong>excluding</strong> ₱2,000 change fund</p>
             </div>
-            <div>
-              <Label>Cash Handed Over (₱)</Label>
-              <Input
-                type="number"
-                value={cashInput}
-                onChange={(e) => setCashInput(e.target.value)}
-                placeholder="Enter amount"
-                className="text-2xl h-14 text-center mt-2"
-                autoFocus
-              />
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-green-500" />
+                  Cash (₱)
+                </Label>
+                <Input
+                  type="number"
+                  value={cashInput}
+                  onChange={(e) => setCashInput(e.target.value)}
+                  placeholder="0"
+                  className="text-xl h-12 text-center mt-2"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label className="flex items-center gap-2">
+                  <span className="text-blue-500 font-bold text-sm">G</span>
+                  GCash (₱)
+                </Label>
+                <Input
+                  type="number"
+                  value={gcashInput}
+                  onChange={(e) => setGcashInput(e.target.value)}
+                  placeholder="0"
+                  className="text-xl h-12 text-center mt-2"
+                />
+              </div>
             </div>
+            
+            {/* Total Preview */}
+            <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 text-center">
+              <p className="text-sm text-muted-foreground">Total</p>
+              <p className="text-2xl font-bold text-primary">
+                ₱{((parseInt(cashInput) || 0) + (parseInt(gcashInput) || 0)).toLocaleString()}
+              </p>
+            </div>
+            
             <Button 
               onClick={endShift} 
               className="w-full h-12"
-              disabled={ending || !cashInput}
+              disabled={ending || ((parseInt(cashInput) || 0) + (parseInt(gcashInput) || 0) === 0)}
             >
               {ending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Confirm & End Shift
