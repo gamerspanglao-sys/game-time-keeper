@@ -287,7 +287,7 @@ serve(async (req) => {
           await fetch(GOOGLE_SHEETS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rows }),
+            body: JSON.stringify({ rows, action: 'replace' }),
           });
           
           sheetsSynced = true;

@@ -150,7 +150,7 @@ serve(async (req) => {
     const response = await fetch(GOOGLE_SHEETS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rows }),
+      body: JSON.stringify({ rows, action: 'replace' }),
     });
 
     console.log(`✅ Data sent to Google Sheets (status: ${response.status})`);
