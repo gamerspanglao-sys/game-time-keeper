@@ -1112,162 +1112,95 @@ export default function Finance() {
   // ============= CASH REGISTER VIEW =============
 
   const renderCashRegister = () => {
-    // Employee View
+    // Employee View - simplified, no duplicate cash entry
     if (!isAdminMode) {
       return (
-        <div className="space-y-6 max-w-2xl mx-auto">
-          {/* Header */}
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-xl font-bold">Cash Register</h2>
-              <p className="text-muted-foreground text-sm">
-                {format(new Date(), 'dd MMMM yyyy')}
-              </p>
-            </div>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={() => requestAdminAction('admin')}
-            >
-              <Lock className="w-4 h-4" />
-            </Button>
-          </div>
-
-          {/* Current Shift Indicator */}
-          <Card className={cn(
-            "border-2",
-            currentShift === 'day' 
-              ? "border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-amber-500/10" 
-              : "border-indigo-500/30 bg-gradient-to-br from-indigo-500/5 to-indigo-500/10"
-          )}>
-            <CardContent className="pt-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {currentShift === 'day' ? (
-                    <Sun className="w-8 h-8 text-amber-500" />
-                  ) : (
-                    <Moon className="w-8 h-8 text-indigo-500" />
-                  )}
-                  <div>
-                    <div className="font-semibold text-lg">
-                      {currentShift === 'day' ? 'Day Shift' : 'Night Shift'}
+        <div className="space-y-4 max-w-2xl mx-auto">
+          {/* Today's Summary Card - only if has data */}
+          {todayRecord && todayRecord.expected_sales > 0 && (
+            <Card className="bg-secondary/30">
+              <CardContent className="py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Sales</div>
+                      <div className="text-lg font-bold text-green-600">₱{todayRecord.expected_sales.toLocaleString()}</div>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {currentShift === 'day' ? '5:00 AM - 5:00 PM' : '5:00 PM - 5:00 AM'}
+                    <div>
+                      <div className="text-xs text-muted-foreground">Expenses</div>
+                      <div className="text-lg font-bold text-red-600">₱{todayTotalExpenses.toLocaleString()}</div>
                     </div>
-                  </div>
-                </div>
-                <Badge variant={currentShift === 'day' ? 'default' : 'secondary'} className="text-sm">
-                  Active
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Today's Summary Card */}
-          {todayRecord && (
-            <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-              <CardContent className="pt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-xs text-muted-foreground">Sales</div>
-                    <div className="text-xl font-bold text-green-600">₱{todayRecord.expected_sales.toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Expenses</div>
-                    <div className="text-xl font-bold text-red-600">₱{todayTotalExpenses.toLocaleString()}</div>
-                  </div>
-                  {todayRecord.actual_cash != null && (
-                    <>
-                      <div>
-                        <div className="text-xs text-muted-foreground">In Register</div>
-                        <div className="text-xl font-bold">₱{todayRecord.actual_cash.toLocaleString()}</div>
-                      </div>
+                    {todayRecord.actual_cash != null && todayRecord.discrepancy !== null && (
                       <div>
                         <div className="text-xs text-muted-foreground">Discrepancy</div>
                         <div className={cn(
-                          "text-xl font-bold",
+                          "text-lg font-bold",
                           todayRecord.discrepancy === 0 ? "text-green-600" :
-                          todayRecord.discrepancy && todayRecord.discrepancy < 0 ? "text-red-600" : "text-green-600"
+                          todayRecord.discrepancy < 0 ? "text-red-600" : "text-amber-600"
                         )}>
-                          {todayRecord.discrepancy === 0 ? '✓' : 
-                            (todayRecord.discrepancy && todayRecord.discrepancy > 0 ? '+' : '') + 
-                            '₱' + Math.abs(todayRecord.discrepancy || 0).toLocaleString()}
+                          {todayRecord.discrepancy === 0 ? '✓ OK' : 
+                            (todayRecord.discrepancy > 0 ? '+' : '') + 
+                            '₱' + todayRecord.discrepancy.toLocaleString()}
                         </div>
                       </div>
-                    </>
-                  )}
+                    )}
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => requestAdminAction('admin')}
+                  >
+                    <Lock className="w-4 h-4" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Big Action Buttons */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Expense Buttons - compact */}
+          <div className="grid grid-cols-3 gap-2">
             <Button
-              variant="default"
-              className="h-24 flex flex-col gap-2 text-lg font-semibold bg-green-600 hover:bg-green-700"
-              onClick={() => setShowCashDialog(true)}
-            >
-              <Wallet className="w-8 h-8" />
-              Enter Cash
-            </Button>
-
-            <Button
-              variant="default"
-              className="h-24 flex flex-col gap-2 text-lg font-semibold bg-purple-600 hover:bg-purple-700"
+              variant="outline"
+              className="h-16 flex flex-col gap-1 border-purple-500/30 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950"
               onClick={() => setShowExpenseDialog(true)}
             >
-              <Receipt className="w-8 h-8" />
-              Expense
+              <Receipt className="w-5 h-5" />
+              <span className="text-xs">Expense</span>
             </Button>
 
             <Button
               variant="outline"
-              className="h-24 flex flex-col gap-2 text-lg font-semibold border-orange-500/50 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950"
+              className="h-16 flex flex-col gap-1 border-orange-500/30 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950"
               onClick={() => requestAdminAction('purchase')}
             >
-              <Package className="w-8 h-8" />
-              <div className="flex items-center gap-1">
-                Purchases
-                <Lock className="w-3 h-3" />
-              </div>
+              <Package className="w-5 h-5" />
+              <span className="text-xs flex items-center gap-0.5">Purchase <Lock className="w-2.5 h-2.5" /></span>
             </Button>
 
             <Button
               variant="outline"
-              className="h-24 flex flex-col gap-2 text-lg font-semibold border-blue-500/50 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
+              className="h-16 flex flex-col gap-1 border-blue-500/30 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
               onClick={() => requestAdminAction('salary')}
             >
-              <Users className="w-8 h-8" />
-              <div className="flex items-center gap-1">
-                Salaries
-                <Lock className="w-3 h-3" />
-              </div>
+              <Users className="w-5 h-5" />
+              <span className="text-xs flex items-center gap-0.5">Salary <Lock className="w-2.5 h-2.5" /></span>
             </Button>
           </div>
 
           {/* Today's Expenses List */}
           {todayExpenses.length > 0 && (
             <Card>
-              <CardHeader className="py-3">
-                <CardTitle className="text-base">This Shift&apos;s Expenses</CardTitle>
+              <CardHeader className="py-2 pb-1">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Expenses</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-1 pt-0">
                 {todayExpenses.map((expense) => (
-                  <div key={expense.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
-                    <div className="flex items-center gap-3">
+                  <div key={expense.id} className="flex items-center justify-between py-2 px-2 bg-secondary/30 rounded">
+                    <div className="flex items-center gap-2">
                       {getCategoryIcon(expense.category)}
-                      <div>
-                        <div className="font-medium">₱{expense.amount.toLocaleString()}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {expense.description || getCategoryLabel(expense.category)}
-                        </div>
-                      </div>
+                      <span className="text-sm">{expense.description || getCategoryLabel(expense.category)}</span>
                     </div>
-                    <Badge variant="secondary">
-                      {getCategoryLabel(expense.category)}
-                    </Badge>
+                    <span className="font-medium text-sm">₱{expense.amount.toLocaleString()}</span>
                   </div>
                 ))}
               </CardContent>
