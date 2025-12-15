@@ -38,8 +38,12 @@ import {
   Sun,
   Moon,
   Pencil,
-  ClipboardList
+  ClipboardList,
+  CalendarIcon
 } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // ============= TYPES =============
 
@@ -142,6 +146,8 @@ export default function Finance() {
   const [actualCashInput, setActualCashInput] = useState<string>('');
   const [expenseAmount, setExpenseAmount] = useState<string>('');
   const [expenseDescription, setExpenseDescription] = useState<string>('');
+  const [expenseDate, setExpenseDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [expenseShift, setExpenseShift] = useState<ShiftType>(getCurrentShift());
   const [syncing, setSyncing] = useState(false);
   
   // Date range filter for stats
@@ -440,9 +446,7 @@ export default function Finance() {
     }
   };
 
-  const addExpense = async (category: 'purchases' | 'salaries' | 'other', amount: number, description: string) => {
-    const date = getShiftDate();
-    const shift = getCurrentShift();
+  const addExpense = async (category: 'purchases' | 'salaries' | 'other', amount: number, description: string, date: string, shift: ShiftType) => {
 
     try {
       let { data: existing } = await supabase
@@ -501,9 +505,11 @@ export default function Finance() {
       toast.error('Enter valid amount');
       return;
     }
-    addExpense('other', amount, expenseDescription);
+    addExpense('other', amount, expenseDescription, expenseDate, expenseShift);
     setExpenseAmount('');
     setExpenseDescription('');
+    setExpenseDate(format(new Date(), 'yyyy-MM-dd'));
+    setExpenseShift(getCurrentShift());
     setShowExpenseDialog(false);
   };
 
@@ -513,9 +519,11 @@ export default function Finance() {
       toast.error('Enter valid amount');
       return;
     }
-    addExpense('purchases', amount, expenseDescription);
+    addExpense('purchases', amount, expenseDescription, expenseDate, expenseShift);
     setExpenseAmount('');
     setExpenseDescription('');
+    setExpenseDate(format(new Date(), 'yyyy-MM-dd'));
+    setExpenseShift(getCurrentShift());
     setShowPurchaseExpenseDialog(false);
   };
 
@@ -525,9 +533,11 @@ export default function Finance() {
       toast.error('Enter valid amount');
       return;
     }
-    addExpense('salaries', amount, expenseDescription);
+    addExpense('salaries', amount, expenseDescription, expenseDate, expenseShift);
     setExpenseAmount('');
     setExpenseDescription('');
+    setExpenseDate(format(new Date(), 'yyyy-MM-dd'));
+    setExpenseShift(getCurrentShift());
     setShowSalaryDialog(false);
   };
 
@@ -916,10 +926,46 @@ export default function Finance() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Receipt className="w-5 h-5 text-purple-600" />
-              Add Expense - {currentShift === 'day' ? 'Day Shift' : 'Night Shift'}
+              Add Expense
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            <div className="flex gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="flex-1 justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(new Date(expenseDate), 'dd.MM.yyyy')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={new Date(expenseDate)}
+                    onSelect={(date) => date && setExpenseDate(format(date, 'yyyy-MM-dd'))}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              <Select value={expenseShift} onValueChange={(v) => setExpenseShift(v as ShiftType)}>
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">
+                    <span className="flex items-center gap-2">
+                      <Sun className="w-4 h-4" /> Day
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="night">
+                    <span className="flex items-center gap-2">
+                      <Moon className="w-4 h-4" /> Night
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Input
               type="number"
               placeholder="Amount"
@@ -950,6 +996,42 @@ export default function Finance() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            <div className="flex gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="flex-1 justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(new Date(expenseDate), 'dd.MM.yyyy')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={new Date(expenseDate)}
+                    onSelect={(date) => date && setExpenseDate(format(date, 'yyyy-MM-dd'))}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              <Select value={expenseShift} onValueChange={(v) => setExpenseShift(v as ShiftType)}>
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">
+                    <span className="flex items-center gap-2">
+                      <Sun className="w-4 h-4" /> Day
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="night">
+                    <span className="flex items-center gap-2">
+                      <Moon className="w-4 h-4" /> Night
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Input
               type="number"
               placeholder="Amount"
@@ -980,6 +1062,42 @@ export default function Finance() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            <div className="flex gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="flex-1 justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(new Date(expenseDate), 'dd.MM.yyyy')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={new Date(expenseDate)}
+                    onSelect={(date) => date && setExpenseDate(format(date, 'yyyy-MM-dd'))}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              <Select value={expenseShift} onValueChange={(v) => setExpenseShift(v as ShiftType)}>
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">
+                    <span className="flex items-center gap-2">
+                      <Sun className="w-4 h-4" /> Day
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="night">
+                    <span className="flex items-center gap-2">
+                      <Moon className="w-4 h-4" /> Night
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Input
               type="number"
               placeholder="Amount"
