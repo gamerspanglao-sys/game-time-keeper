@@ -177,6 +177,11 @@ export default function CashRegister() {
       setShowPinDialog(false);
       setPinInput('');
       setPinError('');
+      // Open edit dialog for current record after login
+      const record = records.find(r => r.date === selectedDate && r.shift === selectedShift);
+      if (record) {
+        openEditDialog(record);
+      }
     } else {
       setPinError('Wrong PIN');
     }
@@ -337,11 +342,21 @@ export default function CashRegister() {
                 </Badge>
                 <span className="text-muted-foreground">Cash Verification</span>
               </div>
-              {isAdminMode && (
-                <Button variant="ghost" size="sm" onClick={() => openEditDialog(currentRecord)}>
-                  <Pencil className="w-4 h-4" />
-                </Button>
-              )}
+              <Button 
+                variant="default" 
+                size="sm" 
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() => {
+                  if (isAdminMode) {
+                    openEditDialog(currentRecord);
+                  } else {
+                    setShowPinDialog(true);
+                  }
+                }}
+              >
+                <Pencil className="w-4 h-4 mr-1" />
+                Enter Cash
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
