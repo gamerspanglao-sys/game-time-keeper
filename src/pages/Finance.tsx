@@ -139,6 +139,10 @@ export default function Finance() {
   const [expenseDescription, setExpenseDescription] = useState<string>('');
   const [syncing, setSyncing] = useState(false);
   
+  // Date range filter for stats
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  
   // Dialogs
   const [showCashDialog, setShowCashDialog] = useState(false);
   const [showExpenseDialog, setShowExpenseDialog] = useState(false);
@@ -611,8 +615,17 @@ export default function Finance() {
   });
   const todayTotalExpenses = (todayRecord?.purchases || 0) + (todayRecord?.salaries || 0) + (todayRecord?.other_expenses || 0);
 
-  // Overall totals for summary
-  const overallTotals = records.reduce((acc, r) => ({
+  // Filter records by date range
+  const filteredRecords = React.useMemo(() => {
+    return records.filter(r => {
+      if (dateFrom && r.date < dateFrom) return false;
+      if (dateTo && r.date > dateTo) return false;
+      return true;
+    });
+  }, [records, dateFrom, dateTo]);
+
+  // Overall totals for summary (using filtered records)
+  const overallTotals = filteredRecords.reduce((acc, r) => ({
     totalSales: acc.totalSales + r.expected_sales,
     totalCost: acc.totalCost + (r.cost || 0),
     totalPurchases: acc.totalPurchases + r.purchases,
@@ -638,7 +651,7 @@ export default function Finance() {
   const dailyRecords = React.useMemo(() => {
     const dailyMap = new Map<string, DailyRecord>();
     
-    records.forEach(r => {
+    filteredRecords.forEach(r => {
       const existing = dailyMap.get(r.date);
       if (existing) {
         existing.expected_sales += r.expected_sales;
@@ -670,7 +683,7 @@ export default function Finance() {
     });
     
     return Array.from(dailyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
-  }, [records]);
+  }, [filteredRecords]);
 
   const exportToCSV = () => {
     if (records.length === 0) {
@@ -1264,11 +1277,83 @@ export default function Finance() {
     return (
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold">Cash Register</h2>
-            <p className="text-muted-foreground text-sm">Admin Mode</p>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold">Cash Register</h2>
+              <p className="text-muted-foreground text-sm">Admin Mode</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setIsAdminMode(false)}
+              >
+                <EyeOff className="w-4 h-4 mr-2" />
+                Exit
+              </Button>
+            </div>
           </div>
+          
+          {/* Date Range Filter */}
+          <Card className="p-4">
+            <div className="flex flex-wrap gap-4 items-end">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">From</Label>
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">To</Label>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setDateFrom('');
+                  setDateTo(format(new Date(), 'yyyy-MM-dd'));
+                }}
+              >
+                All Time
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  const today = new Date();
+                  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+                  setDateFrom(format(firstDay, 'yyyy-MM-dd'));
+                  setDateTo(format(today, 'yyyy-MM-dd'));
+                }}
+              >
+                This Month
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  const today = new Date();
+                  const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                  setDateFrom(format(weekAgo, 'yyyy-MM-dd'));
+                  setDateTo(format(today, 'yyyy-MM-dd'));
+                }}
+              >
+                Last 7 Days
+              </Button>
+            </div>
+          </Card>
+          
+          {/* Sync Controls */}
           <div className="flex flex-wrap gap-2">
             <Input
               type="date"
@@ -1334,14 +1419,6 @@ export default function Finance() {
               )}
               Sheets
             </Button>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={() => setIsAdminMode(false)}
-            >
-              <EyeOff className="w-4 h-4 mr-2" />
-              Exit
-            </Button>
           </div>
         </div>
 
@@ -1350,7 +1427,12 @@ export default function Finance() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <FileSpreadsheet className="w-5 h-5" />
-              Total for {records.length} shifts
+              Total for {filteredRecords.length} shifts
+              {(dateFrom || dateTo) && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  ({dateFrom || 'start'} — {dateTo || 'now'})
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -1421,7 +1503,7 @@ export default function Finance() {
         <Card>
           <CardHeader className="py-3 flex flex-row items-center justify-between">
             <CardTitle className="text-base">
-              History ({viewMode === 'daily' ? `${dailyRecords.length} days` : `${records.length} shifts`})
+              History ({viewMode === 'daily' ? `${dailyRecords.length} days` : `${filteredRecords.length} shifts`})
             </CardTitle>
             <div className="flex border rounded-md overflow-hidden">
               <Button
@@ -1503,7 +1585,7 @@ export default function Finance() {
                     })
                   ) : (
                     // Shift-by-shift view
-                    records.map((record) => {
+                    filteredRecords.map((record) => {
                       const opExpenses = record.salaries + record.other_expenses;
                       const grossProfit = record.expected_sales - (record.cost || 0);
                       const netProfit = grossProfit - opExpenses;
