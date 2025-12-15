@@ -387,8 +387,8 @@ export default function CashRegister() {
           </CardContent>
         </Card>
 
-        <Card className={currentRecord?.discrepancy !== null && currentRecord?.discrepancy !== 0 ? 
-          (currentRecord.discrepancy < 0 ? 'border-red-500/50' : 'border-green-500/50') : ''}>
+        <Card className={currentRecord?.discrepancy != null && currentRecord?.discrepancy !== 0 ? 
+          ((currentRecord?.discrepancy ?? 0) < 0 ? 'border-red-500/50' : 'border-green-500/50') : ''}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Calculator className="w-4 h-4" />
@@ -396,7 +396,7 @@ export default function CashRegister() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {currentRecord?.discrepancy !== null ? (
+            {currentRecord?.discrepancy != null ? (
               <div className="flex items-center gap-2">
                 {currentRecord.discrepancy === 0 ? (
                   <>
