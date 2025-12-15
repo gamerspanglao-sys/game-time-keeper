@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { EmployeeShiftCard } from '@/components/staff/EmployeeShiftCard';
 import { EmployeeManagement } from '@/components/staff/EmployeeManagement';
 import { PayrollReport } from '@/components/staff/PayrollReport';
-import { ActivityLog } from '@/components/ActivityLog';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,7 +38,6 @@ import {
   Sun,
   Moon,
   Pencil,
-  ClipboardList,
   CalendarIcon
 } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
@@ -2160,7 +2159,7 @@ export default function Finance() {
         )}
 
         {/* Tabs Navigation */}
-        <TabsList className="grid w-full max-w-2xl grid-cols-4 bg-secondary/50 p-1 rounded-xl">
+        <TabsList className="grid w-full max-w-xl grid-cols-4 bg-secondary/50 p-1 rounded-xl">
           <TabsTrigger 
             value="shifts" 
             className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all"
@@ -2188,13 +2187,6 @@ export default function Finance() {
           >
             <ShoppingCart className="w-4 h-4" />
             <span className="hidden sm:inline">Orders</span>
-          </TabsTrigger>
-          <TabsTrigger 
-            value="activity" 
-            className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all"
-          >
-            <ClipboardList className="w-4 h-4" />
-            <span className="hidden sm:inline">Activity</span>
           </TabsTrigger>
         </TabsList>
 
@@ -2379,7 +2371,7 @@ export default function Finance() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                      <ClipboardList className="w-4 h-4" />
+                      <Receipt className="w-4 h-4" />
                       Recent Expenses
                     </h4>
                     <Badge variant="secondary" className="text-xs">Last 10</Badge>
@@ -2461,7 +2453,58 @@ export default function Finance() {
             </div>
           </div>
 
-          {/* Cash History Table */}
+          {/* Current Shift Tracker */}
+          {(() => {
+            const currentShift = getCurrentShift();
+            const shiftDate = getShiftDate();
+            const currentRecord = records.find(r => r.date === shiftDate && r.shift === currentShift);
+            const cashExpected = currentRecord?.cash_expected || 0;
+            const gcashExpected = currentRecord?.gcash_expected || 0;
+            const totalExpected = currentRecord?.expected_sales || 0;
+            
+            return (
+              <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10">
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      {currentShift === 'day' ? (
+                        <Sun className="w-5 h-5 text-amber-500" />
+                      ) : (
+                        <Moon className="w-5 h-5 text-indigo-500" />
+                      )}
+                      <span className="font-semibold">
+                        Current: {format(new Date(shiftDate), 'MMM d')} {currentShift === 'day' ? 'Day' : 'Night'}
+                      </span>
+                    </div>
+                    <Badge variant="outline" className="text-lg font-bold">
+                      ₱{totalExpected.toLocaleString()}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-green-500/10 rounded-xl p-4 border border-green-500/20">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Wallet className="w-4 h-4 text-green-500" />
+                        <span className="text-sm text-muted-foreground">Cash</span>
+                      </div>
+                      <div className="text-2xl font-bold text-green-500">
+                        ₱{cashExpected.toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="bg-blue-500/10 rounded-xl p-4 border border-blue-500/20">
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp className="w-4 h-4 text-blue-500" />
+                        <span className="text-sm text-muted-foreground">GCash</span>
+                      </div>
+                      <div className="text-2xl font-bold text-blue-500">
+                        ₱{gcashExpected.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           <Card className="border-border/50 overflow-hidden">
             <CardHeader className="pb-4 bg-gradient-to-r from-green-500/5 to-transparent border-b border-border/50">
               <div className="flex items-center gap-3">
@@ -2550,10 +2593,6 @@ export default function Finance() {
           {renderPurchaseOrders()}
         </TabsContent>
 
-        {/* ACTIVITY TAB */}
-        <TabsContent value="activity" className="animate-fade-in">
-          <ActivityLog />
-        </TabsContent>
       </Tabs>
 
       {renderDialogs()}
