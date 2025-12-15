@@ -373,7 +373,7 @@ export default function CashRegister() {
   }), { totalSales: 0, totalPurchases: 0, totalSalaries: 0, totalOther: 0, totalDiscrepancy: 0, daysWithDiscrepancy: 0 });
 
   const exportToCSV = () => {
-    // Main cash register data - use semicolon for Mac compatibility
+    // Main cash register data - use comma for Mac Excel compatibility
     const headers = ['Date', 'Opening Balance', 'Cash Sales', 'Purchases', 'Salaries', 'Other Expenses', 'Total Expenses', 'Expected', 'Actual', 'Discrepancy'];
     
     // Sort by date ascending for the export
@@ -393,7 +393,7 @@ export default function CashRegister() {
         expected,
         r.actual_cash ?? '',
         r.discrepancy ?? ''
-      ].join(';');
+      ].join(',');
     });
 
     // Add totals row
@@ -408,10 +408,10 @@ export default function CashRegister() {
       '',
       '',
       overallTotals.totalDiscrepancy
-    ].join(';');
+    ].join(',');
 
-    // Use simple \n for Mac compatibility (not \r\n)
-    const csv = [headers.join(';'), ...rows, '', totalsRow].join('\n');
+    // Use commas as delimiter for Mac Excel compatibility
+    const csv = [headers.join(','), ...rows, '', totalsRow].join('\n');
     
     // Add BOM for Excel UTF-8 recognition
     const BOM = '\uFEFF';
