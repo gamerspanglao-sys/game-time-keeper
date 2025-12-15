@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
@@ -164,15 +164,39 @@ export default function Finance() {
 
   // ============= SYNC FUNCTIONS =============
 
-  const syncToGoogleSheets = useCallback(async () => {
+  // Throttled sync - max once per 2 minutes to avoid rate limits
+  const lastSyncRef = useRef<number>(0);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const syncToGoogleSheets = useCallback(async (force = false) => {
+    const now = Date.now();
+    const minInterval = 120000; // 2 minutes
+    
+    // If not forced and called too recently, skip
+    if (!force && now - lastSyncRef.current < minInterval) {
+      console.log('📊 Skipping auto-sync (rate limited)');
+      return;
+    }
+    
     try {
+      lastSyncRef.current = now;
       const { error } = await supabase.functions.invoke('google-sheets-sync');
       if (error) throw error;
-      console.log('📊 Auto-synced to Google Sheets');
+      console.log('📊 Synced to Google Sheets');
     } catch (error) {
-      console.error('Error auto-syncing to Google Sheets:', error);
+      console.error('Error syncing to Google Sheets:', error);
     }
   }, []);
+
+  // Debounced sync for realtime changes - waits 30s after last change
+  const debouncedSync = useCallback(() => {
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+    syncTimeoutRef.current = setTimeout(() => {
+      syncToGoogleSheets(false);
+    }, 30000); // 30 second debounce
+  }, [syncToGoogleSheets]);
 
   // ============= EFFECTS =============
 
@@ -183,18 +207,21 @@ export default function Finance() {
       .channel('cash-register-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_register' }, () => {
         loadData(true);
-        syncToGoogleSheets();
+        debouncedSync();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, () => {
         loadData(true);
-        syncToGoogleSheets();
+        debouncedSync();
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
     };
-  }, [syncToGoogleSheets]);
+  }, [debouncedSync]);
 
   // ============= CASH REGISTER FUNCTIONS =============
 
