@@ -401,13 +401,17 @@ export function EmployeeShiftCard() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm">
+              <p className="text-amber-500 font-medium">⚠️ Important:</p>
+              <p className="text-muted-foreground">Enter cash amount <strong>excluding</strong> the ₱2,000 change fund (which stays in the register)</p>
+            </div>
             <div>
               <Label>Cash Handed Over (₱)</Label>
               <Input
                 type="number"
                 value={cashInput}
                 onChange={(e) => setCashInput(e.target.value)}
-                placeholder="Enter amount"
+                placeholder="Enter amount (without 2000₱ change)"
                 className="text-2xl h-14 text-center mt-2"
                 autoFocus
               />
