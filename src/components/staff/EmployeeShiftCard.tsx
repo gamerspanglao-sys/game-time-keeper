@@ -64,13 +64,17 @@ export function EmployeeShiftCard() {
   const [starting, setStarting] = useState(false);
   const [ending, setEnding] = useState(false);
   
-  // Live timer
+  // Live timer for selected employee
   const [elapsedTime, setElapsedTime] = useState<string>('00:00:00');
   const currentShiftType = getCurrentShiftType();
+  
+  // Start shift dialog
+  const [showStartDialog, setShowStartDialog] = useState(false);
   
   // End shift dialog
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [cashInput, setCashInput] = useState('');
+  const [selectedShiftToEnd, setSelectedShiftToEnd] = useState<ActiveShiftWithEmployee | null>(null);
   
   // PIN dialog for admin
   const [showPinDialog, setShowPinDialog] = useState(false);
@@ -87,6 +91,7 @@ export function EmployeeShiftCard() {
   
   // Bonus dialog
   const [showBonusDialog, setShowBonusDialog] = useState(false);
+  const [bonusShift, setBonusShift] = useState<ActiveShiftWithEmployee | null>(null);
   const [bonusType, setBonusType] = useState<string>('sold_goods');
   const [bonusQuantity, setBonusQuantity] = useState('1');
   const [bonusAmount, setBonusAmount] = useState('');
@@ -254,7 +259,8 @@ export function EmployeeShiftCard() {
   };
 
   const endShift = async () => {
-    if (!activeShift || !cashInput) {
+    const shiftToEnd = selectedShiftToEnd || activeShift;
+    if (!shiftToEnd || !cashInput) {
       toast.error('Enter cash amount');
       return;
     }
@@ -262,7 +268,7 @@ export function EmployeeShiftCard() {
     setEnding(true);
     try {
       const now = new Date();
-      const startTime = new Date(activeShift.shift_start!);
+      const startTime = new Date(shiftToEnd.shift_start!);
       const totalHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
       const cashAmount = parseInt(cashInput);
       
@@ -280,6 +286,14 @@ export function EmployeeShiftCard() {
       const calculatedExpected = (cashRecord?.opening_balance || 0) + expectedCash - totalExpenses;
       const discrepancy = cashAmount - calculatedExpected;
 
+      // Get bonuses for this shift
+      const { data: bonuses } = await supabase
+        .from('bonuses')
+        .select('amount')
+        .eq('shift_id', shiftToEnd.id);
+      
+      const totalBonusAmount = bonuses?.reduce((sum, b) => sum + b.amount, 0) || 0;
+
       // Update shift with cash data
       const { error } = await supabase
         .from('shifts')
@@ -291,7 +305,7 @@ export function EmployeeShiftCard() {
           expected_cash: calculatedExpected,
           status: 'closed'
         })
-        .eq('id', activeShift.id);
+        .eq('id', shiftToEnd.id);
 
       if (error) throw error;
 
@@ -305,7 +319,6 @@ export function EmployeeShiftCard() {
           })
           .eq('id', cashRecord.id);
       } else {
-        // Create new cash_register entry if doesn't exist
         await supabase
           .from('cash_register')
           .insert({
@@ -316,21 +329,21 @@ export function EmployeeShiftCard() {
           });
       }
 
-      // Calculate total bonuses
-      const totalBonusAmount = shiftBonuses.reduce((sum, b) => sum + b.amount, 0);
-
       // Send Telegram notification
-      const employee = employees.find(e => e.id === selectedEmployee);
+      const employeeName = 'employee_name' in shiftToEnd 
+        ? (shiftToEnd as ActiveShiftWithEmployee).employee_name 
+        : employees.find(e => e.id === shiftToEnd.employee_id)?.name;
+        
       await supabase.functions.invoke('telegram-notify', {
         body: { 
           action: 'shift_end',
-          employeeName: employee?.name,
+          employeeName,
           totalHours: totalHours.toFixed(1),
           cashHandedOver: cashAmount,
           expectedCash: calculatedExpected,
           difference: discrepancy,
           bonuses: totalBonusAmount,
-          baseSalary: activeShift.base_salary
+          baseSalary: shiftToEnd.base_salary
         }
       });
 
@@ -342,6 +355,7 @@ export function EmployeeShiftCard() {
       }
       
       setActiveShift(null);
+      setSelectedShiftToEnd(null);
       setShiftBonuses([]);
       setCashInput('');
       setShowEndDialog(false);
@@ -372,7 +386,8 @@ export function EmployeeShiftCard() {
   };
 
   const addBonus = async () => {
-    if (!activeShift || !bonusAmount) {
+    const targetShift = bonusShift || activeShift;
+    if (!targetShift || !bonusAmount) {
       toast.error('Enter bonus amount');
       return;
     }
@@ -381,8 +396,8 @@ export function EmployeeShiftCard() {
       const { data, error } = await supabase
         .from('bonuses')
         .insert({
-          shift_id: activeShift.id,
-          employee_id: selectedEmployee,
+          shift_id: targetShift.id,
+          employee_id: targetShift.employee_id,
           date: format(new Date(), 'yyyy-MM-dd'),
           bonus_type: bonusType,
           quantity: parseInt(bonusQuantity) || 1,
@@ -394,21 +409,24 @@ export function EmployeeShiftCard() {
 
       if (error) throw error;
 
-      setShiftBonuses([...shiftBonuses, data]);
       toast.success('Bonus added!');
       
       // Reset form
       setBonusAmount('');
       setBonusQuantity('1');
       setBonusComment('');
+      setBonusShift(null);
       setShowBonusDialog(false);
 
       // Send Telegram notification
-      const employee = employees.find(e => e.id === selectedEmployee);
+      const employeeName = 'employee_name' in targetShift 
+        ? (targetShift as ActiveShiftWithEmployee).employee_name 
+        : employees.find(e => e.id === targetShift.employee_id)?.name;
+        
       await supabase.functions.invoke('telegram-notify', {
         body: { 
           action: 'bonus_added',
-          employeeName: employee?.name,
+          employeeName,
           bonusType: bonusType,
           amount: parseInt(bonusAmount)
         }
@@ -498,168 +516,194 @@ export function EmployeeShiftCard() {
     );
   }
 
+  // Open end shift dialog for specific employee
+  const openEndShiftDialog = (shift: ActiveShiftWithEmployee) => {
+    setSelectedShiftToEnd(shift);
+    setSelectedEmployee(shift.employee_id);
+    setCashInput('');
+    setShowEndDialog(true);
+  };
+
+  // Open bonus dialog for specific employee
+  const openBonusDialog = (shift: ActiveShiftWithEmployee) => {
+    setBonusShift(shift);
+    setSelectedEmployee(shift.employee_id);
+    setBonusType('sold_goods');
+    setBonusQuantity('1');
+    setBonusAmount('');
+    setBonusComment('');
+    setShowBonusDialog(true);
+  };
+
   return (
     <div className="space-y-4">
-      {/* Header with shift type and on-duty employees */}
-      <Card className={currentShiftType === 'day' 
-        ? "border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-transparent" 
-        : "border-indigo-500/30 bg-gradient-to-br from-indigo-500/5 to-transparent"
-      }>
-        <CardContent className="py-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              {currentShiftType === 'day' ? (
-                <Sun className="w-5 h-5 text-amber-500" />
-              ) : (
-                <Moon className="w-5 h-5 text-indigo-500" />
-              )}
-              <span className="font-semibold">{currentShiftType === 'day' ? 'Day Shift' : 'Night Shift'}</span>
-              <Badge variant="outline" className="text-xs">
-                {currentShiftType === 'day' ? '5AM - 5PM' : '5PM - 5AM'}
-              </Badge>
+      {/* Header - Current shift type */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {currentShiftType === 'day' ? (
+            <Sun className="w-5 h-5 text-amber-500" />
+          ) : (
+            <Moon className="w-5 h-5 text-indigo-500" />
+          )}
+          <span className="font-semibold">{currentShiftType === 'day' ? 'Day Shift' : 'Night Shift'}</span>
+          <Badge variant="outline" className="text-xs">
+            {currentShiftType === 'day' ? '5AM-5PM' : '5PM-5AM'}
+          </Badge>
+        </div>
+        <Button variant="ghost" size="sm" onClick={requestAdminEdit}>
+          <Lock className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* Active shifts - clickable cards */}
+      {allActiveShifts.length > 0 && (
+        <div className="space-y-2">
+          {allActiveShifts.map((shift) => {
+            // Calculate elapsed time for this shift
+            const start = shift.shift_start ? new Date(shift.shift_start).getTime() : 0;
+            const elapsed = start ? Date.now() - start : 0;
+            const hours = Math.floor(elapsed / (1000 * 60 * 60));
+            const minutes = Math.floor((elapsed % (1000 * 60 * 60)) / (1000 * 60));
+            const timeStr = `${hours}h ${minutes}m`;
+            
+            return (
+              <Card key={shift.id} className="border-green-500/30 bg-green-500/5">
+                <CardContent className="py-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                        <Clock className="w-5 h-5 text-green-500" />
+                      </div>
+                      <div>
+                        <div className="font-semibold">{shift.employee_name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {shift.shift_start ? format(new Date(shift.shift_start), 'HH:mm') : ''} • {timeStr}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => openBonusDialog(shift)}
+                      >
+                        <Gift className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        onClick={() => openEndShiftDialog(shift)}
+                      >
+                        <Square className="w-4 h-4 mr-1" />
+                        End
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {allActiveShifts.length === 0 && (
+        <Card className="border-dashed">
+          <CardContent className="py-6 text-center text-muted-foreground">
+            No one on shift
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Big Start Shift Button */}
+      <Button 
+        size="lg"
+        className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
+        onClick={() => {
+          setSelectedEmployee('');
+          setShowStartDialog(true);
+        }}
+      >
+        <Play className="w-6 h-6 mr-2" />
+        Start Shift
+      </Button>
+
+      {/* Start Shift Dialog */}
+      <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Play className="w-5 h-5 text-green-500" />
+              Start Shift
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label>Select Employee</Label>
+              <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
+                <SelectTrigger className="w-full mt-2">
+                  <SelectValue placeholder="Choose your name..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees
+                    .filter(emp => !allActiveShifts.some(s => s.employee_id === emp.id))
+                    .map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {emp.name} - {emp.position}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Button variant="ghost" size="sm" onClick={requestAdminEdit}>
-              <Lock className="w-4 h-4" />
+            
+            {selectedEmployee && allActiveShifts.some(s => s.employee_id === selectedEmployee) && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm text-amber-600">
+                This employee already has an active shift
+              </div>
+            )}
+            
+            <Button 
+              className="w-full h-12 bg-green-600 hover:bg-green-700"
+              onClick={async () => {
+                await startShift();
+                setShowStartDialog(false);
+              }}
+              disabled={!selectedEmployee || starting || allActiveShifts.some(s => s.employee_id === selectedEmployee)}
+            >
+              {starting ? (
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              ) : (
+                <Play className="w-5 h-5 mr-2" />
+              )}
+              Confirm Start
             </Button>
           </div>
-          
-          {allActiveShifts.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {allActiveShifts.map((shift) => (
-                <Badge 
-                  key={shift.id} 
-                  variant="secondary"
-                  className="px-2 py-1"
-                >
-                  {shift.employee_name}
-                  <span className="ml-1 text-xs opacity-60">
-                    {shift.shift_start ? format(new Date(shift.shift_start), 'HH:mm') : ''}
-                  </span>
-                </Badge>
-              ))}
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground">No one on shift</div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Main shift control card */}
-      <Card className={activeShift 
-        ? "border-green-500/50 bg-gradient-to-br from-green-500/5 to-transparent" 
-        : ""
-      }>
-        <CardContent className="pt-4 pb-4">
-          {/* Employee selector - always visible */}
-          <div className="mb-4">
-            <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select employee..." />
-              </SelectTrigger>
-              <SelectContent>
-                {employees.map((emp) => (
-                  <SelectItem key={emp.id} value={emp.id}>
-                    {emp.name} - {emp.position}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {selectedEmployee && (
-            <>
-              {activeShift ? (
-                <div className="space-y-4">
-                  {/* Timer and status */}
-                  <div className="text-center py-3 bg-green-500/10 rounded-lg border border-green-500/20">
-                    <div className="text-3xl font-mono font-bold text-green-500">{elapsedTime}</div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Started {format(new Date(activeShift.shift_start!), 'HH:mm')}
-                    </div>
-                  </div>
-                  
-                  {/* Salary info */}
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="bg-secondary/30 rounded-lg p-3 text-center">
-                      <div className="text-muted-foreground text-xs">Base</div>
-                      <div className="font-bold">₱{activeShift.base_salary}</div>
-                    </div>
-                    <div className="bg-green-500/10 rounded-lg p-3 text-center">
-                      <div className="text-muted-foreground text-xs">Bonuses</div>
-                      <div className="font-bold text-green-500">+₱{totalBonuses}</div>
-                    </div>
-                  </div>
-
-                  {shiftBonuses.length > 0 && (
-                    <div className="space-y-1">
-                      {shiftBonuses.map((bonus) => (
-                        <div key={bonus.id} className="flex justify-between text-xs bg-secondary/30 px-2 py-1 rounded">
-                          <span>{getBonusTypeLabel(bonus.bonus_type)} x{bonus.quantity}</span>
-                          <span>₱{bonus.amount}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button 
-                      variant="outline"
-                      size="lg"
-                      onClick={() => setShowBonusDialog(true)}
-                    >
-                      <Gift className="w-4 h-4 mr-2" />
-                      Bonus
-                    </Button>
-                    <Button 
-                      variant="destructive"
-                      size="lg"
-                      onClick={() => setShowEndDialog(true)}
-                    >
-                      <Square className="w-4 h-4 mr-2" />
-                      End Shift
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <Button 
-                  size="lg"
-                  className="w-full bg-green-600 hover:bg-green-700"
-                  onClick={startShift}
-                  disabled={starting}
-                >
-                  {starting ? (
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  ) : (
-                    <Play className="w-5 h-5 mr-2" />
-                  )}
-                  Start Shift
-                </Button>
-              )}
-            </>
-          )}
-          
-          {!selectedEmployee && (
-            <div className="text-center text-sm text-muted-foreground py-2">
-              Select your name to start or end shift
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
 
       {/* End Shift Dialog */}
-      <Dialog open={showEndDialog} onOpenChange={setShowEndDialog}>
+      <Dialog open={showEndDialog} onOpenChange={(open) => {
+        setShowEndDialog(open);
+        if (!open) setSelectedShiftToEnd(null);
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wallet className="w-5 h-5" />
-              End Shift - Enter Cash
+              End Shift
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            {selectedShiftToEnd && (
+              <div className="bg-secondary/30 p-3 rounded-lg">
+                <div className="font-medium">{selectedShiftToEnd.employee_name}</div>
+                <div className="text-sm text-muted-foreground">
+                  Started {selectedShiftToEnd.shift_start ? format(new Date(selectedShiftToEnd.shift_start), 'HH:mm') : ''}
+                </div>
+              </div>
+            )}
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm">
               <p className="text-amber-500 font-medium">⚠️ Important:</p>
-              <p className="text-muted-foreground">Enter cash amount <strong>excluding</strong> the ₱2,000 change fund (which stays in the register)</p>
+              <p className="text-muted-foreground">Enter cash <strong>excluding</strong> ₱2,000 change fund</p>
             </div>
             <div>
               <Label>Cash Handed Over (₱)</Label>
@@ -667,24 +711,10 @@ export function EmployeeShiftCard() {
                 type="number"
                 value={cashInput}
                 onChange={(e) => setCashInput(e.target.value)}
-                placeholder="Enter amount (without 2000₱ change)"
+                placeholder="Enter amount"
                 className="text-2xl h-14 text-center mt-2"
                 autoFocus
               />
-            </div>
-            <div className="bg-secondary/50 p-4 rounded-lg space-y-2">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Base Salary:</span>
-                <span>₱{activeShift?.base_salary || 500}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Bonuses:</span>
-                <span className="text-green-500">+₱{totalBonuses}</span>
-              </div>
-              <div className="flex justify-between font-bold border-t pt-2">
-                <span>Total Earnings:</span>
-                <span>₱{(activeShift?.base_salary || 500) + totalBonuses}</span>
-              </div>
             </div>
             <Button 
               onClick={endShift} 
@@ -699,12 +729,15 @@ export function EmployeeShiftCard() {
       </Dialog>
 
       {/* Add Bonus Dialog */}
-      <Dialog open={showBonusDialog} onOpenChange={setShowBonusDialog}>
+      <Dialog open={showBonusDialog} onOpenChange={(open) => {
+        setShowBonusDialog(open);
+        if (!open) setBonusShift(null);
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Gift className="w-5 h-5 text-green-500" />
-              Add Bonus
+              Add Bonus {bonusShift && `- ${bonusShift.employee_name}`}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
