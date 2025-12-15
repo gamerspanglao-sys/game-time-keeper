@@ -80,6 +80,7 @@ export function EmployeeShiftCard() {
   // Edit shift dialog
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingShift, setEditingShift] = useState<ActiveShiftWithEmployee | null>(null);
+  const [editStartDate, setEditStartDate] = useState('');
   const [editStartTime, setEditStartTime] = useState('');
   const [editSalary, setEditSalary] = useState('');
   const [saving, setSaving] = useState(false);
@@ -430,11 +431,14 @@ export function EmployeeShiftCard() {
 
   const openEditDialog = (shift: ActiveShiftWithEmployee) => {
     setEditingShift(shift);
-    // Format start time for input
+    // Format start date and time for inputs
     if (shift.shift_start) {
       const startDate = new Date(shift.shift_start);
+      setEditStartDate(format(startDate, 'yyyy-MM-dd'));
       setEditStartTime(format(startDate, 'HH:mm'));
     } else {
+      // Default to shift date for date, empty for time
+      setEditStartDate(shift.date);
       setEditStartTime('');
     }
     setEditSalary(shift.base_salary?.toString() || '500');
@@ -442,27 +446,27 @@ export function EmployeeShiftCard() {
   };
 
   const saveShiftEdit = async () => {
-    if (!editingShift || !editStartTime) return;
+    if (!editingShift || !editStartTime || !editStartDate) return;
 
     setSaving(true);
     try {
-      // Parse the new start time and combine with the shift date
+      // Parse the date and time together
       const [hours, minutes] = editStartTime.split(':').map(Number);
-      const shiftDate = new Date(editingShift.date + 'T00:00:00');
-      shiftDate.setHours(hours, minutes, 0, 0);
+      const shiftStart = new Date(editStartDate + 'T00:00:00');
+      shiftStart.setHours(hours, minutes, 0, 0);
       
       // Calculate hours if shift is closed
       let totalHours = editingShift.total_hours;
       if (editingShift.status === 'closed' && editingShift.shift_end) {
         const endTime = new Date(editingShift.shift_end);
-        totalHours = (endTime.getTime() - shiftDate.getTime()) / (1000 * 60 * 60);
+        totalHours = (endTime.getTime() - shiftStart.getTime()) / (1000 * 60 * 60);
         totalHours = Math.round(totalHours * 100) / 100;
       }
 
       const { error } = await supabase
         .from('shifts')
         .update({
-          shift_start: shiftDate.toISOString(),
+          shift_start: shiftStart.toISOString(),
           total_hours: totalHours,
           base_salary: parseInt(editSalary) || 500
         })
@@ -794,24 +798,35 @@ export function EmployeeShiftCard() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <div>
-                  <Label>Shift Start Time</Label>
+                  <Label>Start Date</Label>
                   <Input
-                    type="time"
-                    value={editStartTime}
-                    onChange={(e) => setEditStartTime(e.target.value)}
+                    type="date"
+                    value={editStartDate}
+                    onChange={(e) => setEditStartDate(e.target.value)}
                     className="mt-2"
                   />
                 </div>
-                <div>
-                  <Label>Base Salary (₱)</Label>
-                  <Input
-                    type="number"
-                    value={editSalary}
-                    onChange={(e) => setEditSalary(e.target.value)}
-                    className="mt-2"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Start Time</Label>
+                    <Input
+                      type="time"
+                      value={editStartTime}
+                      onChange={(e) => setEditStartTime(e.target.value)}
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label>Base Salary (₱)</Label>
+                    <Input
+                      type="number"
+                      value={editSalary}
+                      onChange={(e) => setEditSalary(e.target.value)}
+                      className="mt-2"
+                    />
+                  </div>
                 </div>
               </div>
               
