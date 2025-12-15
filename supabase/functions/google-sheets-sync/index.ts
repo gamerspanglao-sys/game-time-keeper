@@ -130,7 +130,8 @@ serve(async (req) => {
     const { data: records, error: recordsError } = await supabase
       .from('cash_register')
       .select('*')
-      .order('date', { ascending: true });
+      .order('date', { ascending: true })
+      .order('shift', { ascending: true });
 
     if (recordsError) {
       throw new Error(`Failed to fetch records: ${recordsError.message}`);
@@ -150,9 +151,10 @@ serve(async (req) => {
       );
     }
 
-    // Headers - детальный формат с разбивкой по категориям
+    // Headers - with shift column
     const headers = [
       'Дата',
+      'Смена',
       'Доход (продажи)',
       'Себестоимость',
       'Валовая прибыль',
@@ -175,6 +177,8 @@ serve(async (req) => {
       const netProfit = grossProfit - totalExp;
       const expectedCash = (r.opening_balance || 0) + (r.expected_sales || 0) - totalExp;
       
+      const shiftLabel = r.shift === 'day' ? '☀️ День (5-17)' : '🌙 Ночь (17-5)';
+      
       let status = '';
       if (r.actual_cash === null) {
         status = '⏳ Ожидает';
@@ -188,6 +192,7 @@ serve(async (req) => {
       
       rows.push([
         r.date,
+        shiftLabel,
         r.expected_sales || 0,
         r.cost || 0,
         grossProfit,
@@ -220,6 +225,7 @@ serve(async (req) => {
 
     rows.push([
       'ИТОГО',
+      '',
       totals.sales,
       totals.cost,
       totalGrossProfit,
@@ -236,16 +242,17 @@ serve(async (req) => {
 
     // Expenses detail section
     if (expenses && expenses.length > 0) {
-      rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '']);
-      rows.push(['РАСХОДЫ (детализация)', '', '', '', '', '', '', '', '', '', '', '', '']);
-      rows.push(['Дата', 'Категория', 'Сумма', 'Описание', '', '', '', '', '', '', '', '', '']);
+      rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+      rows.push(['РАСХОДЫ (детализация)', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+      rows.push(['Дата', 'Смена', 'Категория', 'Сумма', 'Описание', '', '', '', '', '', '', '', '', '']);
       
       expenses.forEach(exp => {
         const record = records.find(r => r.id === exp.cash_register_id);
         const date = record?.date || '';
+        const shiftLabel = exp.shift === 'day' ? '☀️ День' : '🌙 Ночь';
         const categoryLabel = exp.category === 'purchases' ? 'Закупки' : 
                              exp.category === 'salaries' ? 'Зарплаты' : 'Прочее';
-        rows.push([date, categoryLabel, exp.amount, exp.description || '', '', '', '', '', '', '', '', '', '']);
+        rows.push([date, shiftLabel, categoryLabel, exp.amount, exp.description || '', '', '', '', '', '', '', '', '', '']);
       });
     }
 

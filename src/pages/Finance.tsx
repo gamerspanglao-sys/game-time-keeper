@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,14 +30,19 @@ import {
   Coffee,
   Send,
   X,
-  Loader2
+  Loader2,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 // ============= TYPES =============
 
+type ShiftType = 'day' | 'night';
+
 interface CashRecord {
   id: string;
   date: string;
+  shift: ShiftType;
   opening_balance: number;
   expected_sales: number;
   cost: number;
@@ -55,6 +60,7 @@ interface CashExpense {
   category: string;
   amount: number;
   description: string | null;
+  shift: ShiftType;
 }
 
 interface PurchaseItem {
@@ -91,6 +97,33 @@ const SUPPLIER_CONFIG: Record<string, { label: string; color: string }> = {
   'Others': { label: 'Others', color: 'bg-muted text-muted-foreground border-muted' },
 };
 
+// Get current shift based on Manila time
+const getCurrentShift = (): ShiftType => {
+  const now = new Date();
+  const manilaOffset = 8 * 60;
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const manilaTime = new Date(utcTime + (manilaOffset * 60000));
+  const hour = manilaTime.getHours();
+  // Day shift: 5AM - 5PM, Night shift: 5PM - 5AM
+  return hour >= 5 && hour < 17 ? 'day' : 'night';
+};
+
+// Get current date for the shift (night shift after midnight belongs to previous day)
+const getShiftDate = (): string => {
+  const now = new Date();
+  const manilaOffset = 8 * 60;
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const manilaTime = new Date(utcTime + (manilaOffset * 60000));
+  const hour = manilaTime.getHours();
+  
+  // If it's between midnight and 5AM, we're still in the night shift of the previous day
+  if (hour < 5) {
+    manilaTime.setDate(manilaTime.getDate() - 1);
+  }
+  
+  return format(manilaTime, 'yyyy-MM-dd');
+};
+
 export default function Finance() {
   const [activeTab, setActiveTab] = useState('cash');
   
@@ -99,6 +132,7 @@ export default function Finance() {
   const [expenses, setExpenses] = useState<CashExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedShift, setSelectedShift] = useState<ShiftType>(getCurrentShift());
   const [actualCashInput, setActualCashInput] = useState<string>('');
   const [expenseAmount, setExpenseAmount] = useState<string>('');
   const [expenseDescription, setExpenseDescription] = useState<string>('');
@@ -128,6 +162,18 @@ export default function Finance() {
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
   const [showAllItems, setShowAllItems] = useState(true);
 
+  // ============= SYNC FUNCTIONS =============
+
+  const syncToGoogleSheets = useCallback(async () => {
+    try {
+      const { error } = await supabase.functions.invoke('google-sheets-sync');
+      if (error) throw error;
+      console.log('📊 Auto-synced to Google Sheets');
+    } catch (error) {
+      console.error('Error auto-syncing to Google Sheets:', error);
+    }
+  }, []);
+
   // ============= EFFECTS =============
 
   useEffect(() => {
@@ -135,14 +181,20 @@ export default function Finance() {
     
     const channel = supabase
       .channel('cash-register-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_register' }, () => loadData(true))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, () => loadData(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_register' }, () => {
+        loadData(true);
+        syncToGoogleSheets();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, () => {
+        loadData(true);
+        syncToGoogleSheets();
+      })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [syncToGoogleSheets]);
 
   // ============= CASH REGISTER FUNCTIONS =============
 
@@ -168,7 +220,8 @@ export default function Finance() {
       const { data: recordsData, error: recordsError } = await supabase
         .from('cash_register')
         .select('*')
-        .order('date', { ascending: false });
+        .order('date', { ascending: false })
+        .order('shift', { ascending: true });
 
       if (recordsError) throw recordsError;
       
@@ -183,8 +236,8 @@ export default function Finance() {
       localStorage.setItem(CACHE_KEY_EXPENSES, JSON.stringify(expensesData || []));
       localStorage.setItem(CACHE_KEY_LAST_SYNC, now.toString());
 
-      setRecords(recordsData || []);
-      setExpenses(expensesData || []);
+      setRecords((recordsData || []) as CashRecord[]);
+      setExpenses((expensesData || []) as CashExpense[]);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Failed to load data');
@@ -220,13 +273,24 @@ export default function Finance() {
     setPinError('');
   };
 
-  const syncSalesFromLoyverse = async (date: string) => {
+  const syncSalesFromLoyverse = async (date: string, shift: ShiftType) => {
     setSyncing(true);
     try {
       const targetDate = new Date(date + 'T00:00:00');
-      const startDate = new Date(targetDate.getTime());
-      startDate.setHours(5 - 8, 0, 0, 0);
-      const endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+      let startDate: Date;
+      let endDate: Date;
+      
+      if (shift === 'day') {
+        // Day shift: 5AM to 5PM Manila
+        startDate = new Date(targetDate.getTime());
+        startDate.setHours(5 - 8, 0, 0, 0); // 5AM Manila = -3 UTC
+        endDate = new Date(startDate.getTime() + 12 * 60 * 60 * 1000);
+      } else {
+        // Night shift: 5PM to 5AM next day Manila
+        startDate = new Date(targetDate.getTime());
+        startDate.setHours(17 - 8, 0, 0, 0); // 5PM Manila = 9 UTC
+        endDate = new Date(startDate.getTime() + 12 * 60 * 60 * 1000);
+      }
       
       const { data, error } = await supabase.functions.invoke('loyverse-payments', {
         body: { startDate: startDate.toISOString(), endDate: endDate.toISOString() }
@@ -239,7 +303,8 @@ export default function Finance() {
           .from('cash_register')
           .select('id, purchases, salaries, other_expenses')
           .eq('date', date)
-          .single();
+          .eq('shift', shift)
+          .maybeSingle();
 
         if (existing) {
           await supabase
@@ -254,6 +319,7 @@ export default function Finance() {
             .from('cash_register')
             .insert({
               date,
+              shift,
               opening_balance: 0,
               expected_sales: data.summary.netAmount || 0,
               cost: data.summary.totalCost || 0,
@@ -261,7 +327,7 @@ export default function Finance() {
         }
         
         await loadData(true);
-        toast.success(`Synced sales: ₱${data.summary.netAmount?.toLocaleString() || 0}`);
+        toast.success(`Synced ${shift} shift: ₱${data.summary.netAmount?.toLocaleString() || 0}`);
       }
     } catch (error) {
       console.error('Error syncing from Loyverse:', error);
@@ -278,23 +344,26 @@ export default function Finance() {
     }
 
     const amount = parseInt(actualCashInput);
-    const date = format(new Date(), 'yyyy-MM-dd');
+    const date = getShiftDate();
+    const shift = getCurrentShift();
 
     try {
       let { data: existing } = await supabase
         .from('cash_register')
         .select('*')
         .eq('date', date)
-        .single();
+        .eq('shift', shift)
+        .maybeSingle();
 
       if (!existing) {
-        await syncSalesFromLoyverse(date);
+        await syncSalesFromLoyverse(date, shift);
         
         const { data: newRecord } = await supabase
           .from('cash_register')
           .select('*')
           .eq('date', date)
-          .single();
+          .eq('shift', shift)
+          .maybeSingle();
         
         existing = newRecord;
       }
@@ -312,7 +381,7 @@ export default function Finance() {
           })
           .eq('id', existing.id);
 
-        toast.success('Cash saved');
+        toast.success(`Cash saved for ${shift} shift`);
         setActualCashInput('');
         setShowCashDialog(false);
         loadData(true);
@@ -324,20 +393,23 @@ export default function Finance() {
   };
 
   const addExpense = async (category: 'purchases' | 'salaries' | 'other', amount: number, description: string) => {
-    const date = format(new Date(), 'yyyy-MM-dd');
+    const date = getShiftDate();
+    const shift = getCurrentShift();
 
     try {
       let { data: existing } = await supabase
         .from('cash_register')
         .select('*')
         .eq('date', date)
-        .single();
+        .eq('shift', shift)
+        .maybeSingle();
 
       if (!existing) {
         const { data: newRecord } = await supabase
           .from('cash_register')
           .insert({
             date,
+            shift,
             opening_balance: 0,
             expected_sales: 0,
           })
@@ -353,7 +425,8 @@ export default function Finance() {
             cash_register_id: existing.id,
             category,
             amount,
-            description
+            description,
+            shift
           });
 
         const field = category === 'purchases' ? 'purchases' : 
@@ -440,11 +513,13 @@ export default function Finance() {
     }
   };
 
-  // Calculate today's summary
-  const todayRecord = records.find(r => r.date === format(new Date(), 'yyyy-MM-dd'));
+  // Calculate today's summary for current shift
+  const currentDate = getShiftDate();
+  const currentShift = getCurrentShift();
+  const todayRecord = records.find(r => r.date === currentDate && r.shift === currentShift);
   const todayExpenses = expenses.filter(e => {
     const record = records.find(r => r.id === e.cash_register_id);
-    return record?.date === format(new Date(), 'yyyy-MM-dd');
+    return record?.date === currentDate && record?.shift === currentShift;
   });
   const todayTotalExpenses = (todayRecord?.purchases || 0) + (todayRecord?.salaries || 0) + (todayRecord?.other_expenses || 0);
 
@@ -465,8 +540,12 @@ export default function Finance() {
       return;
     }
     
-    const headers = ['Date', 'Sales', 'Cost', 'Gross Profit', 'Purchases', 'Salaries', 'Other', 'Total Expenses', 'Net Profit', 'Actual Cash', 'Discrepancy'];
-    const sortedRecords = [...records].sort((a, b) => a.date.localeCompare(b.date));
+    const headers = ['Date', 'Shift', 'Sales', 'Cost', 'Gross Profit', 'Purchases', 'Salaries', 'Other', 'Total Expenses', 'Net Profit', 'Actual Cash', 'Discrepancy'];
+    const sortedRecords = [...records].sort((a, b) => {
+      const dateCompare = a.date.localeCompare(b.date);
+      if (dateCompare !== 0) return dateCompare;
+      return a.shift.localeCompare(b.shift);
+    });
     const wsData: (string | number)[][] = [headers];
     
     sortedRecords.forEach(r => {
@@ -475,6 +554,7 @@ export default function Finance() {
       const netProfit = grossProfit - totalExp;
       wsData.push([
         r.date,
+        r.shift === 'day' ? 'Day (5AM-5PM)' : 'Night (5PM-5AM)',
         r.expected_sales,
         r.cost || 0,
         grossProfit,
@@ -651,10 +731,10 @@ export default function Finance() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wallet className="w-5 h-5 text-green-600" />
-              Enter Cash
+              Enter Cash - {currentShift === 'day' ? 'Day Shift' : 'Night Shift'}
             </DialogTitle>
             <DialogDescription>
-              Enter the actual cash amount in register
+              Enter the actual cash amount for {currentShift} shift ({currentShift === 'day' ? '5AM-5PM' : '5PM-5AM'})
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
@@ -680,7 +760,7 @@ export default function Finance() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Receipt className="w-5 h-5 text-purple-600" />
-              Add Expense
+              Add Expense - {currentShift === 'day' ? 'Day Shift' : 'Night Shift'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
@@ -822,6 +902,37 @@ export default function Finance() {
             </Button>
           </div>
 
+          {/* Current Shift Indicator */}
+          <Card className={cn(
+            "border-2",
+            currentShift === 'day' 
+              ? "border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-amber-500/10" 
+              : "border-indigo-500/30 bg-gradient-to-br from-indigo-500/5 to-indigo-500/10"
+          )}>
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {currentShift === 'day' ? (
+                    <Sun className="w-8 h-8 text-amber-500" />
+                  ) : (
+                    <Moon className="w-8 h-8 text-indigo-500" />
+                  )}
+                  <div>
+                    <div className="font-semibold text-lg">
+                      {currentShift === 'day' ? 'Day Shift' : 'Night Shift'}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {currentShift === 'day' ? '5:00 AM - 5:00 PM' : '5:00 PM - 5:00 AM'}
+                    </div>
+                  </div>
+                </div>
+                <Badge variant={currentShift === 'day' ? 'default' : 'secondary'} className="text-sm">
+                  Active
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Today's Summary Card */}
           {todayRecord && (
             <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
@@ -909,7 +1020,7 @@ export default function Finance() {
           {todayExpenses.length > 0 && (
             <Card>
               <CardHeader className="py-3">
-                <CardTitle className="text-base">Today&apos;s Expenses</CardTitle>
+                <CardTitle className="text-base">This Shift&apos;s Expenses</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {todayExpenses.map((expense) => (
@@ -951,10 +1062,30 @@ export default function Finance() {
               onChange={(e) => setSelectedDate(e.target.value)}
               className="w-40"
             />
+            <div className="flex border rounded-md overflow-hidden">
+              <Button
+                variant={selectedShift === 'day' ? 'default' : 'ghost'}
+                size="sm"
+                className="rounded-none"
+                onClick={() => setSelectedShift('day')}
+              >
+                <Sun className="w-4 h-4 mr-1" />
+                Day
+              </Button>
+              <Button
+                variant={selectedShift === 'night' ? 'default' : 'ghost'}
+                size="sm"
+                className="rounded-none"
+                onClick={() => setSelectedShift('night')}
+              >
+                <Moon className="w-4 h-4 mr-1" />
+                Night
+              </Button>
+            </div>
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => syncSalesFromLoyverse(selectedDate)}
+              onClick={() => syncSalesFromLoyverse(selectedDate, selectedShift)}
               disabled={syncing}
             >
               <RefreshCw className={cn("w-4 h-4 mr-2", syncing && 'animate-spin')} />
@@ -1005,7 +1136,7 @@ export default function Finance() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <FileSpreadsheet className="w-5 h-5" />
-              Total for {records.length} days
+              Total for {records.length} shifts
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -1083,6 +1214,7 @@ export default function Finance() {
                 <thead>
                   <tr className="border-b">
                     <th className="text-left py-2 px-2">Date</th>
+                    <th className="text-left py-2 px-2">Shift</th>
                     <th className="text-right py-2 px-2">Sales</th>
                     <th className="text-right py-2 px-2">Cost</th>
                     <th className="text-right py-2 px-2">Profit</th>
@@ -1098,6 +1230,12 @@ export default function Finance() {
                     return (
                       <tr key={record.id} className="border-b hover:bg-muted/50">
                         <td className="py-2 px-2">{record.date}</td>
+                        <td className="py-2 px-2">
+                          <Badge variant={record.shift === 'day' ? 'default' : 'secondary'} className="text-xs">
+                            {record.shift === 'day' ? <Sun className="w-3 h-3 mr-1" /> : <Moon className="w-3 h-3 mr-1" />}
+                            {record.shift === 'day' ? 'Day' : 'Night'}
+                          </Badge>
+                        </td>
                         <td className="text-right py-2 px-2 text-green-600">₱{record.expected_sales.toLocaleString()}</td>
                         <td className="text-right py-2 px-2 text-muted-foreground">₱{(record.cost || 0).toLocaleString()}</td>
                         <td className="text-right py-2 px-2 text-green-600">₱{grossProfit.toLocaleString()}</td>
@@ -1140,7 +1278,7 @@ export default function Finance() {
                       <div>
                         <div className="font-medium">₱{expense.amount.toLocaleString()}</div>
                         <div className="text-xs text-muted-foreground">
-                          {record?.date} • {expense.description || getCategoryLabel(expense.category)}
+                          {record?.date} • {expense.shift === 'day' ? '☀️' : '🌙'} • {expense.description || getCategoryLabel(expense.category)}
                         </div>
                       </div>
                     </div>

@@ -49,6 +49,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          shift: string
         }
         Insert: {
           amount: number
@@ -57,6 +58,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          shift?: string
         }
         Update: {
           amount?: number
@@ -65,6 +67,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          shift?: string
         }
         Relationships: [
           {
@@ -90,6 +93,7 @@ export type Database = {
           other_expenses: number
           purchases: number
           salaries: number
+          shift: string
           updated_at: string
         }
         Insert: {
@@ -105,6 +109,7 @@ export type Database = {
           other_expenses?: number
           purchases?: number
           salaries?: number
+          shift?: string
           updated_at?: string
         }
         Update: {
@@ -120,6 +125,7 @@ export type Database = {
           other_expenses?: number
           purchases?: number
           salaries?: number
+          shift?: string
           updated_at?: string
         }
         Relationships: []
