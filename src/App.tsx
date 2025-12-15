@@ -29,7 +29,7 @@ const App = () => (
           <Route path="/tournaments" element={<Tournaments />} />
           <Route path="/payments" element={<AdminGuard><Layout><PaymentsReport /></Layout></AdminGuard>} />
           <Route path="/purchases" element={<AdminGuard><Layout><PurchaseRequests /></Layout></AdminGuard>} />
-          <Route path="/cash" element={<AdminGuard><Layout><CashRegister /></Layout></AdminGuard>} />
+          <Route path="/cash" element={<Layout><CashRegister /></Layout>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
