@@ -318,8 +318,13 @@ export default function CashRegister() {
   }), { totalSales: 0, totalPurchases: 0, totalSalaries: 0, totalOther: 0, totalDiscrepancy: 0, daysWithDiscrepancy: 0 });
 
   const exportToCSV = () => {
+    // Main cash register data
     const headers = ['Date', 'Opening Balance', 'Cash Sales', 'Purchases', 'Salaries', 'Other Expenses', 'Total Expenses', 'Expected', 'Actual', 'Discrepancy'];
-    const rows = records.map(r => {
+    
+    // Sort by date ascending for the export
+    const sortedRecords = [...records].sort((a, b) => a.date.localeCompare(b.date));
+    
+    const rows = sortedRecords.map(r => {
       const totalExp = r.purchases + r.salaries + r.other_expenses;
       const expected = r.opening_balance + r.expected_sales - totalExp;
       return [
@@ -336,15 +341,32 @@ export default function CashRegister() {
       ].join(',');
     });
 
-    const csv = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
+    // Add totals row
+    const totalsRow = [
+      'TOTAL',
+      '',
+      overallTotals.totalSales,
+      overallTotals.totalPurchases,
+      overallTotals.totalSalaries,
+      overallTotals.totalOther,
+      overallTotals.totalPurchases + overallTotals.totalSalaries + overallTotals.totalOther,
+      '',
+      '',
+      overallTotals.totalDiscrepancy
+    ].join(',');
+
+    const csv = [headers.join(','), ...rows, '', totalsRow].join('\n');
+    
+    // Add BOM for Excel to recognize UTF-8
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `cash-register-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `cash-register-full-${format(new Date(), 'yyyy-MM-dd')}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success('Exported to CSV');
+    toast.success(`Exported ${records.length} records to CSV`);
   };
 
   const getCategoryLabel = (category: string) => {
