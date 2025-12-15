@@ -449,9 +449,9 @@ export default function CashRegister() {
                 Сохранить
               </Button>
             </div>
-            {currentRecord?.actual_cash !== null && (
+            {currentRecord?.actual_cash != null && (
               <div className="text-sm">
-                Текущее значение: <span className="font-bold">₱{currentRecord.actual_cash.toLocaleString()}</span>
+                Текущее значение: <span className="font-bold">₱{currentRecord?.actual_cash?.toLocaleString()}</span>
               </div>
             )}
           </CardContent>
@@ -578,10 +578,10 @@ export default function CashRegister() {
                       <td className="text-right py-2 px-2 text-red-600">-₱{recordExpenses.toLocaleString()}</td>
                       <td className="text-right py-2 px-2 font-medium">₱{expected.toLocaleString()}</td>
                       <td className="text-right py-2 px-2">
-                        {record.actual_cash !== null ? `₱${record.actual_cash.toLocaleString()}` : '—'}
+                        {record.actual_cash != null ? `₱${record.actual_cash.toLocaleString()}` : '—'}
                       </td>
                       <td className="text-right py-2 px-2">
-                        {record.discrepancy !== null ? (
+                        {record.discrepancy != null ? (
                           <Badge variant={record.discrepancy === 0 ? 'default' : record.discrepancy < 0 ? 'destructive' : 'secondary'}>
                             {record.discrepancy >= 0 ? '+' : ''}₱{record.discrepancy.toLocaleString()}
                           </Badge>
