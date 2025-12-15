@@ -6,16 +6,99 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Get access token from Service Account
+async function getAccessToken(serviceAccountJson: string): Promise<string> {
+  const serviceAccount = JSON.parse(serviceAccountJson);
+  
+  const header = {
+    alg: 'RS256',
+    typ: 'JWT',
+  };
+
+  const now = Math.floor(Date.now() / 1000);
+  const claim = {
+    iss: serviceAccount.client_email,
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now,
+  };
+
+  // Base64url encode
+  const base64UrlEncode = (obj: object) => {
+    const json = JSON.stringify(obj);
+    const base64 = btoa(json);
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  };
+
+  const headerEncoded = base64UrlEncode(header);
+  const claimEncoded = base64UrlEncode(claim);
+  const signatureInput = `${headerEncoded}.${claimEncoded}`;
+
+  // Import private key and sign
+  const pemContents = serviceAccount.private_key
+    .replace('-----BEGIN PRIVATE KEY-----', '')
+    .replace('-----END PRIVATE KEY-----', '')
+    .replace(/\n/g, '');
+  
+  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8',
+    binaryKey,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const signatureBuffer = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    cryptoKey,
+    new TextEncoder().encode(signatureInput)
+  );
+
+  const signature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+
+  const jwt = `${signatureInput}.${signature}`;
+
+  // Exchange JWT for access token
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+
+  const tokenData = await tokenResponse.json();
+  
+  if (!tokenData.access_token) {
+    throw new Error(`Failed to get access token: ${JSON.stringify(tokenData)}`);
+  }
+  
+  return tokenData.access_token;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const GOOGLE_SHEETS_URL = Deno.env.get('GOOGLE_SHEETS_WEBHOOK_URL');
-    if (!GOOGLE_SHEETS_URL) {
-      throw new Error('GOOGLE_SHEETS_WEBHOOK_URL is not configured');
+    const SPREADSHEET_ID = Deno.env.get('GOOGLE_SHEETS_ID');
+    const SERVICE_ACCOUNT_JSON = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON');
+    
+    if (!SPREADSHEET_ID) {
+      throw new Error('GOOGLE_SHEETS_ID is not configured');
     }
+    if (!SERVICE_ACCOUNT_JSON) {
+      throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is not configured');
+    }
+
+    console.log('🔑 Getting access token...');
+    const accessToken = await getAccessToken(SERVICE_ACCOUNT_JSON);
+    console.log('✅ Access token obtained');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -147,20 +230,52 @@ serve(async (req) => {
 
     console.log(`📤 Sending ${rows.length} rows to Google Sheets...`);
 
-    const response = await fetch(GOOGLE_SHEETS_URL, {
+    // Step 1: Clear the sheet
+    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/Sheet1!A:Z:clear`;
+    const clearResponse = await fetch(clearUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rows, action: 'replace' }),
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
     });
 
-    console.log(`✅ Data sent to Google Sheets (status: ${response.status})`);
+    if (!clearResponse.ok) {
+      const clearError = await clearResponse.text();
+      console.error('❌ Failed to clear sheet:', clearError);
+      throw new Error(`Failed to clear sheet: ${clearError}`);
+    }
+    console.log('🧹 Sheet cleared');
+
+    // Step 2: Write new data
+    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/Sheet1!A1?valueInputOption=RAW`;
+    const updateResponse = await fetch(updateUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        values: rows,
+      }),
+    });
+
+    if (!updateResponse.ok) {
+      const updateError = await updateResponse.text();
+      console.error('❌ Failed to update sheet:', updateError);
+      throw new Error(`Failed to update sheet: ${updateError}`);
+    }
+
+    const result = await updateResponse.json();
+    console.log(`✅ Data written to Google Sheets: ${result.updatedCells} cells updated`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: `Synced ${records.length} records to Google Sheets`,
         recordCount: records.length,
-        expenseCount: expenses?.length || 0
+        expenseCount: expenses?.length || 0,
+        cellsUpdated: result.updatedCells
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
