@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { EmployeeShiftCard } from '@/components/staff/EmployeeShiftCard';
 import { EmployeeManagement } from '@/components/staff/EmployeeManagement';
 import { PayrollReport } from '@/components/staff/PayrollReport';
-import { AdminShiftList } from '@/components/staff/AdminShiftList';
+import { ActivityLog } from '@/components/ActivityLog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,7 +37,8 @@ import {
   Loader2,
   Sun,
   Moon,
-  Pencil
+  Pencil,
+  ClipboardList
 } from 'lucide-react';
 
 // ============= TYPES =============
@@ -130,7 +131,7 @@ const getShiftDate = (): string => {
 };
 
 export default function Finance() {
-  const [activeTab, setActiveTab] = useState('cash');
+  const [activeTab, setActiveTab] = useState('staff');
   
   // ============= CASH REGISTER STATE =============
   const [records, setRecords] = useState<CashRecord[]>([]);
@@ -1891,25 +1892,28 @@ export default function Finance() {
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full max-w-lg grid-cols-2">
-          <TabsTrigger value="cash" className="flex items-center gap-2">
-            <Wallet className="w-4 h-4" />
-            Cash
+        <TabsList className="grid w-full max-w-lg grid-cols-3">
+          <TabsTrigger value="staff" className="flex items-center gap-2">
+            <Users className="w-4 h-4" />
+            Staff
           </TabsTrigger>
           <TabsTrigger value="purchases" className="flex items-center gap-2">
             <ShoppingCart className="w-4 h-4" />
             Orders
           </TabsTrigger>
+          <TabsTrigger value="activity" className="flex items-center gap-2">
+            <ClipboardList className="w-4 h-4" />
+            Activity
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="cash">
+        <TabsContent value="staff">
           {isAdminMode ? (
             <div className="space-y-6">
               <Tabs defaultValue="cash" className="space-y-4">
                 <div className="flex justify-between items-center">
                   <TabsList>
                     <TabsTrigger value="cash">Cash Register</TabsTrigger>
-                    <TabsTrigger value="shifts">Shifts</TabsTrigger>
                     <TabsTrigger value="employees">Employees</TabsTrigger>
                     <TabsTrigger value="payroll">Payroll</TabsTrigger>
                   </TabsList>
@@ -1924,9 +1928,6 @@ export default function Finance() {
                 </div>
                 <TabsContent value="cash">
                   {renderCashRegister()}
-                </TabsContent>
-                <TabsContent value="shifts">
-                  <AdminShiftList />
                 </TabsContent>
                 <TabsContent value="employees">
                   <EmployeeManagement />
@@ -1949,6 +1950,10 @@ export default function Finance() {
 
         <TabsContent value="purchases">
           {renderPurchaseOrders()}
+        </TabsContent>
+
+        <TabsContent value="activity">
+          <ActivityLog />
         </TabsContent>
       </Tabs>
 
