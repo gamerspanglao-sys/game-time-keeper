@@ -463,18 +463,32 @@ serve(async (req) => {
         const overtime = hoursWorked > standardHours ? hoursWorked - standardHours : 0;
         
         // Calculate lateness (if shift started after expected time)
-        // Day shift should start at 5 AM, Night at 5 PM
+        // Day shift should start at 5 AM Manila, Night at 5 PM Manila
         let lateness = 0;
         if (s.shift_start) {
           const start = new Date(s.shift_start);
-          const startHour = start.getHours();
-          const startMinute = start.getMinutes();
+          // Convert to Manila time (UTC+8)
+          const manilaOffset = 8 * 60; // 8 hours in minutes
+          const utcTime = start.getTime() + (start.getTimezoneOffset() * 60000);
+          const manilaTime = new Date(utcTime + (manilaOffset * 60000));
+          const startHour = manilaTime.getHours();
+          const startMinute = manilaTime.getMinutes();
           
-          // Expected start times
-          const expectedHour = s.shift_type?.includes('night') || s.shift_type === 'Night' ? 17 : 5;
+          // Determine if it's a night shift based on Manila time
+          const isNightShift = startHour >= 17 || startHour < 5;
+          const expectedHour = isNightShift ? 17 : 5;
           
-          if (startHour > expectedHour || (startHour === expectedHour && startMinute > 0)) {
-            lateness = (startHour - expectedHour) + (startMinute / 60);
+          // Calculate lateness only if started after expected time
+          if (isNightShift) {
+            // Night shift: expected at 17:00
+            if (startHour >= 17 && (startHour > 17 || startMinute > 0)) {
+              lateness = (startHour - 17) + (startMinute / 60);
+            }
+          } else {
+            // Day shift: expected at 5:00
+            if (startHour >= 5 && (startHour > 5 || startMinute > 0)) {
+              lateness = (startHour - 5) + (startMinute / 60);
+            }
           }
         }
         
