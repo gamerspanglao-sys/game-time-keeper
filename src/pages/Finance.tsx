@@ -157,6 +157,8 @@ export default function Finance() {
   const [expenseDate, setExpenseDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [expenseShift, setExpenseShift] = useState<ShiftType>(getCurrentShift());
   const [expenseType, setExpenseType] = useState<string>('other');
+  const [expenseResponsible, setExpenseResponsible] = useState<string>('');
+  const [employeesList, setEmployeesList] = useState<{id: string, name: string}[]>([]);
   const [syncing, setSyncing] = useState(false);
   
   // Date range filter for stats
@@ -236,8 +238,18 @@ export default function Finance() {
 
   // ============= EFFECTS =============
 
+  const loadEmployees = async () => {
+    const { data } = await supabase
+      .from('employees')
+      .select('id, name')
+      .eq('active', true)
+      .order('name');
+    if (data) setEmployeesList(data);
+  };
+
   useEffect(() => {
     loadData();
+    loadEmployees();
     
     const channel = supabase
       .channel('cash-register-changes')
@@ -515,13 +527,18 @@ export default function Finance() {
       return;
     }
     const typeConfig = EXPENSE_TYPES.find(t => t.value === expenseType) || EXPENSE_TYPES[4];
-    const fullDescription = `[${typeConfig.label}] ${expenseDescription}`.trim();
+    const responsibleName = employeesList.find(e => e.id === expenseResponsible)?.name || '';
+    const parts = [`[${typeConfig.label}]`];
+    if (responsibleName) parts.push(`@${responsibleName}`);
+    if (expenseDescription) parts.push(expenseDescription);
+    const fullDescription = parts.join(' ').trim();
     addExpense(typeConfig.category, amount, fullDescription, expenseDate, expenseShift);
     setExpenseAmount('');
     setExpenseDescription('');
     setExpenseDate(format(new Date(), 'yyyy-MM-dd'));
     setExpenseShift(getCurrentShift());
     setExpenseType('other');
+    setExpenseResponsible('');
     setShowExpenseDialog(false);
   };
 
@@ -978,18 +995,33 @@ export default function Finance() {
                 </SelectContent>
               </Select>
             </div>
-            <Select value={expenseType} onValueChange={setExpenseType}>
-              <SelectTrigger className="w-full h-12">
-                <SelectValue placeholder="Тип расхода" />
-              </SelectTrigger>
-              <SelectContent className="z-50 bg-background">
-                {EXPENSE_TYPES.map((type) => (
-                  <SelectItem key={type.value} value={type.value}>
-                    {type.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Select value={expenseType} onValueChange={setExpenseType}>
+                <SelectTrigger className="flex-1 h-12">
+                  <SelectValue placeholder="Expense Type" />
+                </SelectTrigger>
+                <SelectContent className="z-50 bg-background">
+                  {EXPENSE_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={expenseResponsible} onValueChange={setExpenseResponsible}>
+                <SelectTrigger className="flex-1 h-12">
+                  <SelectValue placeholder="Responsible" />
+                </SelectTrigger>
+                <SelectContent className="z-50 bg-background">
+                  <SelectItem value="">None</SelectItem>
+                  {employeesList.map((emp) => (
+                    <SelectItem key={emp.id} value={emp.id}>
+                      {emp.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Input
               type="number"
               placeholder="Amount"
