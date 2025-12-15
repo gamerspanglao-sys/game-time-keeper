@@ -67,7 +67,8 @@ serve(async (req) => {
     const results: { date: string; shift: string; cashSales: number; gcashSales: number; totalSales: number; status: string }[] = [];
     
     // Process each day and each shift
-    for (let i = 0; i < days; i++) {
+    // Start from tomorrow to include tonight's night shift (which is labeled as tomorrow's night shift)
+    for (let i = -1; i < days; i++) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
