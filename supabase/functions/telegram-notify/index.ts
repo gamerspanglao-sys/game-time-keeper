@@ -303,6 +303,71 @@ function formatCashReport(data: any): string {
   return message;
 }
 
+async function fetchCashDiscrepancy(): Promise<{ date: string; discrepancy: number; actual: number; expected: number } | null> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  
+  // Get yesterday's date in Manila timezone
+  const now = new Date();
+  const manilaOffset = 8 * 60;
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const manilaTime = new Date(utcTime + (manilaOffset * 60000));
+  
+  // Yesterday in Manila
+  const yesterday = new Date(manilaTime);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const dateStr = yesterday.toISOString().split('T')[0];
+  
+  console.log(`📅 Checking cash discrepancy for: ${dateStr}`);
+  
+  const { data, error } = await supabase
+    .from('cash_register')
+    .select('date, actual_cash, discrepancy')
+    .eq('date', dateStr)
+    .single();
+  
+  if (error || !data) {
+    console.log(`ℹ️ No cash register entry for ${dateStr}`);
+    return null;
+  }
+  
+  if (data.discrepancy !== null && data.discrepancy !== 0) {
+    const expected = (data.actual_cash || 0) - data.discrepancy;
+    return {
+      date: dateStr,
+      discrepancy: data.discrepancy,
+      actual: data.actual_cash || 0,
+      expected: expected
+    };
+  }
+  
+  console.log(`✅ No discrepancy for ${dateStr}`);
+  return null;
+}
+
+function formatDiscrepancyAlert(data: { date: string; discrepancy: number; actual: number; expected: number }): string {
+  const formatMoney = (n: number) => `₱${n?.toLocaleString() || 0}`;
+  const isShortage = data.discrepancy < 0;
+  const emoji = isShortage ? '🚨' : '⚠️';
+  const type = isShortage ? 'SHORTAGE' : 'SURPLUS';
+  
+  let message = `${emoji} <b>CASH ${type} ALERT</b>\n`;
+  message += `━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `📅 Date: ${data.date}\n\n`;
+  message += `💰 Expected: ${formatMoney(data.expected)}\n`;
+  message += `💵 Actual: ${formatMoney(data.actual)}\n`;
+  message += `━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `${isShortage ? '📉' : '📈'} Discrepancy: <b>${formatMoney(Math.abs(data.discrepancy))}</b> ${isShortage ? 'SHORT' : 'OVER'}\n`;
+  
+  if (isShortage && Math.abs(data.discrepancy) > 500) {
+    message += `\n⚠️ Large shortage! Please investigate immediately.`;
+  }
+  
+  return message;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -360,13 +425,26 @@ serve(async (req) => {
       message += formatCashReport(cashData);
     }
     
+    // Check for cash discrepancy and add to morning report
+    if (action === 'morning' || action === 'discrepancy') {
+      const discrepancy = await fetchCashDiscrepancy();
+      if (discrepancy) {
+        if (message && action === 'morning') {
+          message += '\n\n━━━━━━━━━━━━━━━━━━\n\n';
+        }
+        message += formatDiscrepancyAlert(discrepancy);
+      } else if (action === 'discrepancy') {
+        message = '✅ No cash discrepancy found for yesterday.';
+      }
+    }
+    
     if (action === 'test') {
       message = '🤖 <b>Test Message</b>\n\nTelegram notifications are working!\n\n';
       message += `📅 Time: ${new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}`;
     }
     
     if (!message) {
-      message = '❓ Unknown action. Use: test, purchase, cash, or morning';
+      message = '❓ Unknown action. Use: test, purchase, cash, morning, or discrepancy';
     }
     
     const success = await sendTelegramMessage(message);
