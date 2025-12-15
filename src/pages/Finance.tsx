@@ -1008,12 +1008,12 @@ export default function Finance() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={expenseResponsible} onValueChange={setExpenseResponsible}>
+              <Select value={expenseResponsible || 'none'} onValueChange={(v) => setExpenseResponsible(v === 'none' ? '' : v)}>
                 <SelectTrigger className="flex-1 h-12">
                   <SelectValue placeholder="Responsible" />
                 </SelectTrigger>
                 <SelectContent className="z-50 bg-background">
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {employeesList.map((emp) => (
                     <SelectItem key={emp.id} value={emp.id}>
                       {emp.name}
