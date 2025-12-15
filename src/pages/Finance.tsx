@@ -2104,267 +2104,374 @@ export default function Finance() {
   // ============= MAIN RENDER =============
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         {/* Admin Mode Header */}
         {isAdminMode && (
-          <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-2">
-            <div className="flex items-center gap-2">
-              <Lock className="w-4 h-4 text-amber-600" />
-              <span className="text-sm font-medium text-amber-600">Admin Mode</span>
+          <div className="flex items-center justify-between bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl px-4 py-3 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                <Lock className="w-4 h-4 text-amber-500" />
+              </div>
+              <div>
+                <span className="text-sm font-semibold text-amber-500">Admin Mode</span>
+                <p className="text-xs text-muted-foreground">Full access enabled</p>
+              </div>
             </div>
             <Button 
               variant="ghost" 
               size="sm"
               onClick={() => setIsAdminMode(false)}
-              className="text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+              className="text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 gap-2"
             >
-              <EyeOff className="w-4 h-4 mr-2" />
+              <EyeOff className="w-4 h-4" />
               Exit
             </Button>
           </div>
         )}
 
-        <TabsList className="grid w-full max-w-2xl grid-cols-4">
-          <TabsTrigger value="shifts" className="flex items-center gap-2">
+        {/* Tabs Navigation */}
+        <TabsList className="grid w-full max-w-2xl grid-cols-4 bg-secondary/50 p-1 rounded-xl">
+          <TabsTrigger 
+            value="shifts" 
+            className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all"
+          >
             <Users className="w-4 h-4" />
             <span className="hidden sm:inline">Shifts</span>
           </TabsTrigger>
-          <TabsTrigger value="finance" className="flex items-center gap-2">
+          <TabsTrigger 
+            value="finance" 
+            className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all"
+          >
             <Wallet className="w-4 h-4" />
             <span className="hidden sm:inline">Finance</span>
           </TabsTrigger>
-          <TabsTrigger value="purchases" className="flex items-center gap-2">
+          <TabsTrigger 
+            value="purchases" 
+            className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all"
+          >
             <ShoppingCart className="w-4 h-4" />
             <span className="hidden sm:inline">Orders</span>
           </TabsTrigger>
-          <TabsTrigger value="activity" className="flex items-center gap-2">
+          <TabsTrigger 
+            value="activity" 
+            className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all"
+          >
             <ClipboardList className="w-4 h-4" />
             <span className="hidden sm:inline">Activity</span>
           </TabsTrigger>
         </TabsList>
 
         {/* SHIFTS TAB */}
-        <TabsContent value="shifts">
-          <div className="space-y-6">
-            <EmployeeShiftCard />
-            {isAdminMode && (
+        <TabsContent value="shifts" className="space-y-6 animate-fade-in">
+          <EmployeeShiftCard />
+          {isAdminMode && (
+            <div className="space-y-4">
               <Tabs defaultValue="employees" className="space-y-4">
-                <TabsList>
-                  <TabsTrigger value="employees">Employees</TabsTrigger>
-                  <TabsTrigger value="payroll">Payroll</TabsTrigger>
+                <TabsList className="bg-secondary/30">
+                  <TabsTrigger value="employees" className="gap-2">
+                    <Users className="w-4 h-4" />
+                    Employees
+                  </TabsTrigger>
+                  <TabsTrigger value="payroll" className="gap-2">
+                    <Wallet className="w-4 h-4" />
+                    Payroll
+                  </TabsTrigger>
                 </TabsList>
-                <TabsContent value="employees">
+                <TabsContent value="employees" className="animate-fade-in">
                   <EmployeeManagement />
                 </TabsContent>
-                <TabsContent value="payroll">
+                <TabsContent value="payroll" className="animate-fade-in">
                   <PayrollReport />
                 </TabsContent>
               </Tabs>
-            )}
-          </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* FINANCE TAB */}
-        <TabsContent value="finance">
-          <div className="space-y-6">
-            {/* Header with Admin Button */}
+        <TabsContent value="finance" className="space-y-6 animate-fade-in">
+          {/* Header with Admin Button */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
+                Finance
+              </h2>
+              <p className="text-sm text-muted-foreground">Manage expenses and cash register</p>
+            </div>
             {!isAdminMode && (
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Finance</h2>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => requestAdminAction('admin')}
-                  className="gap-2"
-                >
-                  <Lock className="w-4 h-4" />
-                  Admin
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => requestAdminAction('admin')}
+                className="gap-2 border-primary/30 hover:border-primary hover:bg-primary/10"
+              >
+                <Lock className="w-4 h-4" />
+                Admin
+              </Button>
             )}
-            
-            {/* Expense Section */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Receipt className="w-5 h-5 text-purple-600" />
-                  Expenses
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Add Expense Buttons */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <Button
-                    variant="outline"
-                    className="h-12 flex flex-col gap-1 border-purple-500/30 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950"
-                    onClick={() => setShowExpenseDialog(true)}
-                  >
-                    <Receipt className="w-4 h-4" />
-                    <span className="text-xs">Add Expense</span>
-                  </Button>
-                  
-                  {isAdminMode && (
-                    <>
-                      <Button
-                        variant="outline"
-                        className="h-12 flex flex-col gap-1 border-orange-500/30 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950"
-                        onClick={() => setShowPurchaseExpenseDialog(true)}
-                      >
-                        <Package className="w-4 h-4" />
-                        <span className="text-xs">Purchase</span>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="h-12 flex flex-col gap-1 border-blue-500/30 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
-                        onClick={() => setShowSalaryDialog(true)}
-                      >
-                        <Users className="w-4 h-4" />
-                        <span className="text-xs">Salary</span>
-                      </Button>
-                    </>
-                  )}
-                </div>
+          </div>
 
-                {/* Recent Expenses List */}
-                {recentExpenses.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-muted-foreground">Recent (last 10)</h4>
-                    <div className="space-y-1">
-                      {recentExpenses.map((expense) => (
-                        <div key={expense.id} className="flex items-center justify-between py-2 px-3 bg-secondary/30 rounded-lg">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <Badge variant="outline" className="text-xs shrink-0">
-                              {expense.shift === 'day' ? '☀️' : '🌙'}
-                            </Badge>
-                            <span className="text-sm truncate">{expense.description || expense.category}</span>
-                          </div>
-                          <div className="flex items-center gap-2 ml-2">
-                            <span className="font-medium text-sm whitespace-nowrap">₱{expense.amount.toLocaleString()}</span>
-                            {isAdminMode && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => deleteExpense(expense.id, expense.category, expense.amount)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+          {/* Stats Cards Row */}
+          {todayRecord && todayRecord.expected_sales > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border-green-500/20 overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-green-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                      <TrendingUp className="w-5 h-5 text-green-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium">Today's Sales</p>
+                      <p className="text-2xl font-bold text-green-500">₱{todayRecord.expected_sales.toLocaleString()}</p>
                     </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            {/* Cash Summary */}
-            {todayRecord && todayRecord.expected_sales > 0 && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Wallet className="w-5 h-5 text-green-600" />
-                    Today's Cash
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <div className="text-xs text-muted-foreground">Sales</div>
-                      <div className="text-xl font-bold text-green-600">₱{todayRecord.expected_sales.toLocaleString()}</div>
+              <Card className="bg-gradient-to-br from-red-500/10 to-rose-500/5 border-red-500/20 overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-red-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center">
+                      <Receipt className="w-5 h-5 text-red-500" />
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground">Expenses</div>
-                      <div className="text-xl font-bold text-red-600">₱{todayTotalExpenses.toLocaleString()}</div>
+                      <p className="text-xs text-muted-foreground font-medium">Expenses</p>
+                      <p className="text-2xl font-bold text-red-500">₱{todayTotalExpenses.toLocaleString()}</p>
                     </div>
-                    {todayRecord.discrepancy !== null && (
+                  </div>
+                </CardContent>
+              </Card>
+
+              {todayRecord.discrepancy !== null && (
+                <Card className={cn(
+                  "overflow-hidden relative",
+                  todayRecord.discrepancy === 0 
+                    ? "bg-gradient-to-br from-green-500/10 to-emerald-500/5 border-green-500/20"
+                    : todayRecord.discrepancy < 0
+                    ? "bg-gradient-to-br from-red-500/10 to-rose-500/5 border-red-500/20"
+                    : "bg-gradient-to-br from-amber-500/10 to-yellow-500/5 border-amber-500/20"
+                )}>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center",
+                        todayRecord.discrepancy === 0 ? "bg-green-500/20" :
+                        todayRecord.discrepancy < 0 ? "bg-red-500/20" : "bg-amber-500/20"
+                      )}>
+                        <Wallet className={cn(
+                          "w-5 h-5",
+                          todayRecord.discrepancy === 0 ? "text-green-500" :
+                          todayRecord.discrepancy < 0 ? "text-red-500" : "text-amber-500"
+                        )} />
+                      </div>
                       <div>
-                        <div className="text-xs text-muted-foreground">Discrepancy</div>
-                        <div className={cn(
-                          "text-xl font-bold",
-                          todayRecord.discrepancy === 0 ? "text-green-600" :
-                          todayRecord.discrepancy < 0 ? "text-red-600" : "text-amber-600"
+                        <p className="text-xs text-muted-foreground font-medium">Discrepancy</p>
+                        <p className={cn(
+                          "text-2xl font-bold",
+                          todayRecord.discrepancy === 0 ? "text-green-500" :
+                          todayRecord.discrepancy < 0 ? "text-red-500" : "text-amber-500"
                         )}>
                           {todayRecord.discrepancy === 0 ? '✓ OK' : 
                             `${todayRecord.discrepancy > 0 ? '+' : ''}₱${todayRecord.discrepancy.toLocaleString()}`}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* Expense Section */}
+          <Card className="border-border/50 overflow-hidden">
+            <CardHeader className="pb-4 bg-gradient-to-r from-purple-500/5 to-transparent border-b border-border/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                  <Receipt className="w-5 h-5 text-purple-500" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Expenses</CardTitle>
+                  <p className="text-xs text-muted-foreground">Add and manage expenses</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              {/* Add Expense Buttons */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Button
+                  variant="outline"
+                  className="h-20 flex flex-col gap-2 border-purple-500/30 hover:border-purple-500 hover:bg-purple-500/10 transition-all group"
+                  onClick={() => setShowExpenseDialog(true)}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Receipt className="w-4 h-4 text-purple-500" />
+                  </div>
+                  <span className="text-xs font-medium">Add Expense</span>
+                </Button>
+                
+                {isAdminMode && (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="h-20 flex flex-col gap-2 border-orange-500/30 hover:border-orange-500 hover:bg-orange-500/10 transition-all group"
+                      onClick={() => setShowPurchaseExpenseDialog(true)}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Package className="w-4 h-4 text-orange-500" />
+                      </div>
+                      <span className="text-xs font-medium">Purchase</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="h-20 flex flex-col gap-2 border-blue-500/30 hover:border-blue-500 hover:bg-blue-500/10 transition-all group"
+                      onClick={() => setShowSalaryDialog(true)}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Users className="w-4 h-4 text-blue-500" />
+                      </div>
+                      <span className="text-xs font-medium">Salary</span>
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {/* Recent Expenses List */}
+              {recentExpenses.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                      <ClipboardList className="w-4 h-4" />
+                      Recent Expenses
+                    </h4>
+                    <Badge variant="secondary" className="text-xs">Last 10</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {recentExpenses.map((expense, index) => (
+                      <div 
+                        key={expense.id} 
+                        className="flex items-center justify-between py-3 px-4 bg-secondary/30 hover:bg-secondary/50 rounded-xl transition-all group"
+                        style={{ animationDelay: `${index * 50}ms` }}
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className={cn(
+                            "w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium",
+                            expense.shift === 'day' 
+                              ? "bg-amber-500/20 text-amber-500" 
+                              : "bg-indigo-500/20 text-indigo-500"
+                          )}>
+                            {expense.shift === 'day' ? '☀️' : '🌙'}
+                          </div>
+                          <span className="text-sm truncate">{expense.description || expense.category}</span>
+                        </div>
+                        <div className="flex items-center gap-3 ml-2">
+                          <span className="font-semibold text-sm whitespace-nowrap">₱{expense.amount.toLocaleString()}</span>
+                          {isAdminMode && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all"
+                              onClick={() => deleteExpense(expense.id, expense.category, expense.amount)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
-                    )}
+                    ))}
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Admin: Full Cash Register History */}
-            {isAdminMode && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">Cash History</CardTitle>
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => syncToGoogleSheets(true)}
-                        disabled={exportingToSheets}
-                      >
-                        {exportingToSheets ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-                      </Button>
+          {/* Admin: Full Cash Register History */}
+          {isAdminMode && (
+            <Card className="border-border/50 overflow-hidden">
+              <CardHeader className="pb-4 bg-gradient-to-r from-green-500/5 to-transparent border-b border-border/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                      <Wallet className="w-5 h-5 text-green-500" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">Cash History</CardTitle>
+                      <p className="text-xs text-muted-foreground">Recent register entries</p>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2 font-medium">Date</th>
-                          <th className="text-left py-2 font-medium">Shift</th>
-                          <th className="text-right py-2 font-medium">Sales</th>
-                          <th className="text-right py-2 font-medium">Expenses</th>
-                          <th className="text-right py-2 font-medium">Diff</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {records.slice(0, 10).map((record) => {
-                          const recordExpenses = expenses.filter(e => e.cash_register_id === record.id);
-                          const totalExp = recordExpenses.reduce((sum, e) => sum + e.amount, 0);
-                          return (
-                            <tr key={record.id} className="border-b border-border/50">
-                              <td className="py-2">{format(new Date(record.date), 'MMM d')}</td>
-                              <td className="py-2">{record.shift === 'day' ? '☀️' : '🌙'}</td>
-                              <td className="py-2 text-right text-green-600">₱{record.expected_sales.toLocaleString()}</td>
-                              <td className="py-2 text-right text-red-600">₱{totalExp.toLocaleString()}</td>
-                              <td className={cn(
-                                "py-2 text-right font-medium",
-                                record.discrepancy === 0 ? "text-green-600" :
-                                record.discrepancy && record.discrepancy < 0 ? "text-red-600" : "text-amber-600"
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => syncToGoogleSheets(true)}
+                    disabled={exportingToSheets}
+                    className="gap-2"
+                  >
+                    {exportingToSheets ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                    Sync
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/50">
+                        <th className="text-left py-3 px-2 font-semibold text-muted-foreground">Date</th>
+                        <th className="text-left py-3 px-2 font-semibold text-muted-foreground">Shift</th>
+                        <th className="text-right py-3 px-2 font-semibold text-muted-foreground">Sales</th>
+                        <th className="text-right py-3 px-2 font-semibold text-muted-foreground">Expenses</th>
+                        <th className="text-right py-3 px-2 font-semibold text-muted-foreground">Diff</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {records.slice(0, 10).map((record, index) => {
+                        const recordExpenses = expenses.filter(e => e.cash_register_id === record.id);
+                        const totalExp = recordExpenses.reduce((sum, e) => sum + e.amount, 0);
+                        return (
+                          <tr 
+                            key={record.id} 
+                            className="border-b border-border/30 hover:bg-secondary/30 transition-colors"
+                          >
+                            <td className="py-3 px-2 font-medium">{format(new Date(record.date), 'MMM d')}</td>
+                            <td className="py-3 px-2">
+                              <span className={cn(
+                                "inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs",
+                                record.shift === 'day' ? "bg-amber-500/20" : "bg-indigo-500/20"
                               )}>
-                                {record.discrepancy !== null ? 
-                                  (record.discrepancy === 0 ? '✓' : `${record.discrepancy > 0 ? '+' : ''}₱${record.discrepancy}`) 
-                                  : '-'}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+                                {record.shift === 'day' ? '☀️' : '🌙'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-2 text-right font-semibold text-green-500">₱{record.expected_sales.toLocaleString()}</td>
+                            <td className="py-3 px-2 text-right font-semibold text-red-500">₱{totalExp.toLocaleString()}</td>
+                            <td className={cn(
+                              "py-3 px-2 text-right font-bold",
+                              record.discrepancy === 0 ? "text-green-500" :
+                              record.discrepancy && record.discrepancy < 0 ? "text-red-500" : "text-amber-500"
+                            )}>
+                              {record.discrepancy !== null ? 
+                                (record.discrepancy === 0 ? '✓' : `${record.discrepancy > 0 ? '+' : ''}₱${record.discrepancy}`) 
+                                : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* ORDERS TAB */}
-        <TabsContent value="purchases">
+        <TabsContent value="purchases" className="animate-fade-in">
           {renderPurchaseOrders()}
         </TabsContent>
 
         {/* ACTIVITY TAB */}
-        <TabsContent value="activity">
+        <TabsContent value="activity" className="animate-fade-in">
           <ActivityLog />
         </TabsContent>
       </Tabs>
