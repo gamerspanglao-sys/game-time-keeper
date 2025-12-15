@@ -1084,6 +1084,8 @@ export default function Finance() {
                   <tr className="border-b">
                     <th className="text-left py-2 px-2">Date</th>
                     <th className="text-right py-2 px-2">Sales</th>
+                    <th className="text-right py-2 px-2">Cost</th>
+                    <th className="text-right py-2 px-2">Profit</th>
                     <th className="text-right py-2 px-2">Expenses</th>
                     <th className="text-right py-2 px-2">Cash</th>
                     <th className="text-right py-2 px-2">Diff</th>
@@ -1092,10 +1094,13 @@ export default function Finance() {
                 <tbody>
                   {records.slice(0, 30).map((record) => {
                     const totalExp = record.purchases + record.salaries + record.other_expenses;
+                    const grossProfit = record.expected_sales - (record.cost || 0);
                     return (
                       <tr key={record.id} className="border-b hover:bg-muted/50">
                         <td className="py-2 px-2">{record.date}</td>
                         <td className="text-right py-2 px-2 text-green-600">₱{record.expected_sales.toLocaleString()}</td>
+                        <td className="text-right py-2 px-2 text-muted-foreground">₱{(record.cost || 0).toLocaleString()}</td>
+                        <td className="text-right py-2 px-2 text-green-600">₱{grossProfit.toLocaleString()}</td>
                         <td className="text-right py-2 px-2 text-red-600">₱{totalExp.toLocaleString()}</td>
                         <td className="text-right py-2 px-2">
                           {record.actual_cash != null ? `₱${record.actual_cash.toLocaleString()}` : '—'}
