@@ -14,15 +14,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
-  Plus, 
-  TrendingDown, 
   TrendingUp, 
-  DollarSign,
   ShoppingCart,
   Users,
   MoreHorizontal,
-  AlertTriangle,
-  CheckCircle,
   RefreshCw,
   Trash2,
   Lock,
@@ -33,8 +28,6 @@ import {
   Receipt,
   Package,
   Coffee,
-  Beer,
-  Droplets,
   Send,
   X,
   Loader2
@@ -226,12 +219,6 @@ export default function Finance() {
     setPinInput('');
     setPinError('');
   };
-
-  const currentRecord = records.find(r => r.date === selectedDate);
-  const currentExpenses = expenses.filter(e => {
-    const record = records.find(r => r.id === e.cash_register_id);
-    return record?.date === selectedDate;
-  });
 
   const syncSalesFromLoyverse = async (date: string) => {
     setSyncing(true);
@@ -510,9 +497,9 @@ export default function Finance() {
 
   const getCategoryLabel = (category: string) => {
     switch (category) {
-      case 'purchases': return 'Закупки';
-      case 'salaries': return 'Зарплаты';
-      case 'other': return 'Прочее';
+      case 'purchases': return 'Purchases';
+      case 'salaries': return 'Salaries';
+      case 'other': return 'Other';
       default: return category;
     }
   };
@@ -664,16 +651,16 @@ export default function Finance() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wallet className="w-5 h-5 text-green-600" />
-              Внести кассу
+              Enter Cash
             </DialogTitle>
             <DialogDescription>
-              Введите фактическую сумму в кассе
+              Enter the actual cash amount in register
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <Input
               type="number"
-              placeholder="Сумма"
+              placeholder="Amount"
               value={actualCashInput}
               onChange={(e) => setActualCashInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && saveActualCash()}
@@ -681,7 +668,7 @@ export default function Finance() {
               autoFocus
             />
             <Button onClick={saveActualCash} className="w-full h-12 bg-green-600 hover:bg-green-700">
-              Сохранить
+              Save
             </Button>
           </div>
         </DialogContent>
@@ -693,25 +680,25 @@ export default function Finance() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Receipt className="w-5 h-5 text-purple-600" />
-              Добавить расход
+              Add Expense
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <Input
               type="number"
-              placeholder="Сумма"
+              placeholder="Amount"
               value={expenseAmount}
               onChange={(e) => setExpenseAmount(e.target.value)}
               className="text-xl h-12"
               autoFocus
             />
             <Input
-              placeholder="Описание (что купили?)"
+              placeholder="Description (what was bought?)"
               value={expenseDescription}
               onChange={(e) => setExpenseDescription(e.target.value)}
             />
             <Button onClick={handleAddExpense} className="w-full h-12 bg-purple-600 hover:bg-purple-700">
-              Добавить
+              Add
             </Button>
           </div>
         </DialogContent>
@@ -723,25 +710,25 @@ export default function Finance() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="w-5 h-5 text-orange-600" />
-              Добавить закупку
+              Add Purchase
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <Input
               type="number"
-              placeholder="Сумма"
+              placeholder="Amount"
               value={expenseAmount}
               onChange={(e) => setExpenseAmount(e.target.value)}
               className="text-xl h-12"
               autoFocus
             />
             <Input
-              placeholder="Описание"
+              placeholder="Description"
               value={expenseDescription}
               onChange={(e) => setExpenseDescription(e.target.value)}
             />
             <Button onClick={handleAddPurchaseExpense} className="w-full h-12 bg-orange-600 hover:bg-orange-700">
-              Добавить закупку
+              Add Purchase
             </Button>
           </div>
         </DialogContent>
@@ -753,25 +740,25 @@ export default function Finance() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="w-5 h-5 text-blue-600" />
-              Добавить зарплату
+              Add Salary
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <Input
               type="number"
-              placeholder="Сумма"
+              placeholder="Amount"
               value={expenseAmount}
               onChange={(e) => setExpenseAmount(e.target.value)}
               className="text-xl h-12"
               autoFocus
             />
             <Input
-              placeholder="Кому (имя)"
+              placeholder="Recipient (name)"
               value={expenseDescription}
               onChange={(e) => setExpenseDescription(e.target.value)}
             />
             <Button onClick={handleAddSalary} className="w-full h-12 bg-blue-600 hover:bg-blue-700">
-              Добавить зарплату
+              Add Salary
             </Button>
           </div>
         </DialogContent>
@@ -783,12 +770,12 @@ export default function Finance() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Lock className="w-5 h-5" />
-              Введите PIN
+              Enter PIN
             </DialogTitle>
             <DialogDescription>
-              {pendingAdminAction === 'purchase' && 'Для добавления закупок требуется PIN'}
-              {pendingAdminAction === 'salary' && 'Для добавления зарплат требуется PIN'}
-              {pendingAdminAction === 'admin' && 'Войти в режим администратора'}
+              {pendingAdminAction === 'purchase' && 'PIN required to add purchases'}
+              {pendingAdminAction === 'salary' && 'PIN required to add salaries'}
+              {pendingAdminAction === 'admin' && 'Enter admin mode'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
@@ -803,7 +790,7 @@ export default function Finance() {
             />
             {pinError && <p className="text-sm text-destructive text-center">{pinError}</p>}
             <Button onClick={handleAdminLogin} className="w-full h-12">
-              Подтвердить
+              Confirm
             </Button>
           </div>
         </DialogContent>
@@ -821,7 +808,7 @@ export default function Finance() {
           {/* Header */}
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-bold">Касса</h2>
+              <h2 className="text-xl font-bold">Cash Register</h2>
               <p className="text-muted-foreground text-sm">
                 {format(new Date(), 'dd MMMM yyyy')}
               </p>
@@ -841,21 +828,21 @@ export default function Finance() {
               <CardContent className="pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <div className="text-xs text-muted-foreground">Продажи</div>
+                    <div className="text-xs text-muted-foreground">Sales</div>
                     <div className="text-xl font-bold text-green-600">₱{todayRecord.expected_sales.toLocaleString()}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">Расходы</div>
+                    <div className="text-xs text-muted-foreground">Expenses</div>
                     <div className="text-xl font-bold text-red-600">₱{todayTotalExpenses.toLocaleString()}</div>
                   </div>
                   {todayRecord.actual_cash != null && (
                     <>
                       <div>
-                        <div className="text-xs text-muted-foreground">В кассе</div>
+                        <div className="text-xs text-muted-foreground">In Register</div>
                         <div className="text-xl font-bold">₱{todayRecord.actual_cash.toLocaleString()}</div>
                       </div>
                       <div>
-                        <div className="text-xs text-muted-foreground">Расхождение</div>
+                        <div className="text-xs text-muted-foreground">Discrepancy</div>
                         <div className={cn(
                           "text-xl font-bold",
                           todayRecord.discrepancy === 0 ? "text-green-600" :
@@ -881,7 +868,7 @@ export default function Finance() {
               onClick={() => setShowCashDialog(true)}
             >
               <Wallet className="w-8 h-8" />
-              Внести кассу
+              Enter Cash
             </Button>
 
             <Button
@@ -890,7 +877,7 @@ export default function Finance() {
               onClick={() => setShowExpenseDialog(true)}
             >
               <Receipt className="w-8 h-8" />
-              Расход
+              Expense
             </Button>
 
             <Button
@@ -900,7 +887,7 @@ export default function Finance() {
             >
               <Package className="w-8 h-8" />
               <div className="flex items-center gap-1">
-                Закупки
+                Purchases
                 <Lock className="w-3 h-3" />
               </div>
             </Button>
@@ -912,7 +899,7 @@ export default function Finance() {
             >
               <Users className="w-8 h-8" />
               <div className="flex items-center gap-1">
-                Зарплаты
+                Salaries
                 <Lock className="w-3 h-3" />
               </div>
             </Button>
@@ -922,7 +909,7 @@ export default function Finance() {
           {todayExpenses.length > 0 && (
             <Card>
               <CardHeader className="py-3">
-                <CardTitle className="text-base">Расходы сегодня</CardTitle>
+                <CardTitle className="text-base">Today&apos;s Expenses</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {todayExpenses.map((expense) => (
@@ -954,8 +941,8 @@ export default function Finance() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold">Касса</h2>
-            <p className="text-muted-foreground text-sm">Режим администратора</p>
+            <h2 className="text-xl font-bold">Cash Register</h2>
+            <p className="text-muted-foreground text-sm">Admin Mode</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Input
@@ -1008,7 +995,7 @@ export default function Finance() {
               onClick={() => setIsAdminMode(false)}
             >
               <EyeOff className="w-4 h-4 mr-2" />
-              Выйти
+              Exit
             </Button>
           </div>
         </div>
@@ -1018,29 +1005,29 @@ export default function Finance() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <FileSpreadsheet className="w-5 h-5" />
-              Итого за {records.length} дней
+              Total for {records.length} days
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div>
-                <div className="text-xs text-muted-foreground">Продажи</div>
+                <div className="text-xs text-muted-foreground">Sales</div>
                 <div className="text-lg font-bold text-green-600">₱{overallTotals.totalSales.toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Себестоимость</div>
+                <div className="text-xs text-muted-foreground">Cost</div>
                 <div className="text-lg font-bold text-muted-foreground">₱{overallTotals.totalCost.toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Валовая прибыль</div>
+                <div className="text-xs text-muted-foreground">Gross Profit</div>
                 <div className="text-lg font-bold text-green-600">₱{(overallTotals.totalSales - overallTotals.totalCost).toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Расходы</div>
+                <div className="text-xs text-muted-foreground">Expenses</div>
                 <div className="text-lg font-bold text-red-600">₱{(overallTotals.totalPurchases + overallTotals.totalSalaries + overallTotals.totalOther).toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Чистая прибыль</div>
+                <div className="text-xs text-muted-foreground">Net Profit</div>
                 <div className="text-lg font-bold">
                   ₱{(overallTotals.totalSales - overallTotals.totalCost - overallTotals.totalPurchases - overallTotals.totalSalaries - overallTotals.totalOther).toLocaleString()}
                 </div>
@@ -1057,7 +1044,7 @@ export default function Finance() {
             onClick={() => setShowCashDialog(true)}
           >
             <Wallet className="w-5 h-5 text-green-600" />
-            <span className="text-sm">Внести кассу</span>
+            <span className="text-sm">Enter Cash</span>
           </Button>
           <Button
             variant="outline"
@@ -1065,7 +1052,7 @@ export default function Finance() {
             onClick={() => setShowExpenseDialog(true)}
           >
             <Receipt className="w-5 h-5 text-purple-600" />
-            <span className="text-sm">Расход</span>
+            <span className="text-sm">Expense</span>
           </Button>
           <Button
             variant="outline"
@@ -1073,7 +1060,7 @@ export default function Finance() {
             onClick={() => setShowPurchaseExpenseDialog(true)}
           >
             <Package className="w-5 h-5 text-orange-600" />
-            <span className="text-sm">Закупки</span>
+            <span className="text-sm">Purchases</span>
           </Button>
           <Button
             variant="outline"
@@ -1081,25 +1068,25 @@ export default function Finance() {
             onClick={() => setShowSalaryDialog(true)}
           >
             <Users className="w-5 h-5 text-blue-600" />
-            <span className="text-sm">Зарплаты</span>
+            <span className="text-sm">Salaries</span>
           </Button>
         </div>
 
         {/* History Table */}
         <Card>
           <CardHeader className="py-3">
-            <CardTitle className="text-base">История</CardTitle>
+            <CardTitle className="text-base">History</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
-                    <th className="text-left py-2 px-2">Дата</th>
-                    <th className="text-right py-2 px-2">Продажи</th>
-                    <th className="text-right py-2 px-2">Расходы</th>
-                    <th className="text-right py-2 px-2">Касса</th>
-                    <th className="text-right py-2 px-2">Расх.</th>
+                    <th className="text-left py-2 px-2">Date</th>
+                    <th className="text-right py-2 px-2">Sales</th>
+                    <th className="text-right py-2 px-2">Expenses</th>
+                    <th className="text-right py-2 px-2">Cash</th>
+                    <th className="text-right py-2 px-2">Diff</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1136,7 +1123,7 @@ export default function Finance() {
         {expenses.length > 0 && (
           <Card>
             <CardHeader className="py-3">
-              <CardTitle className="text-base">Последние расходы</CardTitle>
+              <CardTitle className="text-base">Recent Expenses</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {expenses.slice(0, 20).map((expense) => {
@@ -1182,9 +1169,9 @@ export default function Finance() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold">Заказ закупок</h2>
+          <h2 className="text-xl font-bold">Purchase Order</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            На основе {purchaseData?.period.days || 3}-дневного анализа продаж
+            Based on {purchaseData?.period.days || 3}-day sales analysis
           </p>
         </div>
         
@@ -1196,7 +1183,7 @@ export default function Finance() {
             className="shadow-lg hover:shadow-xl transition-shadow"
           >
             {purchaseLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShoppingCart className="h-4 w-4 mr-2" />}
-            Сформировать
+            Generate
           </Button>
 
           {purchaseData && filteredRecommendations.length > 0 && (
@@ -1214,7 +1201,7 @@ export default function Finance() {
                 onCheckedChange={setShowAllItems}
               />
               <Label htmlFor="show-all" className="text-sm cursor-pointer">
-                {showAllItems ? "Все" : "Только заказ"}
+                {showAllItems ? "All" : "Order only"}
               </Label>
             </div>
           )}
@@ -1230,7 +1217,7 @@ export default function Finance() {
           className="bg-blue-500/10 border-blue-500/30 text-blue-500 hover:bg-blue-500/20 hover:text-blue-400"
         >
           {sendingPurchase ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-          Отправить заказ
+          Send Order
         </Button>
         <Button 
           variant="outline" 
@@ -1239,7 +1226,7 @@ export default function Finance() {
           className="bg-green-500/10 border-green-500/30 text-green-500 hover:bg-green-500/20 hover:text-green-400"
         >
           {sendingCash ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-          Отправить кассу
+          Send Cash Report
         </Button>
       </div>
 
@@ -1250,13 +1237,13 @@ export default function Finance() {
             <Card className="bg-gradient-to-br from-card to-muted/30 border-0 shadow-md">
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Период анализа
+                  Analysis Period
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold">{purchaseData.period.days} <span className="text-lg font-normal text-muted-foreground">дней</span></p>
+                <p className="text-3xl font-bold">{purchaseData.period.days} <span className="text-lg font-normal text-muted-foreground">days</span></p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  +{purchaseData.period.deliveryBuffer || 2} дня буфер
+                  +{purchaseData.period.deliveryBuffer || 2} days buffer
                 </p>
               </CardContent>
             </Card>
@@ -1264,7 +1251,7 @@ export default function Finance() {
             <Card className="bg-gradient-to-br from-card to-muted/30 border-0 shadow-md">
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Чеков
+                  Receipts
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1275,7 +1262,7 @@ export default function Finance() {
             <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 shadow-md">
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-medium text-primary uppercase tracking-wide">
-                  Единиц к заказу
+                  Units to Order
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1286,7 +1273,7 @@ export default function Finance() {
             <Card className="bg-gradient-to-br from-card to-muted/30 border-0 shadow-md">
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Коробок
+                  Cases
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1311,11 +1298,11 @@ export default function Finance() {
                         {supplierConfig.label}
                       </Badge>
                       <span className="text-muted-foreground text-sm font-normal">
-                        {typedItems.length} товаров
+                        {typedItems.length} items
                       </span>
                     </div>
                     <div className="text-sm font-medium text-muted-foreground">
-                      {supplierCases} коробок
+                      {supplierCases} cases
                     </div>
                   </CardTitle>
                 </CardHeader>
@@ -1387,8 +1374,8 @@ export default function Finance() {
             <Card>
               <CardContent className="py-8 text-center text-muted-foreground">
                 {removedItems.size > 0 
-                  ? "Все товары удалены. Нажмите Сформировать для обновления."
-                  : "Все товары в наличии!"
+                  ? "All items removed. Click Generate to refresh."
+                  : "All items in stock!"
                 }
               </CardContent>
             </Card>
@@ -1400,9 +1387,9 @@ export default function Finance() {
         <Card>
           <CardContent className="py-12 text-center">
             <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Сформировать заказ</h3>
+            <h3 className="text-lg font-medium mb-2">Generate Purchase Order</h3>
             <p className="text-muted-foreground mb-4">
-              Анализирует 7-дневные продажи, сравнивает со складом и рекомендует что заказать.
+              Analyzes 7-day sales, compares with current stock, and recommends what to order.
             </p>
           </CardContent>
         </Card>
@@ -1418,11 +1405,11 @@ export default function Finance() {
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="cash" className="flex items-center gap-2">
             <Wallet className="w-4 h-4" />
-            Касса
+            Cash
           </TabsTrigger>
           <TabsTrigger value="purchases" className="flex items-center gap-2">
             <ShoppingCart className="w-4 h-4" />
-            Закупки
+            Orders
           </TabsTrigger>
         </TabsList>
 
