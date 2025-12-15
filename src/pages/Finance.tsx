@@ -178,6 +178,7 @@ export default function Finance() {
   const [showExpenseDialog, setShowExpenseDialog] = useState(false);
   const [showPurchaseExpenseDialog, setShowPurchaseExpenseDialog] = useState(false);
   const [showSalaryDialog, setShowSalaryDialog] = useState(false);
+  const [recentExpenses, setRecentExpenses] = useState<Array<{id: string; amount: number; description: string | null; category: string; shift: string; created_at: string}>>([]);
   
   // Admin mode
   const [isAdminMode, setIsAdminMode] = useState(false);
@@ -255,9 +256,19 @@ export default function Finance() {
     if (data) setEmployeesList(data);
   };
 
+  const loadRecentExpenses = async () => {
+    const { data } = await supabase
+      .from('cash_expenses')
+      .select('id, amount, description, category, shift, created_at')
+      .order('created_at', { ascending: false })
+      .limit(10);
+    if (data) setRecentExpenses(data);
+  };
+
   useEffect(() => {
     loadData();
     loadEmployees();
+    loadRecentExpenses();
     
     const channel = supabase
       .channel('cash-register-changes')
@@ -267,6 +278,7 @@ export default function Finance() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, () => {
         loadData(true);
+        loadRecentExpenses();
         debouncedSync();
       })
       .subscribe();
@@ -1045,6 +1057,30 @@ export default function Finance() {
             <Button onClick={handleAddExpense} className="w-full h-12 bg-purple-600 hover:bg-purple-700">
               Add
             </Button>
+            
+            {/* Recent Expenses List */}
+            {recentExpenses.length > 0 && (
+              <div className="border-t pt-4 mt-4">
+                <h4 className="text-sm font-medium text-muted-foreground mb-2">Recent Expenses</h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {recentExpenses.map((expense) => (
+                    <div key={expense.id} className="flex justify-between items-center text-sm p-2 bg-muted/50 rounded">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-muted-foreground truncate block">
+                          {expense.description || expense.category}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 ml-2">
+                        <Badge variant="outline" className="text-xs">
+                          {expense.shift === 'day' ? '☀️' : '🌙'}
+                        </Badge>
+                        <span className="font-medium whitespace-nowrap">₱{expense.amount}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
