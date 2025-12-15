@@ -32,7 +32,8 @@ import {
   X,
   Loader2,
   Sun,
-  Moon
+  Moon,
+  Pencil
 } from 'lucide-react';
 
 // ============= TYPES =============
@@ -151,6 +152,16 @@ export default function Finance() {
   const [pinError, setPinError] = useState('');
   const [pendingAdminAction, setPendingAdminAction] = useState<'purchase' | 'salary' | 'admin' | null>(null);
   const [viewMode, setViewMode] = useState<'shifts' | 'daily'>('daily'); // Default to daily view
+  
+  // Edit cash record
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<CashRecord | null>(null);
+  const [editSales, setEditSales] = useState('');
+  const [editCost, setEditCost] = useState('');
+  const [editActualCash, setEditActualCash] = useState('');
+  const [editPurchases, setEditPurchases] = useState('');
+  const [editSalaries, setEditSalaries] = useState('');
+  const [editOther, setEditOther] = useState('');
   
   // Google Sheets
   const [exportingToSheets, setExportingToSheets] = useState(false);
@@ -538,6 +549,55 @@ export default function Finance() {
     } catch (error) {
       console.error('Error deleting expense:', error);
       toast.error('Failed to delete');
+    }
+  };
+
+  const openEditDialog = (record: CashRecord) => {
+    setEditingRecord(record);
+    setEditSales(record.expected_sales.toString());
+    setEditCost((record.cost || 0).toString());
+    setEditActualCash(record.actual_cash?.toString() || '');
+    setEditPurchases(record.purchases.toString());
+    setEditSalaries(record.salaries.toString());
+    setEditOther(record.other_expenses.toString());
+    setShowEditDialog(true);
+  };
+
+  const saveEditedRecord = async () => {
+    if (!editingRecord) return;
+
+    try {
+      const sales = parseInt(editSales) || 0;
+      const cost = parseInt(editCost) || 0;
+      const actualCash = editActualCash ? parseInt(editActualCash) : null;
+      const purchases = parseInt(editPurchases) || 0;
+      const salaries = parseInt(editSalaries) || 0;
+      const other = parseInt(editOther) || 0;
+      
+      const totalExpenses = purchases + salaries + other;
+      const expectedCash = editingRecord.opening_balance + sales - totalExpenses;
+      const discrepancy = actualCash !== null ? actualCash - expectedCash : null;
+
+      await supabase
+        .from('cash_register')
+        .update({
+          expected_sales: sales,
+          cost: cost,
+          actual_cash: actualCash,
+          purchases: purchases,
+          salaries: salaries,
+          other_expenses: other,
+          discrepancy: discrepancy
+        })
+        .eq('id', editingRecord.id);
+
+      toast.success('Record updated');
+      setShowEditDialog(false);
+      setEditingRecord(null);
+      loadData(true);
+    } catch (error) {
+      console.error('Error updating record:', error);
+      toast.error('Failed to update');
     }
   };
 
@@ -953,6 +1013,82 @@ export default function Finance() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Cash Record Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="w-5 h-5" />
+              Edit Record - {editingRecord?.date} ({editingRecord?.shift === 'day' ? 'Day' : 'Night'})
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs text-muted-foreground">Sales</Label>
+                <Input
+                  type="number"
+                  value={editSales}
+                  onChange={(e) => setEditSales(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Cost</Label>
+                <Input
+                  type="number"
+                  value={editCost}
+                  onChange={(e) => setEditCost(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Actual Cash</Label>
+              <Input
+                type="number"
+                value={editActualCash}
+                onChange={(e) => setEditActualCash(e.target.value)}
+                placeholder="Not entered"
+                className="h-10"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs text-orange-500">Purchases</Label>
+                <Input
+                  type="number"
+                  value={editPurchases}
+                  onChange={(e) => setEditPurchases(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-blue-500">Salaries</Label>
+                <Input
+                  type="number"
+                  value={editSalaries}
+                  onChange={(e) => setEditSalaries(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-purple-500">Other</Label>
+                <Input
+                  type="number"
+                  value={editOther}
+                  onChange={(e) => setEditOther(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+            </div>
+            <Button onClick={saveEditedRecord} className="w-full h-12">
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 
@@ -1323,6 +1459,7 @@ export default function Finance() {
                     <th className="text-right py-2 px-2 font-semibold">Net</th>
                     <th className="text-right py-2 px-2 font-semibold">Cash</th>
                     <th className="text-right py-2 px-2 font-semibold">Diff</th>
+                    {viewMode === 'shifts' && <th className="py-2 px-2 font-semibold w-10"></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1405,6 +1542,16 @@ export default function Finance() {
                               (record.discrepancy > 0 ? '+' : '') + `₱${record.discrepancy.toLocaleString()}`
                             ) : '—'}
                           </td>
+                          <td className="py-2 px-2 text-center">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => openEditDialog(record)}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          </td>
                         </tr>
                       );
                     })
@@ -1434,6 +1581,7 @@ export default function Finance() {
                     )}>
                       ₱{overallTotals.totalDiscrepancy.toLocaleString()}
                     </td>
+                    {viewMode === 'shifts' && <td></td>}
                   </tr>
                 </tfoot>
               </table>
