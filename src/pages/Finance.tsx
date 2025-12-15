@@ -1961,7 +1961,7 @@ export default function Finance() {
         <TabsList className="grid w-full max-w-lg grid-cols-2">
           <TabsTrigger value="cash" className="flex items-center gap-2">
             <Wallet className="w-4 h-4" />
-            Shift & Cash
+            Cash
           </TabsTrigger>
           <TabsTrigger value="purchases" className="flex items-center gap-2">
             <ShoppingCart className="w-4 h-4" />
