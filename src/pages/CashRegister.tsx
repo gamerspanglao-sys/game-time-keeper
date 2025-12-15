@@ -75,8 +75,8 @@ export default function CashRegister() {
     
     const channel = supabase
       .channel('cash-register-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_register' }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_register' }, () => loadData(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, () => loadData(true))
       .subscribe();
 
     return () => {
@@ -84,24 +84,79 @@ export default function CashRegister() {
     };
   }, []);
 
-  const loadData = async () => {
+  const CACHE_KEY_RECORDS = 'cash_register_records';
+  const CACHE_KEY_EXPENSES = 'cash_register_expenses';
+  const CACHE_KEY_LAST_SYNC = 'cash_register_last_sync';
+
+  const loadData = async (forceRefresh = false) => {
     try {
-      // Load ALL records for complete history
-      const { data: recordsData, error: recordsError } = await supabase
+      // Try to load from cache first
+      const cachedRecords = localStorage.getItem(CACHE_KEY_RECORDS);
+      const cachedExpenses = localStorage.getItem(CACHE_KEY_EXPENSES);
+      const lastSync = localStorage.getItem(CACHE_KEY_LAST_SYNC);
+      
+      let existingRecords: CashRecord[] = [];
+      let existingExpenses: CashExpense[] = [];
+      
+      if (cachedRecords && cachedExpenses && !forceRefresh) {
+        existingRecords = JSON.parse(cachedRecords);
+        existingExpenses = JSON.parse(cachedExpenses);
+        setRecords(existingRecords);
+        setExpenses(existingExpenses);
+        setLoading(false);
+      }
+
+      // Fetch only new/updated records since last sync
+      let recordsQuery = supabase
         .from('cash_register')
         .select('*')
         .order('date', { ascending: false });
-
-      if (recordsError) throw recordsError;
-      setRecords(recordsData || []);
-
-      const { data: expensesData, error: expensesError } = await supabase
+      
+      let expensesQuery = supabase
         .from('cash_expenses')
         .select('*')
         .order('created_at', { ascending: false });
 
+      // If we have cached data and not forcing refresh, only get updates
+      if (lastSync && !forceRefresh && existingRecords.length > 0) {
+        recordsQuery = recordsQuery.gte('updated_at', lastSync);
+        expensesQuery = expensesQuery.gte('created_at', lastSync);
+      }
+
+      const { data: newRecordsData, error: recordsError } = await recordsQuery;
+      if (recordsError) throw recordsError;
+
+      const { data: newExpensesData, error: expensesError } = await expensesQuery;
       if (expensesError) throw expensesError;
-      setExpenses((expensesData || []) as CashExpense[]);
+
+      // Merge new data with cached data
+      let finalRecords: CashRecord[];
+      let finalExpenses: CashExpense[];
+
+      if (forceRefresh || !cachedRecords) {
+        // Full refresh - just use new data
+        finalRecords = newRecordsData || [];
+        finalExpenses = (newExpensesData || []) as CashExpense[];
+      } else {
+        // Merge: update existing records and add new ones
+        const recordsMap = new Map(existingRecords.map(r => [r.id, r]));
+        (newRecordsData || []).forEach(r => recordsMap.set(r.id, r));
+        finalRecords = Array.from(recordsMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+
+        const expensesMap = new Map(existingExpenses.map(e => [e.id, e]));
+        ((newExpensesData || []) as CashExpense[]).forEach(e => expensesMap.set(e.id, e));
+        finalExpenses = Array.from(expensesMap.values());
+      }
+
+      // Save to cache
+      localStorage.setItem(CACHE_KEY_RECORDS, JSON.stringify(finalRecords));
+      localStorage.setItem(CACHE_KEY_EXPENSES, JSON.stringify(finalExpenses));
+      localStorage.setItem(CACHE_KEY_LAST_SYNC, new Date().toISOString());
+
+      setRecords(finalRecords);
+      setExpenses(finalExpenses);
+      
+      console.log(`Cash register: ${finalRecords.length} records cached`);
     } catch (error) {
       console.error('Error loading cash data:', error);
       toast.error('Error loading data');
