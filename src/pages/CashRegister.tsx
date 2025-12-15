@@ -751,49 +751,30 @@ export default function CashRegister() {
             <Download className="w-4 h-4 mr-2" />
             Excel
           </Button>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <FileSpreadsheet className="w-4 h-4 mr-2" />
-                Google Sheets
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Export to Google Sheets</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Google Apps Script URL</label>
-                  <Input
-                    placeholder="https://script.google.com/macros/s/..."
-                    value={googleSheetsUrl}
-                    onChange={(e) => setGoogleSheetsUrl(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Paste your Google Apps Script web app URL
-                  </p>
-                </div>
-                <Button 
-                  onClick={exportToGoogleSheets} 
-                  disabled={exportingToSheets || !googleSheetsUrl}
-                  className="w-full"
-                >
-                  {exportingToSheets ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <FileSpreadsheet className="w-4 h-4 mr-2" />
-                      Export {records.length} records
-                    </>
-                  )}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button 
+            variant="outline" 
+            onClick={async () => {
+              setExportingToSheets(true);
+              try {
+                const { data, error } = await supabase.functions.invoke('google-sheets-sync');
+                if (error) throw error;
+                toast.success(data?.message || 'Synced to Google Sheets');
+              } catch (error) {
+                console.error('Error syncing to Google Sheets:', error);
+                toast.error('Failed to sync to Google Sheets');
+              } finally {
+                setExportingToSheets(false);
+              }
+            }}
+            disabled={exportingToSheets}
+          >
+            {exportingToSheets ? (
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+            )}
+            Google Sheets
+          </Button>
           <Button 
             variant="ghost" 
             size="sm"
