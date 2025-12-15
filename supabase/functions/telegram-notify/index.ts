@@ -226,7 +226,7 @@ async function formatPurchaseOrder(data: any): Promise<string> {
   return message;
 }
 
-function formatCashReport(data: any): string {
+function formatCashReport(data: any, shift?: string): string {
   if (!data?.summary) {
     return '💰 <b>FINANCIAL REPORT</b>\n\nNo data';
   }
@@ -234,9 +234,13 @@ function formatCashReport(data: any): string {
   const s = data.summary;
   const formatMoney = (n: number) => `₱${n?.toLocaleString() || 0}`;
   
+  const shiftLabel = shift === 'day' ? '☀️ Day Shift (5AM-5PM)' : 
+                     shift === 'night' ? '🌙 Night Shift (5PM-5AM)' :
+                     '5:00 AM - 5:00 AM';
+  
   let message = `💰 <b>FINANCIAL REPORT</b>\n`;
   message += `━━━━━━━━━━━━━━━━━━━━\n`;
-  message += `📅 Shift: 5:00 AM - 5:00 AM\n\n`;
+  message += `📅 ${shiftLabel}\n\n`;
   
   // By category
   if (s.byCategory) {
@@ -303,7 +307,7 @@ function formatCashReport(data: any): string {
   return message;
 }
 
-async function fetchCashDiscrepancy(): Promise<{ date: string; discrepancy: number; actual: number; expected: number } | null> {
+async function fetchCashDiscrepancy(): Promise<{ date: string; shift: string; discrepancy: number; actual: number; expected: number }[]> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   
@@ -320,49 +324,51 @@ async function fetchCashDiscrepancy(): Promise<{ date: string; discrepancy: numb
   yesterday.setDate(yesterday.getDate() - 1);
   const dateStr = yesterday.toISOString().split('T')[0];
   
-  console.log(`📅 Checking cash discrepancy for: ${dateStr}`);
+  console.log(`📅 Checking cash discrepancy for: ${dateStr} (both shifts)`);
   
   const { data, error } = await supabase
     .from('cash_register')
-    .select('date, actual_cash, discrepancy')
+    .select('date, shift, actual_cash, discrepancy')
     .eq('date', dateStr)
-    .maybeSingle();
+    .not('discrepancy', 'is', null)
+    .neq('discrepancy', 0);
   
-  if (error || !data) {
-    console.log(`ℹ️ No cash register entry for ${dateStr}`);
-    return null;
+  if (error || !data || data.length === 0) {
+    console.log(`✅ No discrepancies for ${dateStr}`);
+    return [];
   }
   
-  if (data.discrepancy !== null && data.discrepancy !== 0) {
-    const expected = (data.actual_cash || 0) - data.discrepancy;
-    return {
-      date: dateStr,
-      discrepancy: data.discrepancy,
-      actual: data.actual_cash || 0,
-      expected: expected
-    };
-  }
-  
-  console.log(`✅ No discrepancy for ${dateStr}`);
-  return null;
+  return data.map(d => ({
+    date: d.date,
+    shift: d.shift,
+    discrepancy: d.discrepancy,
+    actual: d.actual_cash || 0,
+    expected: (d.actual_cash || 0) - d.discrepancy
+  }));
 }
 
-function formatDiscrepancyAlert(data: { date: string; discrepancy: number; actual: number; expected: number }): string {
+function formatDiscrepancyAlert(discrepancies: { date: string; shift: string; discrepancy: number; actual: number; expected: number }[]): string {
+  if (discrepancies.length === 0) return '';
+  
   const formatMoney = (n: number) => `₱${n?.toLocaleString() || 0}`;
-  const isShortage = data.discrepancy < 0;
-  const emoji = isShortage ? '🚨' : '⚠️';
-  const type = isShortage ? 'SHORTAGE' : 'SURPLUS';
   
-  let message = `${emoji} <b>CASH ${type} ALERT</b>\n`;
+  let message = `🚨 <b>CASH DISCREPANCY ALERT</b>\n`;
   message += `━━━━━━━━━━━━━━━━━━━━\n`;
-  message += `📅 Date: ${data.date}\n\n`;
-  message += `💰 Expected: ${formatMoney(data.expected)}\n`;
-  message += `💵 Actual: ${formatMoney(data.actual)}\n`;
-  message += `━━━━━━━━━━━━━━━━━━━━\n`;
-  message += `${isShortage ? '📉' : '📈'} Discrepancy: <b>${formatMoney(Math.abs(data.discrepancy))}</b> ${isShortage ? 'SHORT' : 'OVER'}\n`;
   
-  if (isShortage && Math.abs(data.discrepancy) > 500) {
-    message += `\n⚠️ Large shortage! Please investigate immediately.`;
+  for (const d of discrepancies) {
+    const isShortage = d.discrepancy < 0;
+    const emoji = isShortage ? '📉' : '📈';
+    const shiftEmoji = d.shift === 'day' ? '☀️' : '🌙';
+    const type = isShortage ? 'SHORT' : 'OVER';
+    
+    message += `\n${shiftEmoji} <b>${d.shift === 'day' ? 'Day' : 'Night'} Shift</b> (${d.date})\n`;
+    message += `   💰 Expected: ${formatMoney(d.expected)}\n`;
+    message += `   💵 Actual: ${formatMoney(d.actual)}\n`;
+    message += `   ${emoji} <b>${formatMoney(Math.abs(d.discrepancy))}</b> ${type}\n`;
+    
+    if (isShortage && Math.abs(d.discrepancy) > 500) {
+      message += `   ⚠️ Large shortage! Investigate!\n`;
+    }
   }
   
   return message;
@@ -442,23 +448,28 @@ async function fetchDailySummary(): Promise<any | null> {
   const grossProfit = totalSales - totalCost;
   const netProfit = grossProfit - totalExpenses;
   
-  // Yesterday's data
-  const yesterday = data[0];
-  const yesterdayProfit = yesterday ? (yesterday.expected_sales - (yesterday.cost || 0) - yesterday.purchases - yesterday.salaries - yesterday.other_expenses) : 0;
+  // Yesterday's data (both shifts)
+  const yesterday = data.filter(r => r.date === data[0]?.date);
+  const yesterdaySales = yesterday.reduce((sum, r) => sum + (r.expected_sales || 0), 0);
+  const yesterdayProfit = yesterday.reduce((sum, r) => 
+    sum + (r.expected_sales - (r.cost || 0) - r.purchases - r.salaries - r.other_expenses), 0);
+  
+  // Count unique days
+  const uniqueDays = new Set(data.map(r => r.date)).size;
   
   return {
-    days: data.length,
+    days: uniqueDays,
+    shifts: data.length,
     totalSales,
     totalCost,
     grossProfit,
     totalExpenses,
     netProfit,
-    yesterday: yesterday ? {
-      date: yesterday.date,
-      sales: yesterday.expected_sales,
-      cost: yesterday.cost || 0,
-      expenses: yesterday.purchases + yesterday.salaries + yesterday.other_expenses,
-      profit: yesterdayProfit
+    yesterday: yesterday.length > 0 ? {
+      date: yesterday[0].date,
+      sales: yesterdaySales,
+      profit: yesterdayProfit,
+      shifts: yesterday.length
     } : null
   };
 }
@@ -468,7 +479,7 @@ function formatDailySummary(data: any): string {
   
   let message = `📊 <b>WEEKLY SUMMARY</b>\n`;
   message += `━━━━━━━━━━━━━━━━━━━━\n`;
-  message += `📅 Last ${data.days} days\n\n`;
+  message += `📅 Last ${data.days} days (${data.shifts} shifts)\n\n`;
   
   message += `💵 Total Sales: ${formatMoney(data.totalSales)}\n`;
   message += `💸 Total Cost: ${formatMoney(data.totalCost)}\n`;
@@ -479,6 +490,7 @@ function formatDailySummary(data: any): string {
   
   if (data.yesterday) {
     message += `\n📅 <b>Yesterday (${data.yesterday.date})</b>\n`;
+    message += `   Shifts: ${data.yesterday.shifts}\n`;
     message += `   Sales: ${formatMoney(data.yesterday.sales)}\n`;
     message += `   Profit: ${formatMoney(data.yesterday.profit)}\n`;
   }
@@ -498,9 +510,9 @@ serve(async (req) => {
   }
 
   try {
-    const { action } = await req.json().catch(() => ({ action: 'test' }));
+    const { action, shift } = await req.json().catch(() => ({ action: 'test', shift: undefined }));
     
-    console.log(`📱 Telegram notify action: ${action}`);
+    console.log(`📱 Telegram notify action: ${action}, shift: ${shift}`);
     
     let message = '';
     
@@ -511,8 +523,9 @@ serve(async (req) => {
     }
     
     if (action === 'cash' || action === 'all' || action === 'morning') {
-      // Calculate 5AM-5AM period for the PREVIOUS shift in Manila timezone
+      // Calculate shift period in Manila timezone
       // Manila is UTC+8
+      // Notification at 6AM covers the night shift (5PM yesterday to 5AM today)
       const now = new Date();
       const manilaOffset = 8 * 60; // Manila is UTC+8
       const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -523,42 +536,52 @@ serve(async (req) => {
       const manilaMonth = manilaTime.getMonth();
       const manilaYear = manilaTime.getFullYear();
       
-      // If current Manila time is before 5AM, we want yesterday's shift (day before yesterday 5AM to yesterday 5AM)
-      // If current Manila time is 5AM or later, we want the shift that just ended (yesterday 5AM to today 5AM)
       let endDate: Date;
       let startDate: Date;
+      let reportShift = shift;
       
-      if (manilaHour < 5) {
-        // Before 5AM Manila: report for shift that ended yesterday at 5AM
-        // End: yesterday 5AM Manila = yesterday 5AM - 8 hours = yesterday at -3 (day before at 21:00 UTC)
-        endDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate - 1, 5 - 8, 0, 0));
-        startDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate - 2, 5 - 8, 0, 0));
-      } else {
-        // 5AM or later Manila: report for shift that just ended at 5AM today
-        // End: today 5AM Manila = today 5AM - 8 hours = yesterday 21:00 UTC
+      // If called at 6AM (morning report), report on the night shift that just ended
+      if (action === 'morning' || manilaHour === 6) {
+        // Night shift: yesterday 5PM to today 5AM
+        endDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate, 5 - 8, 0, 0)); // 5AM Manila
+        startDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate - 1, 17 - 8, 0, 0)); // 5PM Manila yesterday
+        reportShift = 'night';
+      } else if (manilaHour < 5) {
+        // Before 5AM: still night shift
         endDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate, 5 - 8, 0, 0));
-        startDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate - 1, 5 - 8, 0, 0));
+        startDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate - 1, 17 - 8, 0, 0));
+        reportShift = 'night';
+      } else if (manilaHour < 17) {
+        // Day shift: 5AM to 5PM
+        endDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate, 17 - 8, 0, 0));
+        startDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate, 5 - 8, 0, 0));
+        reportShift = 'day';
+      } else {
+        // Night shift: 5PM to 5AM next day
+        endDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate + 1, 5 - 8, 0, 0));
+        startDate = new Date(Date.UTC(manilaYear, manilaMonth, manilaDate, 17 - 8, 0, 0));
+        reportShift = 'night';
       }
       
-      console.log(`📊 Cash report period: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+      console.log(`📊 Cash report period: ${startDate.toISOString()} to ${endDate.toISOString()}, shift: ${reportShift}`);
       console.log(`📊 Manila time now: ${manilaTime.toISOString()}, hour: ${manilaHour}`);
       
       const cashData = await fetchPaymentsData(startDate.toISOString(), endDate.toISOString());
       
       if (message) message += '\n\n━━━━━━━━━━━━━━━━━━\n\n';
-      message += formatCashReport(cashData);
+      message += formatCashReport(cashData, reportShift);
     }
     
     // Check for cash discrepancy alert
     if (action === 'morning' || action === 'discrepancy') {
-      const discrepancy = await fetchCashDiscrepancy();
-      if (discrepancy) {
+      const discrepancies = await fetchCashDiscrepancy();
+      if (discrepancies.length > 0) {
         if (message && action === 'morning') {
           message += '\n\n━━━━━━━━━━━━━━━━━━\n\n';
         }
-        message += formatDiscrepancyAlert(discrepancy);
+        message += formatDiscrepancyAlert(discrepancies);
       } else if (action === 'discrepancy') {
-        message = '✅ No cash discrepancy found for yesterday.';
+        message = '✅ No cash discrepancies found for yesterday.';
       }
     }
     
