@@ -310,8 +310,8 @@ export default function Finance() {
           await supabase
             .from('cash_register')
             .update({
-              expected_sales: data.summary.netAmount || 0,
-              cost: data.summary.totalCost || 0,
+              expected_sales: Math.round(data.summary.netAmount || 0),
+              cost: Math.round(data.summary.totalCost || 0),
             })
             .eq('id', existing.id);
         } else {
@@ -321,8 +321,8 @@ export default function Finance() {
               date,
               shift,
               opening_balance: 0,
-              expected_sales: data.summary.netAmount || 0,
-              cost: data.summary.totalCost || 0,
+              expected_sales: Math.round(data.summary.netAmount || 0),
+              cost: Math.round(data.summary.totalCost || 0),
             });
         }
         
