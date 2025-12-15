@@ -49,13 +49,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 type ShiftType = 'day' | 'night';
 
+// Regular employee expense types
 const EXPENSE_TYPES = [
   { value: 'employee_food', label: 'Employee Food', category: 'other' as const },
-  { value: 'purchases', label: 'Purchases', category: 'purchases' as const },
-  { value: 'advance', label: 'Advance (Salary)', category: 'salaries' as const },
   { value: 'food_hunters', label: 'Food Hunters', category: 'other' as const },
   { value: 'other', label: 'Other', category: 'other' as const },
 ];
+
+// Admin-only expense types
+const ADMIN_EXPENSE_TYPES = [
+  { value: 'purchases', label: 'Purchases', category: 'purchases' as const },
+  { value: 'advance', label: 'Advance (Salary)', category: 'salaries' as const },
+];
+
+// All expense types combined for lookup
+const ALL_EXPENSE_TYPES = [...EXPENSE_TYPES, ...ADMIN_EXPENSE_TYPES];
 
 interface CashRecord {
   id: string;
@@ -526,7 +534,7 @@ export default function Finance() {
       toast.error('Enter valid amount');
       return;
     }
-    const typeConfig = EXPENSE_TYPES.find(t => t.value === expenseType) || EXPENSE_TYPES[4];
+    const typeConfig = ALL_EXPENSE_TYPES.find(t => t.value === expenseType) || EXPENSE_TYPES[2];
     const responsibleName = employeesList.find(e => e.id === expenseResponsible)?.name || '';
     const parts = [`[${typeConfig.label}]`];
     if (responsibleName) parts.push(`@${responsibleName}`);
