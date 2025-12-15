@@ -499,171 +499,153 @@ export function EmployeeShiftCard() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Current Shift - All Employees On Duty */}
+    <div className="space-y-4">
+      {/* Header with shift type and on-duty employees */}
       <Card className={currentShiftType === 'day' 
-        ? "border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-amber-500/10" 
-        : "border-indigo-500/30 bg-gradient-to-br from-indigo-500/5 to-indigo-500/10"
+        ? "border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-transparent" 
+        : "border-indigo-500/30 bg-gradient-to-br from-indigo-500/5 to-transparent"
       }>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center justify-between">
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               {currentShiftType === 'day' ? (
                 <Sun className="w-5 h-5 text-amber-500" />
               ) : (
                 <Moon className="w-5 h-5 text-indigo-500" />
               )}
-              <span>{currentShiftType === 'day' ? 'Day Shift' : 'Night Shift'}</span>
-              <Badge variant="secondary" className="text-xs">
+              <span className="font-semibold">{currentShiftType === 'day' ? 'Day Shift' : 'Night Shift'}</span>
+              <Badge variant="outline" className="text-xs">
                 {currentShiftType === 'day' ? '5AM - 5PM' : '5PM - 5AM'}
               </Badge>
             </div>
             <Button variant="ghost" size="sm" onClick={requestAdminEdit}>
-              <Lock className="w-4 h-4 mr-1" />
-              Edit
+              <Lock className="w-4 h-4" />
             </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </div>
+          
           {allActiveShifts.length > 0 ? (
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                On duty: {allActiveShifts.length} employee{allActiveShifts.length > 1 ? 's' : ''}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {allActiveShifts.map((shift) => (
-                  <Badge 
-                    key={shift.id} 
-                    variant="default" 
-                    className="px-3 py-1.5"
-                  >
-                    <Clock className="w-3 h-3 mr-1.5" />
-                    {shift.employee_name}
-                    <span className="ml-1.5 text-xs opacity-75">
-                      {shift.shift_start ? format(new Date(shift.shift_start), 'HH:mm') : ''}
-                    </span>
-                  </Badge>
-                ))}
-              </div>
+            <div className="flex flex-wrap gap-2">
+              {allActiveShifts.map((shift) => (
+                <Badge 
+                  key={shift.id} 
+                  variant="secondary"
+                  className="px-2 py-1"
+                >
+                  {shift.employee_name}
+                  <span className="ml-1 text-xs opacity-60">
+                    {shift.shift_start ? format(new Date(shift.shift_start), 'HH:mm') : ''}
+                  </span>
+                </Badge>
+              ))}
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No employees on shift</div>
+            <div className="text-sm text-muted-foreground">No one on shift</div>
           )}
         </CardContent>
       </Card>
 
-      {/* Employee Selection */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Start Your Shift</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Choose your name..." />
-            </SelectTrigger>
-            <SelectContent>
-              {employees.map((emp) => (
-                <SelectItem key={emp.id} value={emp.id}>
-                  {emp.name} - {emp.position}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
+      {/* Main shift control card */}
+      <Card className={activeShift 
+        ? "border-green-500/50 bg-gradient-to-br from-green-500/5 to-transparent" 
+        : ""
+      }>
+        <CardContent className="pt-4 pb-4">
+          {/* Employee selector - always visible */}
+          <div className="mb-4">
+            <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select employee..." />
+              </SelectTrigger>
+              <SelectContent>
+                {employees.map((emp) => (
+                  <SelectItem key={emp.id} value={emp.id}>
+                    {emp.name} - {emp.position}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-      {selectedEmployee && (
-        <>
-          {/* Active Shift Status */}
-          <Card className={activeShift 
-            ? "border-green-500/50 bg-gradient-to-br from-green-500/5 to-green-500/10" 
-            : "border-muted"
-          }>
-            <CardContent className="pt-6">
+          {selectedEmployee && (
+            <>
               {activeShift ? (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-5 h-5 text-green-500 animate-pulse" />
-                      <span className="font-medium">Shift Active</span>
-                    </div>
-                    <Badge variant="default" className="bg-green-500">
+                  {/* Timer and status */}
+                  <div className="text-center py-3 bg-green-500/10 rounded-lg border border-green-500/20">
+                    <div className="text-3xl font-mono font-bold text-green-500">{elapsedTime}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
                       Started {format(new Date(activeShift.shift_start!), 'HH:mm')}
-                    </Badge>
-                  </div>
-                  
-                  {/* Live Timer */}
-                  <div className="text-center py-4 bg-green-500/10 rounded-lg border border-green-500/30">
-                    <div className="text-4xl font-mono font-bold text-green-500">{elapsedTime}</div>
-                    <div className="text-sm text-muted-foreground mt-1">Shift Duration</div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <div className="text-muted-foreground">Base Salary</div>
-                      <div className="font-bold text-lg">₱{activeShift.base_salary}</div>
                     </div>
-                    <div>
-                      <div className="text-muted-foreground">Bonuses</div>
-                      <div className="font-bold text-lg text-green-500">+₱{totalBonuses}</div>
+                  </div>
+                  
+                  {/* Salary info */}
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="bg-secondary/30 rounded-lg p-3 text-center">
+                      <div className="text-muted-foreground text-xs">Base</div>
+                      <div className="font-bold">₱{activeShift.base_salary}</div>
+                    </div>
+                    <div className="bg-green-500/10 rounded-lg p-3 text-center">
+                      <div className="text-muted-foreground text-xs">Bonuses</div>
+                      <div className="font-bold text-green-500">+₱{totalBonuses}</div>
                     </div>
                   </div>
 
                   {shiftBonuses.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-sm text-muted-foreground">Added Bonuses:</div>
+                    <div className="space-y-1">
                       {shiftBonuses.map((bonus) => (
-                        <div key={bonus.id} className="flex justify-between text-sm bg-secondary/50 p-2 rounded">
+                        <div key={bonus.id} className="flex justify-between text-xs bg-secondary/30 px-2 py-1 rounded">
                           <span>{getBonusTypeLabel(bonus.bonus_type)} x{bonus.quantity}</span>
-                          <span className="font-medium">₱{bonus.amount}</span>
+                          <span>₱{bonus.amount}</span>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-3 pt-2">
+                  {/* Actions */}
+                  <div className="grid grid-cols-2 gap-2">
                     <Button 
                       variant="outline"
-                      className="h-14"
+                      size="lg"
                       onClick={() => setShowBonusDialog(true)}
                     >
-                      <Gift className="w-5 h-5 mr-2" />
-                      Add Bonus
+                      <Gift className="w-4 h-4 mr-2" />
+                      Bonus
                     </Button>
                     <Button 
                       variant="destructive"
-                      className="h-14"
+                      size="lg"
                       onClick={() => setShowEndDialog(true)}
                     >
-                      <Square className="w-5 h-5 mr-2" />
+                      <Square className="w-4 h-4 mr-2" />
                       End Shift
                     </Button>
                   </div>
                 </div>
               ) : (
-                <div className="text-center space-y-4">
-                  <div className="text-muted-foreground">No active shift</div>
-                  <Button 
-                    size="lg"
-                    className="w-full h-16 text-lg bg-green-600 hover:bg-green-700"
-                    onClick={startShift}
-                    disabled={starting}
-                  >
-                    {starting ? (
-                      <Loader2 className="w-6 h-6 mr-2 animate-spin" />
-                    ) : (
-                      <Play className="w-6 h-6 mr-2" />
-                    )}
-                    Start Shift
-                  </Button>
-                </div>
+                <Button 
+                  size="lg"
+                  className="w-full bg-green-600 hover:bg-green-700"
+                  onClick={startShift}
+                  disabled={starting}
+                >
+                  {starting ? (
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="w-5 h-5 mr-2" />
+                  )}
+                  Start Shift
+                </Button>
               )}
-            </CardContent>
-          </Card>
-        </>
-      )}
+            </>
+          )}
+          
+          {!selectedEmployee && (
+            <div className="text-center text-sm text-muted-foreground py-2">
+              Select your name to start or end shift
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* End Shift Dialog */}
       <Dialog open={showEndDialog} onOpenChange={setShowEndDialog}>
