@@ -50,11 +50,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 type ShiftType = 'day' | 'night';
 
 const EXPENSE_TYPES = [
-  { value: 'employee_food', label: 'Еда сотрудникам', category: 'other' as const },
-  { value: 'purchases', label: 'Закупки', category: 'purchases' as const },
-  { value: 'advance', label: 'Аванс', category: 'salaries' as const },
+  { value: 'employee_food', label: 'Employee Food', category: 'other' as const },
+  { value: 'purchases', label: 'Purchases', category: 'purchases' as const },
+  { value: 'advance', label: 'Advance (Salary)', category: 'salaries' as const },
   { value: 'food_hunters', label: 'Food Hunters', category: 'other' as const },
-  { value: 'other', label: 'Другое', category: 'other' as const },
+  { value: 'other', label: 'Other', category: 'other' as const },
 ];
 
 interface CashRecord {
