@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
@@ -27,6 +28,7 @@ export default function Inventory() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showZeroStock, setShowZeroStock] = useState(false);
   
   // Editing state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -58,14 +60,14 @@ export default function Inventory() {
             total_value: (item.in_stock || 0) * (item.cost || 0),
             category: item.category_name
           }))
-          .sort((a: InventoryItem, b: InventoryItem) => a.item_name.localeCompare(b.item_name));
+          .sort((a: InventoryItem, b: InventoryItem) => b.in_stock - a.in_stock); // Sort by stock descending
         
         setItems(inventoryItems);
-        toast.success(`Загружено ${inventoryItems.length} позиций`);
+        toast.success(`Loaded ${inventoryItems.length} items`);
       }
     } catch (error) {
       console.error('Error loading inventory:', error);
-      toast.error('Ошибка загрузки инвентаря');
+      toast.error('Error loading inventory');
     } finally {
       setLoading(false);
     }
@@ -75,9 +77,9 @@ export default function Inventory() {
     loadInventory();
   }, []);
 
-  const filteredItems = items.filter(item =>
-    item.item_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredItems = items
+    .filter(item => showZeroStock || item.in_stock > 0)
+    .filter(item => item.item_name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const itemsInStock = items.filter(i => i.in_stock > 0);
   const totalValue = itemsInStock.reduce((sum, item) => sum + item.total_value, 0);
@@ -93,7 +95,7 @@ export default function Inventory() {
   const saveEdit = async (item: InventoryItem) => {
     const actualQty = parseInt(editValue);
     if (isNaN(actualQty) || actualQty < 0) {
-      toast.error('Введите корректное количество');
+      toast.error('Enter valid quantity');
       return;
     }
 
@@ -108,7 +110,7 @@ export default function Inventory() {
         previous_quantity: item.in_stock,
         cost_per_unit: item.cost,
         total_cost: Math.abs(diff) * item.cost,
-        notes: diff === 0 ? 'Совпадает' : `Расхождение: ${diff > 0 ? '+' : ''}${diff}`
+        notes: diff === 0 ? 'Match' : `Discrepancy: ${diff > 0 ? '+' : ''}${diff}`
       });
 
       await supabase.from('activity_log').insert({
@@ -119,7 +121,7 @@ export default function Inventory() {
       });
 
       if (diff === 0) {
-        toast.success(`✓ ${item.item_name}: совпадает`);
+        toast.success(`✓ ${item.item_name}: match`);
       } else {
         toast.warning(`${item.item_name}: ${diff > 0 ? '+' : ''}${diff}`);
       }
@@ -128,7 +130,7 @@ export default function Inventory() {
       setEditValue('');
     } catch (error) {
       console.error('Error saving check:', error);
-      toast.error('Ошибка');
+      toast.error('Error');
     }
   };
 
@@ -144,7 +146,7 @@ export default function Inventory() {
     const cost = parseInt(receiptCost) || 0;
     
     if (!receiptItem || !qty || qty <= 0) {
-      toast.error('Выберите товар и количество');
+      toast.error('Select item and quantity');
       return;
     }
 
@@ -170,7 +172,7 @@ export default function Inventory() {
         timestamp: Date.now()
       });
 
-      toast.success(`Приход: ${selectedItem.item_name} +${qty} шт.`);
+      toast.success(`Receipt: ${selectedItem.item_name} +${qty} pcs`);
       setShowReceiptDialog(false);
       setReceiptItem('');
       setReceiptQty('');
@@ -178,14 +180,14 @@ export default function Inventory() {
       setReceiptNotes('');
     } catch (error) {
       console.error('Error adding receipt:', error);
-      toast.error('Ошибка');
+      toast.error('Error');
     }
   };
 
   const exportToExcel = () => {
     const rows: any[] = [
-      ['ОСТАТКИ НА СКЛАДЕ', format(new Date(), 'dd.MM.yyyy HH:mm')],
-      ['Позиция', 'Количество', 'Себестоимость', 'Сумма'],
+      ['INVENTORY', format(new Date(), 'dd.MM.yyyy HH:mm')],
+      ['Item', 'Quantity', 'Cost', 'Total'],
     ];
 
     itemsInStock.forEach(item => {
@@ -193,13 +195,13 @@ export default function Inventory() {
     });
 
     rows.push([]);
-    rows.push(['ИТОГО', totalQty, '', totalValue]);
+    rows.push(['TOTAL', totalQty, '', totalValue]);
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Остатки');
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
     XLSX.writeFile(wb, `inventory_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
-    toast.success('Экспорт завершен');
+    toast.success('Export complete');
   };
 
   return (
@@ -208,12 +210,12 @@ export default function Inventory() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <Package className="w-6 h-6 text-primary" />
-          Склад
+          Inventory
         </h1>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setShowReceiptDialog(true)}>
             <Truck className="w-4 h-4 mr-1" />
-            Приход
+            Receipt
           </Button>
           <Button variant="outline" size="sm" onClick={loadInventory} disabled={loading}>
             <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
@@ -228,28 +230,34 @@ export default function Inventory() {
       <div className="grid grid-cols-2 gap-3">
         <Card className="bg-blue-500/10 border-blue-500/30">
           <CardContent className="py-3 px-4">
-            <div className="text-xs text-blue-600 font-medium">Позиций</div>
+            <div className="text-xs text-blue-600 font-medium">Items in Stock</div>
             <div className="text-2xl font-bold">{itemsInStock.length}</div>
-            <div className="text-xs text-muted-foreground">{totalQty.toLocaleString()} шт.</div>
+            <div className="text-xs text-muted-foreground">{totalQty.toLocaleString()} pcs</div>
           </CardContent>
         </Card>
         <Card className="bg-green-500/10 border-green-500/30">
           <CardContent className="py-3 px-4">
-            <div className="text-xs text-green-600 font-medium">Стоимость</div>
+            <div className="text-xs text-green-600 font-medium">Total Value</div>
             <div className="text-2xl font-bold">₱{totalValue.toLocaleString()}</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Поиск товара..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+      {/* Search & Filters */}
+      <div className="flex gap-3 items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search item..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <Switch checked={showZeroStock} onCheckedChange={setShowZeroStock} />
+          <span className="text-muted-foreground whitespace-nowrap">Show zero</span>
+        </div>
       </div>
 
       {/* Stock List */}
@@ -260,15 +268,15 @@ export default function Inventory() {
               <Loader2 className="w-6 h-6 animate-spin" />
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">Ничего не найдено</div>
+            <div className="p-8 text-center text-muted-foreground">No items found</div>
           ) : (
             <div className="max-h-[500px] overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-background border-b">
                   <tr className="bg-muted/30">
-                    <th className="text-left py-2 px-3 font-medium">Товар</th>
-                    <th className="text-right py-2 px-3 font-medium w-24">Кол-во</th>
-                    <th className="text-right py-2 px-3 font-medium w-24">Сумма</th>
+                    <th className="text-left py-2 px-3 font-medium">Item</th>
+                    <th className="text-right py-2 px-3 font-medium w-24">Qty</th>
+                    <th className="text-right py-2 px-3 font-medium w-24">Value</th>
                     <th className="py-2 px-2 w-16"></th>
                   </tr>
                 </thead>
@@ -330,18 +338,18 @@ export default function Inventory() {
       <Dialog open={showReceiptDialog} onOpenChange={setShowReceiptDialog}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Приход товара</DialogTitle>
-            <DialogDescription>Добавить поступление на склад</DialogDescription>
+            <DialogTitle>Stock Receipt</DialogTitle>
+            <DialogDescription>Add incoming stock</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-1 block">Товар</label>
+              <label className="text-sm font-medium mb-1 block">Item</label>
               <Select value={receiptItem} onValueChange={setReceiptItem}>
-                <SelectTrigger><SelectValue placeholder="Выберите товар" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
                 <SelectContent className="max-h-60">
                   {items.map(item => (
                     <SelectItem key={item.item_id} value={item.item_id}>
-                      {item.item_name} ({item.in_stock} шт.)
+                      {item.item_name} ({item.in_stock} pcs)
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -349,7 +357,7 @@ export default function Inventory() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-sm font-medium mb-1 block">Количество</label>
+                <label className="text-sm font-medium mb-1 block">Quantity</label>
                 <Input
                   type="number"
                   placeholder="0"
@@ -358,7 +366,7 @@ export default function Inventory() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-1 block">Цена за ед.</label>
+                <label className="text-sm font-medium mb-1 block">Unit Cost</label>
                 <Input
                   type="number"
                   placeholder="₱0"
@@ -368,16 +376,16 @@ export default function Inventory() {
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium mb-1 block">Примечание</label>
+              <label className="text-sm font-medium mb-1 block">Notes</label>
               <Input
-                placeholder="Поставщик, накладная..."
+                placeholder="Supplier, invoice..."
                 value={receiptNotes}
                 onChange={(e) => setReceiptNotes(e.target.value)}
               />
             </div>
             <Button onClick={addReceipt} className="w-full">
               <Plus className="w-4 h-4 mr-2" />
-              Добавить приход
+              Add Receipt
             </Button>
           </div>
         </DialogContent>
