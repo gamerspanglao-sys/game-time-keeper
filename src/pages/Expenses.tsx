@@ -590,19 +590,19 @@ export default function Expenses() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Оборотные —</SelectItem>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">— Оборотные —</div>
                   {EXPENSE_CATEGORIES.returnable.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
-                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Невозвратные —</SelectItem>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">— Невозвратные —</div>
                   {EXPENSE_CATEGORIES.nonReturnable.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
-                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Инвестор: Возвратные —</SelectItem>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">— Инвестор: Возвратные —</div>
                   {EXPENSE_CATEGORIES.investorReturnable.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
-                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Инвестор: Невозвратные —</SelectItem>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">— Инвестор: Невозвратные —</div>
                   {EXPENSE_CATEGORIES.investorNonReturnable.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
@@ -669,19 +669,19 @@ export default function Expenses() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Оборотные —</SelectItem>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">— Оборотные —</div>
                   {EXPENSE_CATEGORIES.returnable.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
-                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Невозвратные —</SelectItem>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">— Невозвратные —</div>
                   {EXPENSE_CATEGORIES.nonReturnable.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
-                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Инвестор: Возвратные —</SelectItem>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">— Инвестор: Возвратные —</div>
                   {EXPENSE_CATEGORIES.investorReturnable.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
-                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Инвестор: Невозвратные —</SelectItem>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">— Инвестор: Невозвратные —</div>
                   {EXPENSE_CATEGORIES.investorNonReturnable.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
