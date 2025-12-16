@@ -16,7 +16,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const ADMIN_PASSWORD = '8808';
 
@@ -28,7 +39,7 @@ interface TimerCardProps {
   onReset: (id: string) => void;
   onSetDuration: (id: string, minutes: number) => void;
   onAdjustTime: (id: string, minutes: number) => void;
-  onStartPromo?: (id: string) => void;
+  onStartPromo?: (id: string) => Promise<{ success: boolean; error?: string }>;
   playConfirmSound: () => void;
   stopAlarm: (id: string) => void;
   notifyQueueNext?: (timerName: string, personName: string) => void;
@@ -62,6 +73,7 @@ export function TimerCard({
   const [showAdjust, setShowAdjust] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showExtendPaymentDialog, setShowExtendPaymentDialog] = useState(false);
+  const [showPromoConfirm, setShowPromoConfirm] = useState(false);
   const [pendingPaymentType, setPendingPaymentType] = useState<'prepaid' | 'postpaid' | null>(null);
   const [adjustPassword, setAdjustPassword] = useState('');
   const [adjustMinutes, setAdjustMinutes] = useState(10);
@@ -286,7 +298,7 @@ export function TimerCard({
                 <Button 
                   variant="default" 
                   size={compact ? "default" : "lg"}
-                  onClick={() => onStartPromo(id)}
+                  onClick={() => setShowPromoConfirm(true)}
                   className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg shadow-amber-500/25"
                 >
                   <Sparkles className="w-5 h-5" />
@@ -511,6 +523,33 @@ export function TimerCard({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Promo Confirmation Dialog */}
+      <AlertDialog open={showPromoConfirm} onOpenChange={setShowPromoConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Start Promo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will start a 2-hour VIP Super session with Basket Red Horse (₱1,000).
+              A receipt will be created in Loyverse POS.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (onStartPromo) {
+                  onStartPromo(id);
+                }
+              }}
+              className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              Start Promo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

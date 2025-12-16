@@ -694,13 +694,37 @@ export function useSupabaseTimers() {
   }, [isPaused, pausedTimers, saveTimer, addActivityLogEntry, playFinishedAlarm]);
 
   // Start promo timer (VIP Super + Basket Red Horse)
-  const startPromoTimer = useCallback(async (timerId: string) => {
+  const startPromoTimer = useCallback(async (timerId: string): Promise<{ success: boolean; error?: string }> => {
     const timer = timers.find(t => t.id === timerId);
-    if (!timer || timer.status !== 'idle') return;
+    if (!timer || timer.status !== 'idle') return { success: false, error: 'Timer not available' };
 
     const promoPrice = 1000; // 1000 pesos for promo
     const promoDuration = 2 * 60 * 60 * 1000; // 2 hours
 
+    // First try to create Loyverse receipt
+    console.log(`🎉 Creating Loyverse promo receipt for ${timer.name}...`);
+    try {
+      const { data, error } = await supabase.functions.invoke('loyverse-create-receipt', {
+        body: { timerId, paymentType: 'prepaid', amount: promoPrice, promoId: 'basket-redhorse' }
+      });
+      
+      if (error) {
+        console.error('❌ Loyverse promo receipt error:', error);
+        return { success: false, error: 'Failed to create receipt in POS' };
+      }
+      
+      if (data?.skipped) {
+        console.error('❌ Loyverse promo item not found:', data.message);
+        return { success: false, error: data.message || 'Promo item not found in POS' };
+      }
+      
+      console.log('✅ Loyverse promo receipt created:', data);
+    } catch (err) {
+      console.error('❌ Failed to create Loyverse promo receipt:', err);
+      return { success: false, error: 'Connection error with POS' };
+    }
+
+    // Only start timer if receipt was created successfully
     addActivityLogEntry(timerId, timer.name, 'started');
 
     const updatedTimer: Timer = {
@@ -723,21 +747,8 @@ export function useSupabaseTimers() {
 
     // Save to database
     saveTimer(updatedTimer);
-
-    // Create Loyverse receipt for Basket Red Horse promo
-    console.log(`🎉 Creating Loyverse promo receipt for ${timer.name}...`);
-    try {
-      const { data, error } = await supabase.functions.invoke('loyverse-create-receipt', {
-        body: { timerId, paymentType: 'prepaid', amount: promoPrice, promoId: 'basket-redhorse' }
-      });
-      if (error) {
-        console.error('❌ Loyverse promo receipt error:', error);
-      } else {
-        console.log('✅ Loyverse promo receipt created:', data);
-      }
-    } catch (err) {
-      console.error('❌ Failed to create Loyverse promo receipt:', err);
-    }
+    
+    return { success: true };
   }, [timers, addActivityLogEntry, saveTimer]);
 
   return {
