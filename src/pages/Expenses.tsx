@@ -403,6 +403,16 @@ export default function Expenses() {
         e.amount
       ]);
     });
+    // Add salaries from investor_contributions
+    investorContributions.filter(c => c.category === 'salaries').forEach(c => {
+      rows.push([
+        format(new Date(c.date), 'dd.MM.yyyy'),
+        '—',
+        'Зарплаты',
+        c.description || '',
+        c.amount
+      ]);
+    });
     rows.push(['', '', '', 'ИТОГО Невозвратные:', totals.nonReturnable]);
     rows.push([]);
     
