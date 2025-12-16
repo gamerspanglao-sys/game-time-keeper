@@ -198,17 +198,16 @@ export default function Expenses() {
     investorNonReturnable: expenses.filter(e => getCategoryGroup(e.category) === 'investorNonReturnable').reduce((s, e) => s + e.amount, 0)
   };
 
-  // Calculate investor contributions totals
-  const investorContributionTotals = {
-    returnable: investorContributions.filter(c => c.contribution_type === 'returnable').reduce((s, c) => s + c.amount, 0),
-    nonReturnable: investorContributions.filter(c => c.contribution_type === 'non_returnable').reduce((s, c) => s + c.amount, 0)
-  };
+  // Investor contributions with category "salaries" go to non-returnable expenses
+  const salariesFromInvestor = investorContributions
+    .filter(c => c.category === 'salaries')
+    .reduce((s, c) => s + c.amount, 0);
 
   const totals = {
     returnable: expenseTotals.returnable,
-    nonReturnable: expenseTotals.nonReturnable,
-    investorReturnable: expenseTotals.investorReturnable + investorContributionTotals.returnable,
-    investorNonReturnable: expenseTotals.investorNonReturnable + investorContributionTotals.nonReturnable
+    nonReturnable: expenseTotals.nonReturnable + salariesFromInvestor,
+    investorReturnable: expenseTotals.investorReturnable,
+    investorNonReturnable: expenseTotals.investorNonReturnable
   };
 
   const grandTotal = totals.returnable + totals.nonReturnable + totals.investorReturnable + totals.investorNonReturnable;
@@ -714,8 +713,31 @@ export default function Expenses() {
                       </td>
                     </tr>
                   ))}
-                  {/* Investor contributions */}
-                  {investorContributions.map((contribution) => (
+                  {/* Salary records from investor_contributions (shown as non-returnable expenses) */}
+                  {investorContributions.filter(c => c.category === 'salaries').map((contribution) => (
+                    <tr key={`sal-${contribution.id}`} className="border-b hover:bg-muted/50 bg-red-500/5">
+                      <td className="py-3 px-4">
+                        <div>{format(new Date(contribution.date), 'dd.MM.yyyy')}</div>
+                        <div className="text-xs text-muted-foreground">💸 Зарплаты</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge className="border bg-red-500/20 text-red-500 border-red-500/30">
+                          Зарплаты
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground max-w-xs truncate">
+                        {contribution.description || '—'}
+                      </td>
+                      <td className="text-right py-3 px-4 font-medium">
+                        ₱{contribution.amount.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4">
+                        {/* Salary records are read-only */}
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Other investor contributions (not salaries) */}
+                  {investorContributions.filter(c => c.category !== 'salaries').map((contribution) => (
                     <tr key={`inv-${contribution.id}`} className="border-b hover:bg-muted/50 bg-teal-500/5">
                       <td className="py-3 px-4">
                         <div>{format(new Date(contribution.date), 'dd.MM.yyyy')}</div>
