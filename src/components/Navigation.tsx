@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Timer, Gamepad2, Maximize, Minimize, Wallet, Activity, Banknote, Receipt } from 'lucide-react';
+import { Timer, Gamepad2, Maximize, Minimize, Wallet, Activity, Banknote, Receipt, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { GlobalPauseButton } from './GlobalPauseButton';
@@ -153,6 +153,21 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
         >
           <Receipt className="w-5 h-5" />
           <span>Expenses</span>
+        </NavLink>
+
+        <NavLink
+          to="/inventory"
+          className={({ isActive }) =>
+            cn(
+              'flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 py-3 md:py-0 px-2 md:px-3 md:h-10 text-xs md:text-sm font-medium transition-all',
+              isActive
+                ? 'text-primary bg-primary/10 md:rounded-lg md:border md:border-primary/20'
+                : 'text-muted-foreground hover:text-foreground hover:bg-secondary md:rounded-lg'
+            )
+          }
+        >
+          <Package className="w-5 h-5" />
+          <span>Stock</span>
         </NavLink>
       </div>
     </nav>
