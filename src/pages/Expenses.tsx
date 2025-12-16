@@ -108,6 +108,10 @@ export default function Expenses() {
   const [newDate, setNewDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [newShift, setNewShift] = useState<'day' | 'night'>('day');
 
+  // Inline editing
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
+  const [inlineEditAmount, setInlineEditAmount] = useState('');
+
   const applyDatePreset = (preset: DatePreset) => {
     setDatePreset(preset);
     const now = new Date();
@@ -221,6 +225,49 @@ export default function Expenses() {
     }
   };
 
+  // Quick inline amount update
+  const saveInlineAmount = async (expense: Expense) => {
+    const newAmount = parseInt(inlineEditAmount);
+    if (isNaN(newAmount) || newAmount <= 0) {
+      setInlineEditId(null);
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('cash_expenses')
+        .update({ amount: newAmount })
+        .eq('id', expense.id);
+
+      if (error) throw error;
+
+      setExpenses(prev => prev.map(e => e.id === expense.id ? { ...e, amount: newAmount } : e));
+      toast.success('Сумма обновлена');
+    } catch (error) {
+      console.error('Error updating amount:', error);
+      toast.error('Ошибка обновления');
+    }
+    setInlineEditId(null);
+  };
+
+  // Quick category change
+  const quickChangeCategory = async (expense: Expense, newCategory: string) => {
+    try {
+      const { error } = await supabase
+        .from('cash_expenses')
+        .update({ category: newCategory })
+        .eq('id', expense.id);
+
+      if (error) throw error;
+
+      setExpenses(prev => prev.map(e => e.id === expense.id ? { ...e, category: newCategory } : e));
+      toast.success('Категория обновлена');
+    } catch (error) {
+      console.error('Error updating category:', error);
+      toast.error('Ошибка обновления');
+    }
+  };
+
   const deleteExpense = async (expense: Expense) => {
     if (!confirm('Удалить этот расход?')) return;
 
@@ -230,8 +277,8 @@ export default function Expenses() {
         .delete()
         .eq('id', expense.id);
 
+      setExpenses(prev => prev.filter(e => e.id !== expense.id));
       toast.success('Удалено');
-      loadExpenses();
     } catch (error) {
       console.error('Error deleting expense:', error);
       toast.error('Ошибка удаления');
@@ -558,14 +605,61 @@ export default function Expenses() {
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <Badge className={cn("border", getCategoryColor(expense.category))}>
-                          {getCategoryLabel(expense.category)}
-                        </Badge>
+                        <Select value={expense.category} onValueChange={(v) => quickChangeCategory(expense, v)}>
+                          <SelectTrigger className="h-8 w-auto min-w-[140px] bg-transparent border-0 hover:bg-muted/50 p-0 px-2">
+                            <Badge className={cn("border", getCategoryColor(expense.category))}>
+                              {getCategoryLabel(expense.category)}
+                            </Badge>
+                          </SelectTrigger>
+                          <SelectContent className="bg-popover z-50">
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">— Оборотные —</div>
+                            {EXPENSE_CATEGORIES.returnable.map(cat => (
+                              <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                            ))}
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">— Невозвратные —</div>
+                            {EXPENSE_CATEGORIES.nonReturnable.map(cat => (
+                              <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                            ))}
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">— Инвестор: Возвратные —</div>
+                            {EXPENSE_CATEGORIES.investorReturnable.map(cat => (
+                              <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                            ))}
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">— Инвестор: Невозвратные —</div>
+                            {EXPENSE_CATEGORIES.investorNonReturnable.map(cat => (
+                              <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </td>
                       <td className="py-3 px-4 text-muted-foreground max-w-xs truncate">
                         {expense.description || '—'}
                       </td>
-                      <td className="text-right py-3 px-4 font-medium">₱{expense.amount.toLocaleString()}</td>
+                      <td className="text-right py-3 px-4 font-medium">
+                        {inlineEditId === expense.id ? (
+                          <Input
+                            type="number"
+                            value={inlineEditAmount}
+                            onChange={(e) => setInlineEditAmount(e.target.value)}
+                            onBlur={() => saveInlineAmount(expense)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveInlineAmount(expense);
+                              if (e.key === 'Escape') setInlineEditId(null);
+                            }}
+                            className="h-8 w-24 text-right"
+                            autoFocus
+                          />
+                        ) : (
+                          <span 
+                            className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded"
+                            onClick={() => {
+                              setInlineEditId(expense.id);
+                              setInlineEditAmount(expense.amount.toString());
+                            }}
+                          >
+                            ₱{expense.amount.toLocaleString()}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-4">
                         <div className="flex gap-1 justify-end">
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(expense)}>
