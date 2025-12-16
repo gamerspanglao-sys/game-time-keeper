@@ -49,6 +49,15 @@ interface ShiftHandover {
   employee_id: string;
 }
 
+interface InvestorContribution {
+  id: string;
+  date: string;
+  category: string;
+  amount: number;
+  description: string | null;
+  contribution_type: string;
+}
+
 const ADMIN_PIN = '8808';
 
 const CATEGORIES = [
@@ -99,6 +108,7 @@ export default function CashRegister() {
   const [records, setRecords] = useState<CashRecord[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [shifts, setShifts] = useState<ShiftHandover[]>([]);
+  const [investorExpenses, setInvestorExpenses] = useState<InvestorContribution[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   
@@ -132,6 +142,7 @@ export default function CashRegister() {
 
   const currentRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
   const currentExpenses = expenses.filter(e => e.date === selectedDate && e.shift === selectedShift);
+  const currentInvestorExpenses = investorExpenses.filter(e => e.date === selectedDate);
   
   // Get shifts for current date and shift type (map shift_type to day/night)
   const currentShifts = shifts.filter(s => {
@@ -180,14 +191,16 @@ export default function CashRegister() {
 
   const loadData = async () => {
     try {
-      const [{ data: cashData }, { data: expData }, { data: shiftsData }] = await Promise.all([
+      const [{ data: cashData }, { data: expData }, { data: shiftsData }, { data: investorData }] = await Promise.all([
         supabase.from('cash_register').select('id, date, shift, cash_expected, gcash_expected, cash_actual, gcash_actual').order('date', { ascending: false }),
         supabase.from('cash_expenses').select('*').order('created_at', { ascending: false }),
-        supabase.from('shifts').select('id, date, shift_type, cash_handed_over, gcash_handed_over, employee_id').order('date', { ascending: false })
+        supabase.from('shifts').select('id, date, shift_type, cash_handed_over, gcash_handed_over, employee_id').order('date', { ascending: false }),
+        supabase.from('investor_contributions').select('*').order('created_at', { ascending: false })
       ]);
       setRecords((cashData || []) as CashRecord[]);
       setExpenses((expData || []) as Expense[]);
       setShifts((shiftsData || []) as ShiftHandover[]);
+      setInvestorExpenses((investorData || []) as InvestorContribution[]);
     } catch (e) {
       console.error(e);
     } finally {
@@ -337,6 +350,12 @@ export default function CashRegister() {
 
   const deleteExpense = async (id: string) => {
     await supabase.from('cash_expenses').delete().eq('id', id);
+    toast.success('Deleted');
+    loadData();
+  };
+
+  const deleteInvestorExpense = async (id: string) => {
+    await supabase.from('investor_contributions').delete().eq('id', id);
     toast.success('Deleted');
     loadData();
   };
@@ -665,6 +684,40 @@ export default function CashRegister() {
               )}
             </CardContent>
           </Card>
+
+          {/* Investor Expenses (Today) */}
+          {currentInvestorExpenses.length > 0 && (
+            <Card className="border-purple-500/20">
+              <CardHeader className="py-2 pb-1">
+                <CardTitle className="text-sm flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-purple-500">
+                    <Wallet className="w-4 h-4" />Investor
+                  </span>
+                  <Badge variant="secondary" className="bg-purple-500/20 text-purple-500">
+                    ₱{currentInvestorExpenses.reduce((s, e) => s + e.amount, 0).toLocaleString()}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="py-2">
+                <div className="space-y-1">
+                  {currentInvestorExpenses.map(exp => (
+                    <div key={exp.id} className="flex items-center justify-between text-xs p-1.5 bg-purple-500/5 rounded">
+                      <div className="flex-1">
+                        <span className="text-muted-foreground">{getCategoryLabel(exp.category)}</span>
+                        {exp.description && <span className="text-muted-foreground/60 ml-1">• {exp.description}</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-purple-500">₱{exp.amount.toLocaleString()}</span>
+                        <Button size="icon" variant="ghost" className="h-5 w-5 hover:bg-destructive/20" onClick={() => deleteInvestorExpense(exp.id)}>
+                          <Trash2 className="w-3 h-3 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* History Tab */}
