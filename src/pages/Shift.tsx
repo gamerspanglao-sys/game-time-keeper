@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Trash2 } from 'lucide-react';
+import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Trash2, Square } from 'lucide-react';
 
 type ShiftType = 'day' | 'night';
 
@@ -184,8 +184,8 @@ export default function Shift() {
     }
   };
 
-  const openHandoverDialog = () => {
-    setSelectedEmployee('');
+  const openHandoverDialog = (employeeId?: string) => {
+    setSelectedEmployee(employeeId || '');
     setCashAmount('');
     setGcashAmount('');
     setShowHandoverDialog(true);
@@ -386,7 +386,7 @@ export default function Shift() {
             <Plus className="w-4 h-4" />
             Expense
           </Button>
-          <Button size="sm" onClick={openHandoverDialog} className="gap-1.5 h-9 shadow-lg shadow-primary/20">
+          <Button size="sm" onClick={() => openHandoverDialog()} className="gap-1.5 h-9 shadow-lg shadow-primary/20">
             <Banknote className="w-4 h-4" />
             Cash
           </Button>
@@ -414,11 +414,22 @@ export default function Shift() {
                   <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
                     <User className="w-4 h-4 text-green-500" />
                   </div>
-                  <span className="font-medium">{shift.employee_name}</span>
+                  <div>
+                    <span className="font-medium">{shift.employee_name}</span>
+                    <div className="text-xs text-muted-foreground font-mono">
+                      {formatDuration(shift.shift_start)}
+                    </div>
+                  </div>
                 </div>
-                <Badge className="bg-green-500/20 text-green-400 border-green-500/30 font-mono">
-                  {formatDuration(shift.shift_start)}
-                </Badge>
+                <Button 
+                  size="sm" 
+                  variant="destructive"
+                  onClick={() => openHandoverDialog(shift.employee_id)}
+                  className="gap-1.5 h-8"
+                >
+                  <Square className="w-3 h-3" />
+                  End Shift
+                </Button>
               </div>
             ))}
           </CardContent>
