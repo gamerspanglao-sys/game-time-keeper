@@ -250,6 +250,48 @@ export type Database = {
         }
         Relationships: []
       }
+      inventory_logs: {
+        Row: {
+          action_type: string
+          cost_per_unit: number | null
+          created_at: string
+          created_by: string | null
+          id: string
+          item_id: string
+          item_name: string
+          notes: string | null
+          previous_quantity: number | null
+          quantity: number
+          total_cost: number | null
+        }
+        Insert: {
+          action_type: string
+          cost_per_unit?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          item_id: string
+          item_name: string
+          notes?: string | null
+          previous_quantity?: number | null
+          quantity: number
+          total_cost?: number | null
+        }
+        Update: {
+          action_type?: string
+          cost_per_unit?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          item_id?: string
+          item_name?: string
+          notes?: string | null
+          previous_quantity?: number | null
+          quantity?: number
+          total_cost?: number | null
+        }
+        Relationships: []
+      }
       investor_contributions: {
         Row: {
           amount: number

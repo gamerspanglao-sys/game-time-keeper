@@ -57,6 +57,9 @@ export function ActivityLog() {
       case 'start': return <Play className="w-3 h-3 text-green-500" />;
       case 'stop': return <Square className="w-3 h-3 text-red-500" />;
       case 'payment': return <DollarSign className="w-3 h-3 text-amber-500" />;
+      case 'receipt': return <Play className="w-3 h-3 text-blue-500" />;
+      case 'inventory_ok': return <Clock className="w-3 h-3 text-green-500" />;
+      case 'inventory_diff': return <Clock className="w-3 h-3 text-amber-500" />;
       default: return <Clock className="w-3 h-3 text-muted-foreground" />;
     }
   };
@@ -66,6 +69,9 @@ export function ActivityLog() {
       case 'start': return <Badge variant="default" className="bg-green-500 text-xs">Start</Badge>;
       case 'stop': return <Badge variant="destructive" className="text-xs">Stop</Badge>;
       case 'payment': return <Badge variant="secondary" className="bg-amber-500/20 text-amber-600 text-xs">Payment</Badge>;
+      case 'receipt': return <Badge variant="secondary" className="bg-blue-500/20 text-blue-600 text-xs">Приход</Badge>;
+      case 'inventory_ok': return <Badge variant="secondary" className="bg-green-500/20 text-green-600 text-xs">Инвент. ✓</Badge>;
+      case 'inventory_diff': return <Badge variant="secondary" className="bg-amber-500/20 text-amber-600 text-xs">Расхождение</Badge>;
       default: return <Badge variant="outline" className="text-xs">{action}</Badge>;
     }
   };
