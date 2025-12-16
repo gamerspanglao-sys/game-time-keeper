@@ -693,6 +693,53 @@ export function useSupabaseTimers() {
     setIsPaused(false);
   }, [isPaused, pausedTimers, saveTimer, addActivityLogEntry, playFinishedAlarm]);
 
+  // Start promo timer (VIP Super + Basket Red Horse)
+  const startPromoTimer = useCallback(async (timerId: string) => {
+    const timer = timers.find(t => t.id === timerId);
+    if (!timer || timer.status !== 'idle') return;
+
+    const promoPrice = 1000; // 1000 pesos for promo
+    const promoDuration = 2 * 60 * 60 * 1000; // 2 hours
+
+    addActivityLogEntry(timerId, timer.name, 'started');
+
+    const updatedTimer: Timer = {
+      ...timer,
+      status: 'running' as const,
+      startTime: Date.now(),
+      duration: promoDuration,
+      remainingTime: promoDuration,
+      remainingAtStart: promoDuration,
+      elapsedAtStart: 0,
+      elapsedTime: 0,
+      paidAmount: promoPrice,
+      unpaidAmount: 0,
+    };
+
+    // Update local state
+    setTimers(prevTimers =>
+      prevTimers.map(t => t.id === timerId ? updatedTimer : t)
+    );
+
+    // Save to database
+    saveTimer(updatedTimer);
+
+    // Create Loyverse receipt for Basket Red Horse promo
+    console.log(`🎉 Creating Loyverse promo receipt for ${timer.name}...`);
+    try {
+      const { data, error } = await supabase.functions.invoke('loyverse-create-receipt', {
+        body: { timerId, paymentType: 'prepaid', amount: promoPrice, promoId: 'basket-redhorse' }
+      });
+      if (error) {
+        console.error('❌ Loyverse promo receipt error:', error);
+      } else {
+        console.log('✅ Loyverse promo receipt created:', data);
+      }
+    } catch (err) {
+      console.error('❌ Failed to create Loyverse promo receipt:', err);
+    }
+  }, [timers, addActivityLogEntry, saveTimer]);
+
   return {
     timers,
     activityLog,
@@ -710,5 +757,6 @@ export function useSupabaseTimers() {
     isPaused,
     pauseAllTimers,
     resumeAllTimers,
+    startPromoTimer,
   };
 }
