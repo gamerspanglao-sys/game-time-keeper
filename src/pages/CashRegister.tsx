@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
   RefreshCw, Lock, Loader2, Sun, Moon, Plus, Trash2, Banknote, Smartphone, 
-  Calendar, Wallet, Receipt, History, UserCircle, Download
+  Wallet, History, Download, CircleDollarSign, ArrowDownCircle
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -85,14 +85,13 @@ export default function CashRegister() {
   const [editCash, setEditCash] = useState('');
   const [editGcash, setEditGcash] = useState('');
   
-  // Add expense form state
+  // Add expense dialog
+  const [showExpenseDialog, setShowExpenseDialog] = useState(false);
   const [expAmount, setExpAmount] = useState('');
   const [expCategory, setExpCategory] = useState('purchases');
   const [expDescription, setExpDescription] = useState('');
   const [expSource, setExpSource] = useState<PaymentSource>('cash');
-  const [expType, setExpType] = useState<ExpenseType>('shift');
-  const [expDate, setExpDate] = useState(getShiftDate());
-  const [expShift, setExpShift] = useState<ShiftType>(getCurrentShift());
+  const [expType, setExpType] = useState<ExpenseType>('balance');
   
   // History filters
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
@@ -104,18 +103,15 @@ export default function CashRegister() {
   const currentRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
   const currentExpenses = expenses.filter(e => e.date === selectedDate && e.shift === selectedShift);
   
-  // Calculate balances by expense type
-  // Shift expenses = from current shift revenue (reduces what staff hands over)
-  // Balance expenses = from saved cash/gcash (reduces accumulated balance)
-  const shiftCashExp = currentExpenses.filter(e => e.expense_type === 'shift' && e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
-  const shiftGcashExp = currentExpenses.filter(e => e.expense_type === 'shift' && e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
+  // Balance calculations
   const balanceCashExp = currentExpenses.filter(e => e.expense_type === 'balance' && e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
   const balanceGcashExp = currentExpenses.filter(e => e.expense_type === 'balance' && e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
+  const shiftCashExp = currentExpenses.filter(e => e.expense_type === 'shift' && e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
+  const shiftGcashExp = currentExpenses.filter(e => e.expense_type === 'shift' && e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
   
-  const totalCashExp = shiftCashExp + balanceCashExp;
-  const totalGcashExp = shiftGcashExp + balanceGcashExp;
   const cashOnHand = (currentRecord?.cash_actual || 0) - balanceCashExp;
   const gcashOnHand = (currentRecord?.gcash_actual || 0) - balanceGcashExp;
+  const totalOnHand = cashOnHand + gcashOnHand;
 
   // History expenses with filters
   const historyExpenses = expenses.filter(e => {
@@ -128,8 +124,6 @@ export default function CashRegister() {
   
   const historyTotalCash = historyExpenses.filter(e => e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
   const historyTotalGcash = historyExpenses.filter(e => e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
-  const historyShiftTotal = historyExpenses.filter(e => e.expense_type === 'shift').reduce((s, e) => s + e.amount, 0);
-  const historyBalanceTotal = historyExpenses.filter(e => e.expense_type === 'balance').reduce((s, e) => s + e.amount, 0);
 
   const loadData = async () => {
     try {
@@ -173,7 +167,7 @@ export default function CashRegister() {
       if (error) throw error;
       if (data?.success) {
         await loadData();
-        toast.success('Synced successfully');
+        toast.success('Synced');
       }
     } catch (e) {
       toast.error('Sync failed');
@@ -211,6 +205,15 @@ export default function CashRegister() {
     }
   };
 
+  const openExpenseDialog = (source: PaymentSource, type: ExpenseType) => {
+    setExpSource(source);
+    setExpType(type);
+    setExpAmount('');
+    setExpCategory('purchases');
+    setExpDescription('');
+    setShowExpenseDialog(true);
+  };
+
   const addExpense = async () => {
     const amount = parseInt(expAmount);
     if (!amount || amount <= 0) {
@@ -219,12 +222,11 @@ export default function CashRegister() {
     }
     
     try {
-      // Find or create cash register entry for the expense date/shift
-      let existingRecord = records.find(r => r.date === expDate && r.shift === expShift);
+      let existingRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
       let regId = existingRecord?.id;
       
       if (!regId) {
-        const { data } = await supabase.from('cash_register').insert({ date: expDate, shift: expShift }).select('id').single();
+        const { data } = await supabase.from('cash_register').insert({ date: selectedDate, shift: selectedShift }).select('id').single();
         regId = data?.id;
       }
       
@@ -233,18 +235,17 @@ export default function CashRegister() {
         category: expCategory,
         amount,
         description: expDescription || null,
-        shift: expShift,
-        date: expDate,
+        shift: selectedShift,
+        date: selectedDate,
         payment_source: expSource,
         expense_type: expType
       });
       
       toast.success('Expense added');
-      setExpAmount('');
-      setExpDescription('');
+      setShowExpenseDialog(false);
       loadData();
     } catch (e) {
-      toast.error('Failed to add expense');
+      toast.error('Failed to add');
     }
   };
 
@@ -285,12 +286,16 @@ export default function CashRegister() {
   if (!isAdmin) {
     return (
       <div className="p-4 max-w-md mx-auto">
-        <Card className="mt-10">
-          <CardContent className="py-8 text-center space-y-4">
-            <Lock className="w-12 h-12 mx-auto text-muted-foreground" />
-            <h2 className="text-xl font-semibold">Cash Register</h2>
-            <p className="text-muted-foreground">Admin access required</p>
-            <Button onClick={() => setShowPinDialog(true)}><Lock className="w-4 h-4 mr-2" />Login</Button>
+        <Card className="mt-10 border-border/50">
+          <CardContent className="py-10 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto">
+              <Lock className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-bold">Cash Register</h2>
+            <p className="text-muted-foreground text-sm">Admin access required</p>
+            <Button size="lg" onClick={() => setShowPinDialog(true)} className="mt-4">
+              <Lock className="w-4 h-4 mr-2" />Enter PIN
+            </Button>
           </CardContent>
         </Card>
         <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
@@ -305,299 +310,240 @@ export default function CashRegister() {
   }
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl mx-auto">
+    <div className="p-4 space-y-4 max-w-2xl mx-auto pb-24">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <Wallet className="w-5 h-5" /> Cash Register
-        </h1>
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-primary" /> Cash Register
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Manage cash & expenses</p>
+        </div>
         <Button variant="outline" size="sm" onClick={syncLoyverse} disabled={syncing}>
           {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          <span className="ml-1">Sync</span>
         </Button>
       </div>
 
       {/* Shift Selector */}
       <div className="flex gap-2 items-center">
         <Select value={selectedDate} onValueChange={setSelectedDate}>
-          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-32 h-9 text-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             {uniqueDates.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
           </SelectContent>
         </Select>
-        <div className="flex border rounded-md">
-          <Button variant={selectedShift === 'day' ? 'default' : 'ghost'} size="sm" className="rounded-r-none" onClick={() => setSelectedShift('day')}>
-            <Sun className="w-4 h-4 mr-1" />Day
-          </Button>
-          <Button variant={selectedShift === 'night' ? 'default' : 'ghost'} size="sm" className="rounded-l-none" onClick={() => setSelectedShift('night')}>
-            <Moon className="w-4 h-4 mr-1" />Night
-          </Button>
+        <div className="flex border border-border rounded-lg overflow-hidden">
+          <button 
+            className={cn(
+              "px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1",
+              selectedShift === 'day' ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+            )} 
+            onClick={() => setSelectedShift('day')}
+          >
+            <Sun className="w-3.5 h-3.5" />Day
+          </button>
+          <button 
+            className={cn(
+              "px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1",
+              selectedShift === 'night' ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+            )} 
+            onClick={() => setSelectedShift('night')}
+          >
+            <Moon className="w-3.5 h-3.5" />Night
+          </button>
         </div>
       </div>
 
       {/* Tabs */}
       <Tabs defaultValue="balance" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="balance" className="gap-1"><Wallet className="w-4 h-4" />Balance</TabsTrigger>
-          <TabsTrigger value="expenses" className="gap-1"><Receipt className="w-4 h-4" />Expenses</TabsTrigger>
-          <TabsTrigger value="history" className="gap-1"><History className="w-4 h-4" />History</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 h-11">
+          <TabsTrigger value="balance" className="gap-1.5 text-sm"><Wallet className="w-4 h-4" />Balance</TabsTrigger>
+          <TabsTrigger value="history" className="gap-1.5 text-sm"><History className="w-4 h-4" />History</TabsTrigger>
+          <TabsTrigger value="register" className="gap-1.5 text-sm"><CircleDollarSign className="w-4 h-4" />Register</TabsTrigger>
         </TabsList>
 
         {/* Balance Tab */}
         <TabsContent value="balance" className="space-y-4 mt-4">
-          {/* Balance Cards */}
+          {/* Total Balance */}
+          <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
+            <CardContent className="p-5">
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total On Hand</p>
+                <p className="text-4xl font-bold text-primary">₱{totalOnHand.toLocaleString()}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Cash & GCash Cards - Tappable */}
           <div className="grid grid-cols-2 gap-3">
-            <Card className="bg-green-500/10 border-green-500/30">
+            {/* Cash Card */}
+            <Card 
+              className="cursor-pointer hover:border-green-500/50 transition-all active:scale-[0.98] border-green-500/20 bg-green-500/5"
+              onClick={() => openExpenseDialog('cash', 'balance')}
+            >
               <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Banknote className="w-5 h-5 text-green-600" />
-                  <span className="text-xs text-green-600 font-semibold">CASH ON HAND</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <Banknote className="w-5 h-5 text-green-500" />
+                  </div>
+                  <ArrowDownCircle className="w-5 h-5 text-muted-foreground" />
                 </div>
-                <div className="text-2xl font-bold text-green-600">₱{cashOnHand.toLocaleString()}</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Received: ₱{(currentRecord?.cash_actual || 0).toLocaleString()} − Balance Exp: ₱{balanceCashExp.toLocaleString()}
-                </div>
+                <p className="text-xs text-muted-foreground">Cash</p>
+                <p className="text-2xl font-bold text-green-500">₱{cashOnHand.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Tap to spend from cash
+                </p>
               </CardContent>
             </Card>
             
-            <Card className="bg-blue-500/10 border-blue-500/30">
+            {/* GCash Card */}
+            <Card 
+              className="cursor-pointer hover:border-blue-500/50 transition-all active:scale-[0.98] border-blue-500/20 bg-blue-500/5"
+              onClick={() => openExpenseDialog('gcash', 'balance')}
+            >
               <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Smartphone className="w-5 h-5 text-blue-600" />
-                  <span className="text-xs text-blue-600 font-semibold">GCASH ON HAND</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                    <Smartphone className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <ArrowDownCircle className="w-5 h-5 text-muted-foreground" />
                 </div>
-                <div className="text-2xl font-bold text-blue-600">₱{gcashOnHand.toLocaleString()}</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Received: ₱{(currentRecord?.gcash_actual || 0).toLocaleString()} − Balance Exp: ₱{balanceGcashExp.toLocaleString()}
-                </div>
+                <p className="text-xs text-muted-foreground">GCash</p>
+                <p className="text-2xl font-bold text-blue-500">₱{gcashOnHand.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Tap to spend from GCash
+                </p>
               </CardContent>
             </Card>
           </div>
 
-          {/* Enter Cash Button */}
-          <Button className="w-full" onClick={() => {
-            setEditCash((currentRecord?.cash_actual || 0).toString());
-            setEditGcash((currentRecord?.gcash_actual || 0).toString());
-            setShowCashDialog(true);
-          }}>
-            <Banknote className="w-4 h-4 mr-2" />Enter Actual Cash
-          </Button>
-
-          {/* Expected vs Actual */}
-          {currentRecord && (
-            <Card>
-              <CardHeader className="py-3 pb-2">
-                <CardTitle className="text-sm">Expected vs Received</CardTitle>
-              </CardHeader>
-              <CardContent className="py-3">
-                <div className="grid grid-cols-3 text-sm gap-2">
-                  <div></div>
-                  <div className="text-center font-medium text-muted-foreground">Expected</div>
-                  <div className="text-center font-medium text-muted-foreground">Received</div>
-                  
-                  <div className="font-medium flex items-center gap-1"><Banknote className="w-4 h-4" /> Cash</div>
-                  <div className="text-center">₱{(currentRecord.cash_expected || 0).toLocaleString()}</div>
-                  <div className={cn("text-center font-medium", (currentRecord.cash_actual || 0) >= (currentRecord.cash_expected || 0) ? "text-green-600" : "text-red-600")}>
-                    ₱{(currentRecord.cash_actual || 0).toLocaleString()}
+          {/* Quick Add Shift Expense */}
+          <Card className="border-orange-500/20">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center">
+                    <Plus className="w-4 h-4 text-orange-500" />
                   </div>
-                  
-                  <div className="font-medium flex items-center gap-1"><Smartphone className="w-4 h-4" /> GCash</div>
-                  <div className="text-center">₱{(currentRecord.gcash_expected || 0).toLocaleString()}</div>
-                  <div className={cn("text-center font-medium", (currentRecord.gcash_actual || 0) >= (currentRecord.gcash_expected || 0) ? "text-green-600" : "text-red-600")}>
-                    ₱{(currentRecord.gcash_actual || 0).toLocaleString()}
+                  <div>
+                    <p className="text-sm font-medium">Shift Expense</p>
+                    <p className="text-[10px] text-muted-foreground">Deduct from revenue</p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Shift Expenses Summary */}
-          <Card>
-            <CardHeader className="py-3 pb-2">
-              <CardTitle className="text-sm flex items-center justify-between">
-                <span>Shift Expenses</span>
-                <Badge variant="secondary">₱{(totalCashExp + totalGcashExp).toLocaleString()}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="py-3 space-y-2">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="flex items-center gap-1 text-green-600"><Banknote className="w-4 h-4" /> Cash: ₱{totalCashExp.toLocaleString()}</div>
-                <div className="flex items-center gap-1 text-blue-600"><Smartphone className="w-4 h-4" /> GCash: ₱{totalGcashExp.toLocaleString()}</div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground border-t pt-2">
-                <div>From Shift: ₱{(shiftCashExp + shiftGcashExp).toLocaleString()}</div>
-                <div>From Balance: ₱{(balanceCashExp + balanceGcashExp).toLocaleString()}</div>
+                <div className="flex gap-1">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="h-8 text-xs border-green-500/30 text-green-600 hover:bg-green-500/10"
+                    onClick={() => openExpenseDialog('cash', 'shift')}
+                  >
+                    <Banknote className="w-3.5 h-3.5 mr-1" />Cash
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="h-8 text-xs border-blue-500/30 text-blue-600 hover:bg-blue-500/10"
+                    onClick={() => openExpenseDialog('gcash', 'shift')}
+                  >
+                    <Smartphone className="w-3.5 h-3.5 mr-1" />GCash
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* Expenses Tab */}
-        <TabsContent value="expenses" className="space-y-4 mt-4">
-          {/* Add Expense Form */}
-          <Card>
-            <CardHeader className="py-3 pb-2">
-              <CardTitle className="text-sm flex items-center gap-2"><Plus className="w-4 h-4" /> Add Expense</CardTitle>
-            </CardHeader>
-            <CardContent className="py-3 space-y-3">
-              {/* Expense Type */}
-              <div className="flex gap-1">
-                <Button 
-                  variant={expType === 'shift' ? 'default' : 'outline'} 
-                  size="sm" 
-                  className={cn("flex-1", expType === 'shift' && "bg-orange-600 hover:bg-orange-700")}
-                  onClick={() => setExpType('shift')}
-                >
-                  From Shift
-                </Button>
-                <Button 
-                  variant={expType === 'balance' ? 'default' : 'outline'} 
-                  size="sm" 
-                  className={cn("flex-1", expType === 'balance' && "bg-purple-600 hover:bg-purple-700")}
-                  onClick={() => setExpType('balance')}
-                >
-                  From Balance
-                </Button>
-              </div>
-
-              {/* Payment Source */}
-              <div className="flex gap-1">
-                <Button 
-                  variant={expSource === 'cash' ? 'default' : 'outline'} 
-                  size="sm" 
-                  className={cn("flex-1", expSource === 'cash' && "bg-green-600 hover:bg-green-700")}
-                  onClick={() => setExpSource('cash')}
-                >
-                  <Banknote className="w-4 h-4 mr-1" />Cash
-                </Button>
-                <Button 
-                  variant={expSource === 'gcash' ? 'default' : 'outline'} 
-                  size="sm" 
-                  className={cn("flex-1", expSource === 'gcash' && "bg-blue-600 hover:bg-blue-700")}
-                  onClick={() => setExpSource('gcash')}
-                >
-                  <Smartphone className="w-4 h-4 mr-1" />GCash
-                </Button>
-              </div>
-
-              {/* Category & Amount */}
-              <div className="grid grid-cols-2 gap-2">
-                <Select value={expCategory} onValueChange={setExpCategory}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Input 
-                  type="number" 
-                  placeholder="Amount" 
-                  value={expAmount} 
-                  onChange={e => setExpAmount(e.target.value)} 
-                />
-              </div>
-
-              {/* Date & Shift */}
-              <div className="grid grid-cols-2 gap-2">
-                <Input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} />
-                <Select value={expShift} onValueChange={(v: ShiftType) => setExpShift(v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="day"><Sun className="w-4 h-4 inline mr-1" />Day</SelectItem>
-                    <SelectItem value="night"><Moon className="w-4 h-4 inline mr-1" />Night</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Description */}
-              <Input 
-                placeholder="Description (optional)" 
-                value={expDescription} 
-                onChange={e => setExpDescription(e.target.value)} 
-              />
-
-              <Button className="w-full" onClick={addExpense}>
-                <Plus className="w-4 h-4 mr-2" />Add Expense
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Current Shift Expenses List */}
-          <Card>
-            <CardHeader className="py-3 pb-2">
-              <CardTitle className="text-sm flex items-center justify-between">
-                <span>Expenses ({selectedDate} / {selectedShift === 'day' ? 'Day' : 'Night'})</span>
-                <Badge variant="secondary">{currentExpenses.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="py-2">
-              {currentExpenses.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No expenses</p>
-              ) : (
-                <div className="space-y-2 max-h-72 overflow-y-auto">
+          {/* Today's Expenses */}
+          {currentExpenses.length > 0 && (
+            <Card>
+              <CardHeader className="py-3 pb-2">
+                <CardTitle className="text-sm flex items-center justify-between">
+                  <span>Today's Expenses</span>
+                  <Badge variant="secondary" className="text-xs">{currentExpenses.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="py-2">
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
                   {currentExpenses.map(exp => (
-                    <div key={exp.id} className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                    <div key={exp.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
                       <div className="flex items-center gap-2">
                         <span className={cn(
-                          "text-sm",
-                          exp.payment_source === 'gcash' ? "text-blue-600" : "text-green-600"
+                          "w-6 h-6 rounded-full flex items-center justify-center",
+                          exp.payment_source === 'gcash' ? "bg-blue-500/20" : "bg-green-500/20"
                         )}>
-                          {exp.payment_source === 'gcash' ? <Smartphone className="w-4 h-4" /> : <Banknote className="w-4 h-4" />}
+                          {exp.payment_source === 'gcash' 
+                            ? <Smartphone className="w-3 h-3 text-blue-500" /> 
+                            : <Banknote className="w-3 h-3 text-green-500" />
+                          }
                         </span>
-                        <Badge variant="outline" className="text-[10px]">{exp.expense_type === 'shift' ? 'Shift' : 'Bal'}</Badge>
                         <div>
-                          <div className="text-sm font-medium">{getCategoryLabel(exp.category)}</div>
-                          {exp.description && <div className="text-xs text-muted-foreground">{exp.description}</div>}
+                          <div className="text-sm font-medium flex items-center gap-1">
+                            {getCategoryLabel(exp.category)}
+                            <Badge variant={exp.expense_type === 'shift' ? 'outline' : 'secondary'} className="text-[9px] h-4 px-1">
+                              {exp.expense_type === 'shift' ? 'shift' : 'bal'}
+                            </Badge>
+                          </div>
+                          {exp.description && <div className="text-[10px] text-muted-foreground">{exp.description}</div>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <span className="font-semibold text-sm">₱{exp.amount.toLocaleString()}</span>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteExpense(exp.id)}>
-                          <Trash2 className="w-3.5 h-3.5" />
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive/70 hover:text-destructive" onClick={() => deleteExpense(exp.id)}>
+                          <Trash2 className="w-3 h-3" />
                         </Button>
                       </div>
                     </div>
                   ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Summary */}
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="p-3 bg-muted/30 rounded-lg">
+              <p className="text-xs text-muted-foreground">Shift Expenses</p>
+              <p className="font-semibold">₱{(shiftCashExp + shiftGcashExp).toLocaleString()}</p>
+            </div>
+            <div className="p-3 bg-muted/30 rounded-lg">
+              <p className="text-xs text-muted-foreground">Balance Expenses</p>
+              <p className="font-semibold">₱{(balanceCashExp + balanceGcashExp).toLocaleString()}</p>
+            </div>
+          </div>
         </TabsContent>
 
         {/* History Tab */}
         <TabsContent value="history" className="space-y-4 mt-4">
           {/* Filters */}
           <Card>
-            <CardContent className="p-4 space-y-3">
+            <CardContent className="p-3 space-y-2">
               <div className="flex gap-2 items-center">
-                <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="flex-1" />
-                <span className="text-muted-foreground">to</span>
-                <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="flex-1" />
+                <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="flex-1 h-9 text-sm" />
+                <span className="text-muted-foreground text-sm">—</span>
+                <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="flex-1 h-9 text-sm" />
               </div>
               
               <div className="grid grid-cols-3 gap-2">
                 <Select value={filterCategory} onValueChange={setFilterCategory}>
-                  <SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Category" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Select value={filterSource} onValueChange={setFilterSource}>
-                  <SelectTrigger><SelectValue placeholder="All Sources" /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Source" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Sources</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="gcash">GCash</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={filterExpType} onValueChange={setFilterExpType}>
-                  <SelectTrigger><SelectValue placeholder="All Types" /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="shift">From Shift</SelectItem>
-                    <SelectItem value="balance">From Balance</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="shift">Shift</SelectItem>
+                    <SelectItem value="balance">Balance</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -605,39 +551,28 @@ export default function CashRegister() {
           </Card>
 
           {/* Totals */}
-          <div className="grid grid-cols-4 gap-2">
-            <Card className="bg-green-500/10 border-green-500/30">
-              <CardContent className="p-3 text-center">
-                <Banknote className="w-4 h-4 mx-auto text-green-600 mb-1" />
-                <div className="text-xs text-muted-foreground">Cash</div>
-                <div className="font-bold text-green-600">₱{historyTotalCash.toLocaleString()}</div>
+          <div className="grid grid-cols-2 gap-2">
+            <Card className="border-green-500/20 bg-green-500/5">
+              <CardContent className="p-3 flex items-center gap-3">
+                <Banknote className="w-5 h-5 text-green-500" />
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Cash</p>
+                  <p className="font-bold text-green-500">₱{historyTotalCash.toLocaleString()}</p>
+                </div>
               </CardContent>
             </Card>
-            <Card className="bg-blue-500/10 border-blue-500/30">
-              <CardContent className="p-3 text-center">
-                <Smartphone className="w-4 h-4 mx-auto text-blue-600 mb-1" />
-                <div className="text-xs text-muted-foreground">GCash</div>
-                <div className="font-bold text-blue-600">₱{historyTotalGcash.toLocaleString()}</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-orange-500/10 border-orange-500/30">
-              <CardContent className="p-3 text-center">
-                <Receipt className="w-4 h-4 mx-auto text-orange-600 mb-1" />
-                <div className="text-xs text-muted-foreground">Shift</div>
-                <div className="font-bold text-orange-600">₱{historyShiftTotal.toLocaleString()}</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-purple-500/10 border-purple-500/30">
-              <CardContent className="p-3 text-center">
-                <Wallet className="w-4 h-4 mx-auto text-purple-600 mb-1" />
-                <div className="text-xs text-muted-foreground">Balance</div>
-                <div className="font-bold text-purple-600">₱{historyBalanceTotal.toLocaleString()}</div>
+            <Card className="border-blue-500/20 bg-blue-500/5">
+              <CardContent className="p-3 flex items-center gap-3">
+                <Smartphone className="w-5 h-5 text-blue-500" />
+                <div>
+                  <p className="text-[10px] text-muted-foreground">GCash</p>
+                  <p className="font-bold text-blue-500">₱{historyTotalGcash.toLocaleString()}</p>
+                </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Export Button */}
-          <Button variant="outline" className="w-full" onClick={exportHistory}>
+          <Button variant="outline" size="sm" className="w-full" onClick={exportHistory}>
             <Download className="w-4 h-4 mr-2" />Export CSV
           </Button>
 
@@ -645,29 +580,29 @@ export default function CashRegister() {
           <Card>
             <CardHeader className="py-3 pb-2">
               <CardTitle className="text-sm flex items-center justify-between">
-                <span>Expense History</span>
-                <Badge variant="secondary">{historyExpenses.length} items</Badge>
+                <span>Expenses</span>
+                <Badge variant="secondary" className="text-xs">{historyExpenses.length}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="py-2">
-              <div className="space-y-1 max-h-80 overflow-y-auto">
+              <div className="space-y-1 max-h-72 overflow-y-auto">
                 {historyExpenses.slice(0, 100).map(exp => (
-                  <div key={exp.id} className="flex items-center justify-between text-xs p-2 bg-muted/20 rounded">
+                  <div key={exp.id} className="flex items-center justify-between text-xs p-2 bg-muted/20 rounded-lg">
                     <div className="flex items-center gap-2">
                       <span className={cn(
-                        exp.payment_source === 'gcash' ? "text-blue-600" : "text-green-600"
+                        "w-5 h-5 rounded-full flex items-center justify-center",
+                        exp.payment_source === 'gcash' ? "bg-blue-500/20" : "bg-green-500/20"
                       )}>
-                        {exp.payment_source === 'gcash' ? <Smartphone className="w-3 h-3" /> : <Banknote className="w-3 h-3" />}
+                        {exp.payment_source === 'gcash' ? <Smartphone className="w-2.5 h-2.5 text-blue-500" /> : <Banknote className="w-2.5 h-2.5 text-green-500" />}
                       </span>
                       <span className="text-muted-foreground">{exp.date}</span>
-                      <Badge variant="outline" className="text-[10px] px-1">{exp.shift === 'day' ? 'D' : 'N'}</Badge>
-                      <Badge variant={exp.expense_type === 'shift' ? 'default' : 'secondary'} className="text-[10px] px-1">{exp.expense_type === 'shift' ? 'S' : 'B'}</Badge>
+                      <Badge variant="outline" className="text-[9px] px-1 h-4">{exp.shift === 'day' ? '☀' : '🌙'}</Badge>
                       <span>{getCategoryLabel(exp.category)}</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       <span className="font-semibold">₱{exp.amount.toLocaleString()}</span>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => deleteExpense(exp.id)}>
-                        <Trash2 className="w-3 h-3" />
+                      <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive/70" onClick={() => deleteExpense(exp.id)}>
+                        <Trash2 className="w-2.5 h-2.5" />
                       </Button>
                     </div>
                   </div>
@@ -676,18 +611,172 @@ export default function CashRegister() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Register Tab */}
+        <TabsContent value="register" className="space-y-4 mt-4">
+          {/* Current Values */}
+          <Card>
+            <CardHeader className="py-3 pb-2">
+              <CardTitle className="text-sm">Actual Amounts Received</CardTitle>
+            </CardHeader>
+            <CardContent className="py-3 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Banknote className="w-4 h-4 text-green-500" />
+                    <span className="text-xs text-muted-foreground">Cash</span>
+                  </div>
+                  <p className="text-2xl font-bold text-green-500">
+                    ₱{(currentRecord?.cash_actual || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Smartphone className="w-4 h-4 text-blue-500" />
+                    <span className="text-xs text-muted-foreground">GCash</span>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-500">
+                    ₱{(currentRecord?.gcash_actual || 0).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              <Button className="w-full" onClick={() => {
+                setEditCash((currentRecord?.cash_actual || 0).toString());
+                setEditGcash((currentRecord?.gcash_actual || 0).toString());
+                setShowCashDialog(true);
+              }}>
+                <Plus className="w-4 h-4 mr-2" />Update Amounts
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Expected vs Actual */}
+          {currentRecord && (
+            <Card>
+              <CardHeader className="py-3 pb-2">
+                <CardTitle className="text-sm">Expected vs Actual</CardTitle>
+              </CardHeader>
+              <CardContent className="py-3">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Banknote className="w-4 h-4 text-green-500" />
+                      <span className="text-sm">Cash</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-muted-foreground">
+                        Expected: ₱{(currentRecord.cash_expected || 0).toLocaleString()}
+                      </div>
+                      <div className={cn(
+                        "font-semibold",
+                        (currentRecord.cash_actual || 0) >= (currentRecord.cash_expected || 0) ? "text-green-500" : "text-destructive"
+                      )}>
+                        Actual: ₱{(currentRecord.cash_actual || 0).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="w-4 h-4 text-blue-500" />
+                      <span className="text-sm">GCash</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-muted-foreground">
+                        Expected: ₱{(currentRecord.gcash_expected || 0).toLocaleString()}
+                      </div>
+                      <div className={cn(
+                        "font-semibold",
+                        (currentRecord.gcash_actual || 0) >= (currentRecord.gcash_expected || 0) ? "text-green-500" : "text-destructive"
+                      )}>
+                        Actual: ₱{(currentRecord.gcash_actual || 0).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Total Discrepancy</span>
+                      <span className={cn(
+                        "font-bold",
+                        ((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)) >= 
+                        ((currentRecord.cash_expected || 0) + (currentRecord.gcash_expected || 0)) 
+                          ? "text-green-500" : "text-destructive"
+                      )}>
+                        ₱{(
+                          ((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)) -
+                          ((currentRecord.cash_expected || 0) + (currentRecord.gcash_expected || 0))
+                        ).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
       </Tabs>
+
+      {/* Add Expense Dialog */}
+      <Dialog open={showExpenseDialog} onOpenChange={setShowExpenseDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {expSource === 'cash' 
+                ? <Banknote className="w-5 h-5 text-green-500" /> 
+                : <Smartphone className="w-5 h-5 text-blue-500" />
+              }
+              {expType === 'balance' ? 'Spend from ' : 'Shift Expense: '}
+              {expSource === 'cash' ? 'Cash' : 'GCash'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Amount</label>
+              <Input 
+                type="number" 
+                placeholder="0" 
+                value={expAmount} 
+                onChange={e => setExpAmount(e.target.value)}
+                className="text-lg"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Category</label>
+              <Select value={expCategory} onValueChange={setExpCategory}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Description (optional)</label>
+              <Input 
+                placeholder="What was it for?" 
+                value={expDescription} 
+                onChange={e => setExpDescription(e.target.value)} 
+              />
+            </div>
+            <Button className="w-full" onClick={addExpense}>
+              <Plus className="w-4 h-4 mr-2" />Add Expense
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Enter Cash Dialog */}
       <Dialog open={showCashDialog} onOpenChange={setShowCashDialog}>
-        <DialogContent className="max-w-xs">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Enter Actual Cash</DialogTitle>
+            <DialogTitle>Update Received Amounts</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
               <label className="text-sm text-muted-foreground flex items-center gap-1 mb-1">
-                <Banknote className="w-4 h-4" /> Cash Received
+                <Banknote className="w-4 h-4 text-green-500" /> Cash Received
               </label>
               <Input 
                 type="number" 
@@ -698,7 +787,7 @@ export default function CashRegister() {
             </div>
             <div>
               <label className="text-sm text-muted-foreground flex items-center gap-1 mb-1">
-                <Smartphone className="w-4 h-4" /> GCash Received
+                <Smartphone className="w-4 h-4 text-blue-500" /> GCash Received
               </label>
               <Input 
                 type="number" 
