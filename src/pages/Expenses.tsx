@@ -374,86 +374,47 @@ export default function Expenses() {
     
     const rows: any[] = [];
     
+    // Header
     rows.push(['РАСХОДЫ', `${fromStr} - ${toStr}`]);
-    rows.push([]);
+    rows.push(['Дата', 'Категория', 'Описание', 'Сумма']);
     
-    // Оборотные
-    rows.push(['═══ ОБОРОТНЫЕ (Закупки товара) ═══']);
-    rows.push(['Дата', 'Смена', 'Категория', 'Описание', 'Сумма']);
-    expenses.filter(e => getCategoryGroup(e.category) === 'returnable').forEach(e => {
+    // All expenses sorted by date
+    const allExpenses = [
+      ...expenses.map(e => ({
+        date: e.date || format(new Date(e.created_at), 'yyyy-MM-dd'),
+        category: getCategoryLabel(e.category),
+        description: e.description || '',
+        amount: e.amount
+      })),
+      ...investorContributions.filter(c => c.category === 'salaries').map(c => ({
+        date: c.date,
+        category: 'Зарплаты',
+        description: c.description || '',
+        amount: c.amount
+      }))
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    allExpenses.forEach(e => {
       rows.push([
-        e.date ? format(new Date(e.date), 'dd.MM.yyyy') : format(new Date(e.created_at), 'dd.MM.yyyy'),
-        e.shift === 'day' ? 'День' : 'Ночь',
-        getCategoryLabel(e.category),
-        e.description || '',
+        format(new Date(e.date), 'dd.MM.yyyy'),
+        e.category,
+        e.description,
         e.amount
       ]);
     });
-    rows.push(['', '', '', 'ИТОГО Оборотные:', totals.returnable]);
+
+    // Summary
     rows.push([]);
-    
-    // Невозвратные
-    rows.push(['═══ НЕВОЗВРАТНЫЕ (Операционные) ═══']);
-    rows.push(['Дата', 'Смена', 'Категория', 'Описание', 'Сумма']);
-    expenses.filter(e => getCategoryGroup(e.category) === 'nonReturnable').forEach(e => {
-      rows.push([
-        e.date ? format(new Date(e.date), 'dd.MM.yyyy') : format(new Date(e.created_at), 'dd.MM.yyyy'),
-        e.shift === 'day' ? 'День' : 'Ночь',
-        getCategoryLabel(e.category),
-        e.description || '',
-        e.amount
-      ]);
-    });
-    // Add salaries from investor_contributions
-    investorContributions.filter(c => c.category === 'salaries').forEach(c => {
-      rows.push([
-        format(new Date(c.date), 'dd.MM.yyyy'),
-        '—',
-        'Зарплаты',
-        c.description || '',
-        c.amount
-      ]);
-    });
-    rows.push(['', '', '', 'ИТОГО Невозвратные:', totals.nonReturnable]);
-    rows.push([]);
-    
-    // Инвесторские возвратные
-    rows.push(['═══ ИНВЕСТОР: ВОЗВРАТНЫЕ ═══']);
-    rows.push(['Дата', 'Смена', 'Категория', 'Описание', 'Сумма']);
-    expenses.filter(e => getCategoryGroup(e.category) === 'investorReturnable').forEach(e => {
-      rows.push([
-        e.date ? format(new Date(e.date), 'dd.MM.yyyy') : format(new Date(e.created_at), 'dd.MM.yyyy'),
-        e.shift === 'day' ? 'День' : 'Ночь',
-        getCategoryLabel(e.category),
-        e.description || '',
-        e.amount
-      ]);
-    });
-    rows.push(['', '', '', 'ИТОГО Инвестор возвратные:', totals.investorReturnable]);
-    rows.push([]);
-    
-    // Инвесторские невозвратные
-    rows.push(['═══ ИНВЕСТОР: НЕВОЗВРАТНЫЕ ═══']);
-    rows.push(['Дата', 'Смена', 'Категория', 'Описание', 'Сумма']);
-    expenses.filter(e => getCategoryGroup(e.category) === 'investorNonReturnable').forEach(e => {
-      rows.push([
-        e.date ? format(new Date(e.date), 'dd.MM.yyyy') : format(new Date(e.created_at), 'dd.MM.yyyy'),
-        e.shift === 'day' ? 'День' : 'Ночь',
-        getCategoryLabel(e.category),
-        e.description || '',
-        e.amount
-      ]);
-    });
-    rows.push(['', '', '', 'ИТОГО Инвестор невозвратные:', totals.investorNonReturnable]);
-    rows.push([]);
-    
-    // Итого
-    rows.push(['═══ ОБЩИЙ ИТОГ ═══']);
-    rows.push(['Оборотные (закупки)', '', '', '', totals.returnable]);
-    rows.push(['Невозвратные (операционные)', '', '', '', totals.nonReturnable]);
-    rows.push(['Инвестор: возвратные', '', '', '', totals.investorReturnable]);
-    rows.push(['Инвестор: невозвратные', '', '', '', totals.investorNonReturnable]);
-    rows.push(['', '', '', 'ВСЕГО:', grandTotal]);
+    rows.push(['ИТОГО']);
+    rows.push(['Оборотные', '', '', totals.returnable]);
+    rows.push(['Невозвратные', '', '', totals.nonReturnable]);
+    if (totals.investorReturnable > 0) {
+      rows.push(['Инвестор ↺', '', '', totals.investorReturnable]);
+    }
+    if (totals.investorNonReturnable > 0) {
+      rows.push(['Инвестор ✗', '', '', totals.investorNonReturnable]);
+    }
+    rows.push(['ВСЕГО', '', '', grandTotal]);
     
     const ws = XLSX.utils.aoa_to_sheet(rows);
     const wb = XLSX.utils.book_new();
