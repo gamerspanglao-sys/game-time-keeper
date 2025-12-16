@@ -244,6 +244,36 @@ export type Database = {
         }
         Relationships: []
       }
+      investor_contributions: {
+        Row: {
+          amount: number
+          category: string
+          contribution_type: string
+          created_at: string
+          date: string
+          description: string | null
+          id: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          contribution_type: string
+          created_at?: string
+          date?: string
+          description?: string | null
+          id?: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          contribution_type?: string
+          created_at?: string
+          date?: string
+          description?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       queue: {
         Row: {
           added_at: number
@@ -284,6 +314,9 @@ export type Database = {
           expected_cash: number | null
           gcash_handed_over: number | null
           id: string
+          salary_paid: boolean | null
+          salary_paid_amount: number | null
+          salary_paid_at: string | null
           shift_end: string | null
           shift_start: string | null
           shift_type: string | null
@@ -302,6 +335,9 @@ export type Database = {
           expected_cash?: number | null
           gcash_handed_over?: number | null
           id?: string
+          salary_paid?: boolean | null
+          salary_paid_amount?: number | null
+          salary_paid_at?: string | null
           shift_end?: string | null
           shift_start?: string | null
           shift_type?: string | null
@@ -320,6 +356,9 @@ export type Database = {
           expected_cash?: number | null
           gcash_handed_over?: number | null
           id?: string
+          salary_paid?: boolean | null
+          salary_paid_amount?: number | null
+          salary_paid_at?: string | null
           shift_end?: string | null
           shift_start?: string | null
           shift_type?: string | null
