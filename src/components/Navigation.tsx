@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Timer, Gamepad2, Maximize, Minimize, Wallet, Activity, Banknote, Package } from 'lucide-react';
+import { Timer, Gamepad2, Maximize, Minimize, Wallet, Activity, Banknote, Package, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { GlobalPauseButton } from './GlobalPauseButton';
@@ -111,7 +111,7 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
         </NavLink>
 
         <NavLink
-          to="/activity"
+          to="/shift"
           className={({ isActive }) =>
             cn(
               'flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 py-3 md:py-0 px-2 md:px-3 md:h-10 text-xs md:text-sm font-medium transition-all',
@@ -121,8 +121,8 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
             )
           }
         >
-          <Activity className="w-5 h-5" />
-          <span>Activity</span>
+          <Clock className="w-5 h-5" />
+          <span>Shift</span>
         </NavLink>
 
         <NavLink
@@ -140,7 +140,6 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
           <span>Cash</span>
         </NavLink>
 
-
         <NavLink
           to="/inventory"
           className={({ isActive }) =>
@@ -154,6 +153,21 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
         >
           <Package className="w-5 h-5" />
           <span>Stock</span>
+        </NavLink>
+
+        <NavLink
+          to="/activity"
+          className={({ isActive }) =>
+            cn(
+              'flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 py-3 md:py-0 px-2 md:px-3 md:h-10 text-xs md:text-sm font-medium transition-all',
+              isActive
+                ? 'text-primary bg-primary/10 md:rounded-lg md:border md:border-primary/20'
+                : 'text-muted-foreground hover:text-foreground hover:bg-secondary md:rounded-lg'
+            )
+          }
+        >
+          <Activity className="w-5 h-5" />
+          <span>Activity</span>
         </NavLink>
       </div>
     </nav>
