@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
   RefreshCw, Lock, Loader2, Sun, Moon, Plus, Trash2, Banknote, Smartphone, 
-  Wallet, History, Download, CircleDollarSign, ArrowDownCircle
+  Wallet, History, Download, CircleDollarSign, ArrowDownCircle, ShoppingCart, Send, X
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -56,6 +56,26 @@ interface InvestorContribution {
   amount: number;
   description: string | null;
   contribution_type: string;
+}
+
+interface PurchaseItem {
+  name: string;
+  totalQuantity: number;
+  avgPerDay: number;
+  recommendedQty: number;
+  inStock: number;
+  toOrder: number;
+  caseSize: number;
+  casesToOrder: number;
+  category: string;
+  supplier?: string;
+  note?: string;
+}
+
+interface PurchaseData {
+  period: { days: number; deliveryBuffer?: number };
+  totalReceipts: number;
+  recommendations: PurchaseItem[];
 }
 
 const ADMIN_PIN = '8808';
@@ -139,6 +159,14 @@ export default function CashRegister() {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterSource, setFilterSource] = useState<string>('all');
   const [filterExpType, setFilterExpType] = useState<string>('all');
+
+  // Purchase orders state
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [sendingPurchase, setSendingPurchase] = useState(false);
+  const [sendingCash, setSendingCash] = useState(false);
+  const [purchaseData, setPurchaseData] = useState<PurchaseData | null>(null);
+  const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
+  const [showAllItems, setShowAllItems] = useState(true);
 
   const currentRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
   const currentExpenses = expenses.filter(e => e.date === selectedDate && e.shift === selectedShift);
@@ -382,6 +410,175 @@ export default function CashRegister() {
     a.click();
   };
 
+  // ============= PURCHASE ORDERS FUNCTIONS =============
+  
+  const SUPPLIER_CONFIG: Record<string, { label: string; color: string }> = {
+    'San Miguel': { label: 'San Miguel', color: 'bg-amber-500/20 text-amber-500 border-amber-500/30' },
+    'Tanduay': { label: 'Tanduay', color: 'bg-orange-500/20 text-orange-500 border-orange-500/30' },
+    'Soft Drinks': { label: 'Soft Drinks', color: 'bg-blue-500/20 text-blue-500 border-blue-500/30' },
+    'Snacks': { label: 'Snacks', color: 'bg-purple-500/20 text-purple-500 border-purple-500/30' },
+    'Others': { label: 'Others', color: 'bg-muted text-muted-foreground border-muted' },
+  };
+
+  const fetchPurchaseData = async () => {
+    setPurchaseLoading(true);
+    setRemovedItems(new Set());
+    try {
+      const { data: response, error } = await supabase.functions.invoke('loyverse-purchase-request');
+      if (error) throw error;
+      if (!response.success) throw new Error(response.error);
+      setPurchaseData(response);
+      toast.success(`Analyzed ${response.totalReceipts} receipts`);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to fetch data');
+    } finally {
+      setPurchaseLoading(false);
+    }
+  };
+
+  const sendToTelegram = async (action: 'purchase' | 'cash') => {
+    const isCash = action === 'cash';
+    if (isCash) setSendingCash(true);
+    else setSendingPurchase(true);
+    try {
+      const { data: response, error } = await supabase.functions.invoke('telegram-notify', { body: { action } });
+      if (error) throw error;
+      if (!response.success) throw new Error(response.error || 'Failed');
+      toast.success(isCash ? 'Cash report sent' : 'Order sent');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to send');
+    } finally {
+      if (isCash) setSendingCash(false);
+      else setSendingPurchase(false);
+    }
+  };
+
+  const removeItem = (itemName: string) => setRemovedItems(prev => new Set([...prev, itemName]));
+  
+  const cleanProductName = (name: string) => name.replace(/\s*\(from towers\)/gi, '').replace(/\s*\(from baskets\)/gi, '').trim();
+
+  const filteredRecommendations = purchaseData?.recommendations
+    .filter(item => !removedItems.has(item.name) && (showAllItems || item.toOrder > 0))
+    .sort((a, b) => {
+      const catOrder = ['beer', 'spirits', 'cocktails', 'soft', 'other'];
+      const catA = catOrder.indexOf(a.category);
+      const catB = catOrder.indexOf(b.category);
+      if (catA !== catB) return catA - catB;
+      if (b.toOrder !== a.toOrder) return b.toOrder - a.toOrder;
+      return cleanProductName(a.name).localeCompare(cleanProductName(b.name));
+    }) || [];
+
+  const exportPurchaseToCSV = () => {
+    if (!purchaseData) return;
+    const headers = ['Item', 'Supplier', 'In Stock', 'Need', 'Case Size', 'Cases'];
+    const rows = filteredRecommendations.map(item => [cleanProductName(item.name), item.supplier || 'Other', item.inStock, item.toOrder, item.caseSize, item.casesToOrder]);
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `purchase-order-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+  };
+
+  const supplierOrder = ['San Miguel', 'Tanduay', 'Soft Drinks', 'Snacks', 'Others'];
+  const groupedBySupplier = filteredRecommendations.reduce((acc, item) => {
+    const supplier = item.supplier || 'Others';
+    if (!acc[supplier]) acc[supplier] = [];
+    acc[supplier].push(item);
+    return acc;
+  }, {} as Record<string, PurchaseItem[]>);
+  const sortedSuppliers = Object.keys(groupedBySupplier).sort((a, b) => supplierOrder.indexOf(a) - supplierOrder.indexOf(b));
+
+  const renderOrdersTab = () => (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-primary" />Orders</h2>
+          <p className="text-xs text-muted-foreground">{purchaseData?.period.days || 3}-day analysis</p>
+        </div>
+        <Button onClick={fetchPurchaseData} disabled={purchaseLoading} size="sm">
+          {purchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4 mr-1" />}
+          Generate
+        </Button>
+      </div>
+
+      {/* Telegram buttons */}
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={() => sendToTelegram('purchase')} disabled={sendingPurchase} className="flex-1 text-blue-500 border-blue-500/30">
+          {sendingPurchase ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}Order
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => sendToTelegram('cash')} disabled={sendingCash} className="flex-1 text-green-500 border-green-500/30">
+          {sendingCash ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}Cash
+        </Button>
+        {purchaseData && <Button variant="outline" size="sm" onClick={exportPurchaseToCSV}><Download className="h-4 w-4" /></Button>}
+      </div>
+
+      {purchaseData && (
+        <>
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-2">
+            <Card className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground">Receipts</p>
+              <p className="text-lg font-bold">{purchaseData.totalReceipts}</p>
+            </Card>
+            <Card className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground">Products</p>
+              <p className="text-lg font-bold">{filteredRecommendations.length}</p>
+            </Card>
+            <Card className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground">To Order</p>
+              <p className="text-lg font-bold text-primary">{filteredRecommendations.reduce((s, i) => s + i.toOrder, 0)}</p>
+            </Card>
+          </div>
+
+          {/* Supplier groups */}
+          {sortedSuppliers.map(supplier => {
+            const items = groupedBySupplier[supplier];
+            const config = SUPPLIER_CONFIG[supplier] || SUPPLIER_CONFIG['Others'];
+            return (
+              <Card key={supplier} className="overflow-hidden">
+                <CardHeader className="py-2 bg-secondary/20 border-b">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className={cn("text-xs", config.color)}>{config.label}</Badge>
+                    <span className="text-xs font-bold text-primary">{items.reduce((s, i) => s + i.toOrder, 0)} units</span>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0 divide-y divide-border/30">
+                  {items.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 hover:bg-secondary/30">
+                      <div className="flex-1 min-w-0 mr-2">
+                        <p className="text-sm font-medium truncate">{cleanProductName(item.name)}</p>
+                        <p className="text-[10px] text-muted-foreground">Stock: {item.inStock} • Avg: {item.avgPerDay}/d</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className={cn("text-center px-2 py-0.5 rounded", item.toOrder > 0 ? "bg-primary/10" : "bg-muted/50")}>
+                          <span className={cn("font-bold", item.toOrder > 0 ? "text-primary" : "text-muted-foreground")}>{item.toOrder}</span>
+                        </div>
+                        {item.caseSize > 1 && <span className="text-xs text-muted-foreground">({item.casesToOrder}cs)</span>}
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item.name)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          {filteredRecommendations.length === 0 && (
+            <Card><CardContent className="py-6 text-center text-muted-foreground text-sm">All items in stock!</CardContent></Card>
+          )}
+        </>
+      )}
+
+      {!purchaseData && !purchaseLoading && (
+        <Card><CardContent className="py-8 text-center text-muted-foreground">Click Generate to analyze inventory needs</CardContent></Card>
+      )}
+    </div>
+  );
+
   const uniqueDates = [...new Set(records.map(r => r.date))].slice(0, 14);
 
   if (loading) {
@@ -461,9 +658,10 @@ export default function CashRegister() {
 
       {/* Tabs */}
       <Tabs defaultValue="balance" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 h-11">
+        <TabsList className="grid w-full grid-cols-3 h-11">
           <TabsTrigger value="balance" className="gap-1.5 text-sm"><Wallet className="w-4 h-4" />Balance</TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5 text-sm"><History className="w-4 h-4" />History</TabsTrigger>
+          <TabsTrigger value="orders" className="gap-1.5 text-sm"><ShoppingCart className="w-4 h-4" />Orders</TabsTrigger>
         </TabsList>
 
         {/* Balance Tab */}
@@ -819,6 +1017,11 @@ export default function CashRegister() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Orders Tab */}
+        <TabsContent value="orders" className="space-y-4 mt-4">
+          {renderOrdersTab()}
         </TabsContent>
 
       </Tabs>
