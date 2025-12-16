@@ -411,82 +411,98 @@ export default function CashRegister() {
             </Button>
           </div>
 
-          {/* Three Source Cards */}
-          <div className="space-y-3">
-            {/* Cash On Hand */}
+          {/* Storage Section - Two Columns */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Cash Storage */}
             <Card 
               className="cursor-pointer hover:border-green-500/50 transition-all active:scale-[0.99] border-green-500/20 bg-green-500/5"
               onClick={() => openExpenseDialog('cash', 'balance')}
             >
-              <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                    <Banknote className="w-6 h-6 text-green-500" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Cash On Hand</p>
-                    <p className="text-2xl font-bold text-green-500">₱{cashOnHand.toLocaleString()}</p>
-                  </div>
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Banknote className="w-4 h-4 text-green-500" />
+                  <span className="text-xs text-muted-foreground">Storage</span>
                 </div>
-                <ArrowDownCircle className="w-5 h-5 text-muted-foreground" />
+                <p className="text-xl font-bold text-green-500">₱{cashOnHand.toLocaleString()}</p>
+                {balanceCashExp > 0 && (
+                  <p className="text-[10px] text-muted-foreground">-₱{balanceCashExp.toLocaleString()} expenses</p>
+                )}
               </CardContent>
             </Card>
 
-            {/* GCash On Hand */}
+            {/* GCash Storage */}
             <Card 
               className="cursor-pointer hover:border-blue-500/50 transition-all active:scale-[0.99] border-blue-500/20 bg-blue-500/5"
               onClick={() => openExpenseDialog('gcash', 'balance')}
             >
-              <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center">
-                    <Smartphone className="w-6 h-6 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">GCash On Hand</p>
-                    <p className="text-2xl font-bold text-blue-500">₱{gcashOnHand.toLocaleString()}</p>
-                  </div>
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Smartphone className="w-4 h-4 text-blue-500" />
+                  <span className="text-xs text-muted-foreground">GCash</span>
                 </div>
-                <ArrowDownCircle className="w-5 h-5 text-muted-foreground" />
-              </CardContent>
-            </Card>
-
-            {/* Current Register (Loyverse Expected Revenue) */}
-            <Card 
-              className="cursor-pointer hover:border-primary/50 transition-all active:scale-[0.99] border-primary/20 bg-primary/5"
-              onClick={() => openExpenseDialog('cash', 'shift')}
-            >
-              <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                    <CircleDollarSign className="w-6 h-6 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Current Register</p>
-                    <p className="text-2xl font-bold text-primary">
-                      ₱{currentRegisterTotal.toLocaleString()}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      Cash ₱{currentRegisterCash.toLocaleString()} • GCash ₱{currentRegisterGcash.toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-                <ArrowDownCircle className="w-5 h-5 text-muted-foreground" />
+                <p className="text-xl font-bold text-blue-500">₱{gcashOnHand.toLocaleString()}</p>
+                {balanceGcashExp > 0 && (
+                  <p className="text-[10px] text-muted-foreground">-₱{balanceGcashExp.toLocaleString()} expenses</p>
+                )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Today's Expenses */}
-          {currentExpenses.length > 0 && (
-            <Card>
-              <CardHeader className="py-3 pb-2">
-                <CardTitle className="text-sm flex items-center justify-between">
-                  <span>Today's Expenses</span>
-                  <Badge variant="secondary">₱{currentExpenses.reduce((s, e) => s + e.amount, 0).toLocaleString()}</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="py-2">
-                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+          {/* Current Register Section - Two Columns */}
+          <Card className="border-primary/20">
+            <CardHeader className="py-3 pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <CircleDollarSign className="w-4 h-4 text-primary" />
+                Current Register
+                <Badge variant="secondary" className="ml-auto">₱{currentRegisterTotal.toLocaleString()}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="py-2">
+              <div className="grid grid-cols-2 gap-3">
+                {/* Cash in Register */}
+                <div 
+                  className="p-3 rounded-lg bg-green-500/10 cursor-pointer hover:bg-green-500/20 transition-colors"
+                  onClick={() => openExpenseDialog('cash', 'shift')}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Banknote className="w-3 h-3 text-green-500" />
+                    <span className="text-xs text-muted-foreground">Cash</span>
+                  </div>
+                  <p className="text-lg font-bold text-green-500">₱{currentRegisterCash.toLocaleString()}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    ₱{(currentRecord?.cash_expected || 0).toLocaleString()} - ₱{shiftCashExp.toLocaleString()}
+                  </p>
+                </div>
+
+                {/* GCash in Register */}
+                <div 
+                  className="p-3 rounded-lg bg-blue-500/10 cursor-pointer hover:bg-blue-500/20 transition-colors"
+                  onClick={() => openExpenseDialog('gcash', 'shift')}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Smartphone className="w-3 h-3 text-blue-500" />
+                    <span className="text-xs text-muted-foreground">GCash</span>
+                  </div>
+                  <p className="text-lg font-bold text-blue-500">₱{currentRegisterGcash.toLocaleString()}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    ₱{(currentRecord?.gcash_expected || 0).toLocaleString()} - ₱{shiftGcashExp.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Expenses Section */}
+          <Card>
+            <CardHeader className="py-3 pb-2">
+              <CardTitle className="text-sm flex items-center justify-between">
+                <span>Shift Expenses</span>
+                <Badge variant="secondary">₱{totalShiftExpenses.toLocaleString()}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="py-2">
+              {currentExpenses.length > 0 ? (
+                <div className="space-y-1.5 max-h-60 overflow-y-auto">
                   {currentExpenses.map(exp => (
                     <div key={exp.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
                       <div className="flex items-center gap-2">
@@ -508,6 +524,9 @@ export default function CashRegister() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
+                        <Badge variant={exp.payment_source === 'gcash' ? 'outline' : 'secondary'} className="text-[10px] px-1.5">
+                          {exp.payment_source === 'gcash' ? 'GC' : '₱'}
+                        </Badge>
                         <span className="font-semibold text-sm">₱{exp.amount.toLocaleString()}</span>
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive/70 hover:text-destructive" onClick={() => deleteExpense(exp.id)}>
                           <Trash2 className="w-3 h-3" />
@@ -516,9 +535,11 @@ export default function CashRegister() {
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">No expenses this shift</p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* History Tab */}
