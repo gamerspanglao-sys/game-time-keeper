@@ -2396,28 +2396,30 @@ export default function Finance() {
         {/* SHIFTS TAB */}
         <TabsContent value="shifts" className="space-y-6 animate-fade-in">
           <EmployeeShiftCard />
-          {isAdminMode && (
-            <div className="space-y-4">
-              <Tabs defaultValue="employees" className="space-y-4">
-                <TabsList className="bg-secondary/30">
-                  <TabsTrigger value="employees" className="gap-2">
-                    <Users className="w-4 h-4" />
-                    Employees
-                  </TabsTrigger>
+          <div className="space-y-4">
+            <Tabs defaultValue="employees" className="space-y-4">
+              <TabsList className="bg-secondary/30">
+                <TabsTrigger value="employees" className="gap-2">
+                  <Users className="w-4 h-4" />
+                  Employees
+                </TabsTrigger>
+                {isAdminMode && (
                   <TabsTrigger value="payroll" className="gap-2">
                     <Wallet className="w-4 h-4" />
                     Payroll
                   </TabsTrigger>
-                </TabsList>
-                <TabsContent value="employees" className="animate-fade-in">
-                  <EmployeeManagement />
-                </TabsContent>
+                )}
+              </TabsList>
+              <TabsContent value="employees" className="animate-fade-in">
+                <EmployeeManagement />
+              </TabsContent>
+              {isAdminMode && (
                 <TabsContent value="payroll" className="animate-fade-in">
                   <PayrollReport />
                 </TabsContent>
-              </Tabs>
-            </div>
-          )}
+              )}
+            </Tabs>
+          </div>
         </TabsContent>
 
 
