@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Trash2 } from 'lucide-react';
 
 type ShiftType = 'day' | 'night';
@@ -361,24 +362,31 @@ export default function Shift() {
   }
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl mx-auto">
+    <div className="p-4 space-y-5 max-w-2xl mx-auto pb-24">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Clock className="w-5 h-5 text-primary" />
-          <h1 className="text-xl font-bold">Shift</h1>
-          <Badge variant="outline" className="ml-2">
-            {currentShift === 'day' ? <Sun className="w-3 h-3 mr-1" /> : <Moon className="w-3 h-3 mr-1" />}
-            {currentShift === 'day' ? 'Day' : 'Night'}
-          </Badge>
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Clock className="w-5 h-5 text-primary" />
+            </div>
+            Shift
+          </h1>
+          <div className="flex items-center gap-2 mt-1.5">
+            <Badge className={currentShift === 'day' ? 'bg-amber-500/20 text-amber-500 border-amber-500/30' : 'bg-indigo-500/20 text-indigo-500 border-indigo-500/30'}>
+              {currentShift === 'day' ? <Sun className="w-3 h-3 mr-1" /> : <Moon className="w-3 h-3 mr-1" />}
+              {currentShift === 'day' ? 'Day Shift' : 'Night Shift'}
+            </Badge>
+            <span className="text-xs text-muted-foreground">{currentDate}</span>
+          </div>
         </div>
         
         <div className="flex gap-2">
-          <Button variant="outline" onClick={openExpenseDialog} className="gap-1">
+          <Button variant="outline" size="sm" onClick={openExpenseDialog} className="gap-1.5 h-9 border-border/50 hover:bg-secondary">
             <Plus className="w-4 h-4" />
             Expense
           </Button>
-          <Button onClick={openHandoverDialog} className="gap-1">
+          <Button size="sm" onClick={openHandoverDialog} className="gap-1.5 h-9 shadow-lg shadow-primary/20">
             <Banknote className="w-4 h-4" />
             Cash
           </Button>
@@ -387,21 +395,28 @@ export default function Shift() {
 
       {/* Active Shifts */}
       {activeShifts.length > 0 && (
-        <Card>
-          <CardHeader className="py-3">
+        <Card className="border-green-500/30 bg-gradient-to-br from-green-500/5 to-transparent overflow-hidden">
+          <CardHeader className="py-3 border-b border-green-500/10">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Play className="w-4 h-4 text-green-500" />
+              <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Play className="w-3 h-3 text-green-500" />
+              </div>
               Active Shifts
+              <Badge variant="secondary" className="ml-auto bg-green-500/20 text-green-500 text-xs">
+                {activeShifts.length}
+              </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="py-2 space-y-2">
+          <CardContent className="py-3 space-y-2">
             {activeShifts.map(shift => (
-              <div key={shift.id} className="flex items-center justify-between p-2 bg-green-500/10 rounded-lg border border-green-500/20">
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-green-500" />
+              <div key={shift.id} className="flex items-center justify-between p-3 bg-green-500/10 rounded-xl border border-green-500/20 transition-all hover:border-green-500/40">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <User className="w-4 h-4 text-green-500" />
+                  </div>
                   <span className="font-medium">{shift.employee_name}</span>
                 </div>
-                <Badge variant="secondary" className="bg-green-500/20 text-green-500">
+                <Badge className="bg-green-500/20 text-green-400 border-green-500/30 font-mono">
                   {formatDuration(shift.shift_start)}
                 </Badge>
               </div>
@@ -411,46 +426,71 @@ export default function Shift() {
       )}
 
       {/* Shift Expenses */}
-      <Card>
-        <CardHeader className="py-3">
+      <Card className="border-border/50 overflow-hidden">
+        <CardHeader className="py-3 border-b border-border/50 bg-secondary/20">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Receipt className="w-4 h-4" />
+              <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+                <Receipt className="w-3 h-3 text-primary" />
+              </div>
               Shift Expenses
             </CardTitle>
             {totalShiftExpenses > 0 && (
-              <div className="text-sm text-muted-foreground">
-                <span className="text-foreground font-medium">₱{totalShiftExpenses.toLocaleString()}</span>
-                <span className="ml-2 text-xs">(Cash: ₱{cashExpenses.toLocaleString()} | GCash: ₱{gcashExpenses.toLocaleString()})</span>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="flex items-center gap-1 text-green-500">
+                    <Banknote className="w-3 h-3" />₱{cashExpenses.toLocaleString()}
+                  </span>
+                  <span className="text-muted-foreground">•</span>
+                  <span className="flex items-center gap-1 text-blue-500">
+                    <span className="text-[10px]">GC</span>₱{gcashExpenses.toLocaleString()}
+                  </span>
+                </div>
+                <Badge className="bg-primary/20 text-primary border-primary/30 font-semibold">
+                  ₱{totalShiftExpenses.toLocaleString()}
+                </Badge>
               </div>
             )}
           </div>
         </CardHeader>
-        <CardContent className="py-2">
+        <CardContent className="py-3">
           {shiftExpenses.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No expenses this shift</p>
+            <div className="text-center py-8">
+              <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                <Receipt className="w-6 h-6 text-muted-foreground/50" />
+              </div>
+              <p className="text-sm text-muted-foreground">No expenses this shift</p>
+            </div>
           ) : (
             <div className="space-y-2">
               {shiftExpenses.map(expense => (
-                <div key={expense.id} className="flex items-center justify-between p-2 bg-secondary/30 rounded-lg">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">₱{expense.amount.toLocaleString()}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label || expense.category}
-                      </Badge>
-                      <Badge variant="secondary" className="text-xs">
-                        {expense.payment_source === 'cash' ? 'Cash' : 'GCash'}
-                      </Badge>
+                <div key={expense.id} className="flex items-center justify-between p-3 bg-secondary/30 rounded-xl border border-border/30 transition-all hover:border-border/50 group">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center",
+                      expense.payment_source === 'cash' ? "bg-green-500/20" : "bg-blue-500/20"
+                    )}>
+                      {expense.payment_source === 'cash' 
+                        ? <Banknote className="w-4 h-4 text-green-500" />
+                        : <span className="text-xs font-bold text-blue-500">GC</span>
+                      }
                     </div>
-                    {expense.description && (
-                      <p className="text-xs text-muted-foreground mt-1">{expense.description}</p>
-                    )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">₱{expense.amount.toLocaleString()}</span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 h-5">
+                          {EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label || expense.category}
+                        </Badge>
+                      </div>
+                      {expense.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{expense.description}</p>
+                      )}
+                    </div>
                   </div>
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={() => deleteExpense(expense.id)}
                   >
                     <Trash2 className="w-4 h-4" />
@@ -463,26 +503,37 @@ export default function Shift() {
       </Card>
 
       {/* Employees */}
-      <Card>
-        <CardHeader className="py-3">
-          <CardTitle className="text-sm">Employees</CardTitle>
+      <Card className="border-border/50 overflow-hidden">
+        <CardHeader className="py-3 border-b border-border/50 bg-secondary/20">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center">
+              <User className="w-3 h-3 text-muted-foreground" />
+            </div>
+            Employees
+            <Badge variant="secondary" className="ml-auto text-xs">{employees.length}</Badge>
+          </CardTitle>
         </CardHeader>
-        <CardContent className="py-2 space-y-2">
+        <CardContent className="py-3 space-y-2">
           {employees.map(emp => {
             const activeShift = getEmployeeShift(emp.id);
             return (
-              <div key={emp.id} className="flex items-center justify-between p-2 bg-secondary/30 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-muted-foreground" />
-                  <span>{emp.name}</span>
+              <div key={emp.id} className="flex items-center justify-between p-3 bg-secondary/30 rounded-xl border border-border/30 transition-all hover:border-border/50">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center",
+                    activeShift ? "bg-green-500/20" : "bg-muted"
+                  )}>
+                    <User className={cn("w-4 h-4", activeShift ? "text-green-500" : "text-muted-foreground")} />
+                  </div>
+                  <span className="font-medium">{emp.name}</span>
                 </div>
                 {activeShift ? (
-                  <Badge variant="outline" className="text-green-500 border-green-500/30">
+                  <Badge className="bg-green-500/20 text-green-500 border-green-500/30">
                     Working
                   </Badge>
                 ) : (
-                  <Button size="sm" variant="outline" onClick={() => startShift(emp.id)}>
-                    <Play className="w-3 h-3 mr-1" />
+                  <Button size="sm" variant="outline" onClick={() => startShift(emp.id)} className="h-8 gap-1.5 border-border/50">
+                    <Play className="w-3 h-3" />
                     Start
                   </Button>
                 )}

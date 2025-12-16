@@ -359,36 +359,70 @@ export default function Finance() {
   }
 
   return (
-    <div className="p-4 space-y-4 max-w-2xl mx-auto pb-24">
+    <div className="p-4 space-y-5 max-w-2xl mx-auto pb-24">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold flex items-center gap-2"><Wallet className="w-5 h-5 text-primary" /> Finance</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Cash & expenses</p>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Wallet className="w-5 h-5 text-primary" />
+            </div>
+            Finance
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Cash & expense management</p>
         </div>
-        <Button variant="outline" size="sm" onClick={syncLoyverse} disabled={syncing}>
+        <Button variant="outline" size="icon" onClick={syncLoyverse} disabled={syncing} className="h-10 w-10 border-border/50">
           {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
         </Button>
       </div>
 
-      <div className="flex gap-2 items-center">
+      {/* Date & Shift Selector */}
+      <div className="flex gap-3 items-center p-3 bg-secondary/30 rounded-xl border border-border/50">
         <Select value={selectedDate} onValueChange={setSelectedDate}>
-          <SelectTrigger className="w-32 h-9 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>{uniqueDates.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+          <SelectTrigger className="w-36 h-9 text-sm bg-background border-border/50">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {uniqueDates.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+          </SelectContent>
         </Select>
-        <div className="flex border border-border rounded-lg overflow-hidden">
-          <button className={cn("px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1", selectedShift === 'day' ? "bg-primary text-primary-foreground" : "hover:bg-muted")} onClick={() => setSelectedShift('day')}>
-            <Sun className="w-3.5 h-3.5" />Day
+        <div className="flex bg-background border border-border/50 rounded-lg overflow-hidden">
+          <button 
+            className={cn(
+              "px-4 py-2 text-sm font-medium transition-all flex items-center gap-1.5",
+              selectedShift === 'day' 
+                ? "bg-amber-500/20 text-amber-500" 
+                : "hover:bg-muted text-muted-foreground"
+            )} 
+            onClick={() => setSelectedShift('day')}
+          >
+            <Sun className="w-4 h-4" />Day
           </button>
-          <button className={cn("px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1", selectedShift === 'night' ? "bg-primary text-primary-foreground" : "hover:bg-muted")} onClick={() => setSelectedShift('night')}>
-            <Moon className="w-3.5 h-3.5" />Night
+          <button 
+            className={cn(
+              "px-4 py-2 text-sm font-medium transition-all flex items-center gap-1.5",
+              selectedShift === 'night' 
+                ? "bg-indigo-500/20 text-indigo-500" 
+                : "hover:bg-muted text-muted-foreground"
+            )} 
+            onClick={() => setSelectedShift('night')}
+          >
+            <Moon className="w-4 h-4" />Night
           </button>
         </div>
       </div>
 
+      {/* Tabs */}
       <Tabs defaultValue="balance" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 h-11">
-          <TabsTrigger value="balance" className="gap-1.5 text-sm"><Wallet className="w-4 h-4" />Balance</TabsTrigger>
-          <TabsTrigger value="history" className="gap-1.5 text-sm"><History className="w-4 h-4" />History</TabsTrigger>
+        <TabsList className="w-full">
+          <TabsTrigger value="balance" className="flex-1 gap-2">
+            <Wallet className="w-4 h-4" />
+            Balance
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex-1 gap-2">
+            <History className="w-4 h-4" />
+            History
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="balance" className="space-y-4 mt-4">
