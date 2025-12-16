@@ -364,15 +364,17 @@ export default function CashRegister() {
 
         {/* Balance Tab */}
         <TabsContent value="balance" className="space-y-4 mt-4">
-          {/* Total Balance */}
-          <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
-            <CardContent className="p-5">
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total On Hand</p>
-                <p className="text-4xl font-bold text-primary">₱{totalOnHand.toLocaleString()}</p>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Current Session Header */}
+          <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+            <div>
+              <p className="text-xs text-muted-foreground">Current Session</p>
+              <p className="font-semibold">{selectedDate} • {selectedShift === 'day' ? '☀️ Day' : '🌙 Night'}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Received</p>
+              <p className="font-bold text-primary">₱{((currentRecord?.cash_actual || 0) + (currentRecord?.gcash_actual || 0)).toLocaleString()}</p>
+            </div>
+          </div>
 
           {/* Cash & GCash Cards - Tappable */}
           <div className="grid grid-cols-2 gap-3">
