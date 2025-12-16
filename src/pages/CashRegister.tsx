@@ -411,53 +411,85 @@ export default function CashRegister() {
             </div>
 
             {/* Section 3: Difference */}
-            {((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)) > 0 && (
-              <div className={cn(
-                "p-3 rounded-lg border",
-                (currentRecord.discrepancy || 0) >= 0 
-                  ? "bg-green-500/10 border-green-500/20" 
-                  : "bg-red-500/10 border-red-500/20"
-              )}>
-                <div className={cn(
-                  "text-[10px] uppercase tracking-wider font-semibold mb-2",
-                  (currentRecord.discrepancy || 0) >= 0 ? "text-green-600" : "text-red-600"
-                )}>
-                  📈 Difference (Actual - Expected)
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div>
-                    <div className="text-[10px] text-muted-foreground">💵 Cash</div>
+            {((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)) > 0 && (() => {
+              const cashDiff = (currentRecord.cash_actual || 0) - (currentRecord.cash_expected || 0);
+              const gcashDiff = (currentRecord.gcash_actual || 0) - (currentRecord.gcash_expected || 0);
+              const totalDiff = currentRecord.discrepancy || 0;
+              
+              // Detect resortitsa: one is positive, one is negative (swap between payment methods)
+              const isResortitsa = (cashDiff > 0 && gcashDiff < 0) || (cashDiff < 0 && gcashDiff > 0);
+              const resortitsaAmount = Math.min(Math.abs(cashDiff), Math.abs(gcashDiff));
+              
+              return (
+                <>
+                  {/* Resortitsa Alert */}
+                  {isResortitsa && resortitsaAmount >= 50 && (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                      <div className="text-[10px] text-amber-600 uppercase tracking-wider font-semibold mb-1">
+                        ⚠️ Пересортица обнаружена!
+                      </div>
+                      <div className="text-sm text-amber-700">
+                        {cashDiff > 0 
+                          ? `GCash в Loyverse записан как Cash: ~₱${resortitsaAmount.toLocaleString()}`
+                          : `Cash в Loyverse записан как GCash: ~₱${resortitsaAmount.toLocaleString()}`
+                        }
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        Проверьте транзакции в Loyverse POS
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={cn(
+                    "p-3 rounded-lg border",
+                    totalDiff >= 0 
+                      ? "bg-green-500/10 border-green-500/20" 
+                      : "bg-red-500/10 border-red-500/20"
+                  )}>
                     <div className={cn(
-                      "font-bold text-lg",
-                      ((currentRecord.cash_actual || 0) - (currentRecord.cash_expected || 0)) >= 0 ? "text-green-600" : "text-red-600"
+                      "text-[10px] uppercase tracking-wider font-semibold mb-2",
+                      totalDiff >= 0 ? "text-green-600" : "text-red-600"
                     )}>
-                      {((currentRecord.cash_actual || 0) - (currentRecord.cash_expected || 0)) >= 0 ? '+' : ''}₱{((currentRecord.cash_actual || 0) - (currentRecord.cash_expected || 0)).toLocaleString()}
+                      📈 Difference (Actual - Expected)
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">💵 Cash</div>
+                        <div className={cn(
+                          "font-bold text-lg",
+                          cashDiff >= 0 ? "text-green-600" : "text-red-600",
+                          isResortitsa && "underline decoration-amber-500 decoration-2"
+                        )}>
+                          {cashDiff >= 0 ? '+' : ''}₱{cashDiff.toLocaleString()}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">📱 GCash</div>
+                        <div className={cn(
+                          "font-bold text-lg",
+                          gcashDiff >= 0 ? "text-green-600" : "text-red-600",
+                          isResortitsa && "underline decoration-amber-500 decoration-2"
+                        )}>
+                          {gcashDiff >= 0 ? '+' : ''}₱{gcashDiff.toLocaleString()}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground">💰 Total</div>
+                        <div className={cn(
+                          "font-bold text-lg",
+                          totalDiff >= 0 ? "text-green-600" : "text-red-600"
+                        )}>
+                          {totalDiff >= 0 ? '+' : ''}₱{totalDiff.toLocaleString()}
+                          <span className="text-xs ml-1">
+                            {totalDiff > 0 ? 'OVER' : totalDiff < 0 ? 'SHORT' : '✓'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div className="text-[10px] text-muted-foreground">📱 GCash</div>
-                    <div className={cn(
-                      "font-bold text-lg",
-                      ((currentRecord.gcash_actual || 0) - (currentRecord.gcash_expected || 0)) >= 0 ? "text-green-600" : "text-red-600"
-                    )}>
-                      {((currentRecord.gcash_actual || 0) - (currentRecord.gcash_expected || 0)) >= 0 ? '+' : ''}₱{((currentRecord.gcash_actual || 0) - (currentRecord.gcash_expected || 0)).toLocaleString()}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-muted-foreground">💰 Total</div>
-                    <div className={cn(
-                      "font-bold text-lg",
-                      (currentRecord.discrepancy || 0) >= 0 ? "text-green-600" : "text-red-600"
-                    )}>
-                      {(currentRecord.discrepancy || 0) >= 0 ? '+' : ''}₱{(currentRecord.discrepancy || 0).toLocaleString()}
-                      <span className="text-xs ml-1">
-                        {(currentRecord.discrepancy || 0) > 0 ? 'OVER' : (currentRecord.discrepancy || 0) < 0 ? 'SHORT' : '✓'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+                </>
+              );
+            })()}
 
             {/* Staff Handovers */}
             {currentShiftHandovers.length > 0 && (
