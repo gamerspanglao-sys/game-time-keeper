@@ -40,6 +40,15 @@ interface Expense {
   expense_type: ExpenseType;
 }
 
+interface ShiftHandover {
+  id: string;
+  date: string;
+  shift_type: string | null;
+  cash_handed_over: number | null;
+  gcash_handed_over: number | null;
+  employee_id: string;
+}
+
 const ADMIN_PIN = '8808';
 
 const CATEGORIES = [
@@ -77,6 +86,7 @@ const getShiftDate = (): string => {
 export default function CashRegister() {
   const [records, setRecords] = useState<CashRecord[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [shifts, setShifts] = useState<ShiftHandover[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   
@@ -110,19 +120,33 @@ export default function CashRegister() {
   const currentRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
   const currentExpenses = expenses.filter(e => e.date === selectedDate && e.shift === selectedShift);
   
+  // Get shifts for current date and shift type (map shift_type to day/night)
+  const currentShifts = shifts.filter(s => {
+    if (s.date !== selectedDate) return false;
+    const shiftType = s.shift_type?.includes('Night') || s.shift_type === '12 hours' ? 'night' : 'day';
+    return shiftType === selectedShift || (!s.shift_type && selectedShift === 'day');
+  });
+  
+  // Employee submitted totals
+  const employeeCashSubmitted = currentShifts.reduce((sum, s) => sum + (s.cash_handed_over || 0), 0);
+  const employeeGcashSubmitted = currentShifts.reduce((sum, s) => sum + (s.gcash_handed_over || 0), 0);
+  
   // Shift expenses (deducted from current register)
   const shiftCashExp = currentExpenses.filter(e => e.expense_type === 'shift' && e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
   const shiftGcashExp = currentExpenses.filter(e => e.expense_type === 'shift' && e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
   const totalShiftExpenses = shiftCashExp + shiftGcashExp;
   
-  // Balance expenses (deducted from withdrawn cash on hand)
+  // Balance expenses (deducted from storage)
   const balanceCashExp = currentExpenses.filter(e => e.expense_type === 'balance' && e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
   const balanceGcashExp = currentExpenses.filter(e => e.expense_type === 'balance' && e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
   
-  // Cash On Hand = withdrawn amount (cash_actual) - balance expenses
-  const cashOnHand = (currentRecord?.cash_actual || 0) - balanceCashExp;
-  const gcashOnHand = (currentRecord?.gcash_actual || 0) - balanceGcashExp;
-  const totalOnHand = cashOnHand + gcashOnHand;
+  // Storage = admin received (cash_actual) - balance expenses
+  const storageCash = (currentRecord?.cash_actual || 0) - balanceCashExp;
+  const storageGcash = (currentRecord?.gcash_actual || 0) - balanceGcashExp;
+  
+  // Discrepancy: admin received vs employee submitted
+  const cashDiscrepancy = (currentRecord?.cash_actual || 0) - employeeCashSubmitted;
+  const gcashDiscrepancy = (currentRecord?.gcash_actual || 0) - employeeGcashSubmitted;
   
   // Current Register = Loyverse sales - shift expenses
   const currentRegisterCash = (currentRecord?.cash_expected || 0) - shiftCashExp;
@@ -143,12 +167,14 @@ export default function CashRegister() {
 
   const loadData = async () => {
     try {
-      const [{ data: cashData }, { data: expData }] = await Promise.all([
+      const [{ data: cashData }, { data: expData }, { data: shiftsData }] = await Promise.all([
         supabase.from('cash_register').select('id, date, shift, cash_expected, gcash_expected, cash_actual, gcash_actual').order('date', { ascending: false }),
-        supabase.from('cash_expenses').select('*').order('created_at', { ascending: false })
+        supabase.from('cash_expenses').select('*').order('created_at', { ascending: false }),
+        supabase.from('shifts').select('id, date, shift_type, cash_handed_over, gcash_handed_over, employee_id').order('date', { ascending: false })
       ]);
       setRecords((cashData || []) as CashRecord[]);
       setExpenses((expData || []) as Expense[]);
+      setShifts((shiftsData || []) as ShiftHandover[]);
     } catch (e) {
       console.error(e);
     } finally {
@@ -430,10 +456,29 @@ export default function CashRegister() {
                     <ArrowDownCircle className="w-4 h-4 text-green-500" />
                   </Button>
                 </div>
-                <p className="text-xl font-bold text-green-500">₱{cashOnHand.toLocaleString()}</p>
-                {balanceCashExp > 0 && (
-                  <p className="text-[10px] text-muted-foreground">-₱{balanceCashExp.toLocaleString()} expenses</p>
-                )}
+                <p className="text-xl font-bold text-green-500">₱{storageCash.toLocaleString()}</p>
+                <div className="text-[10px] text-muted-foreground space-y-0.5 mt-1">
+                  <div className="flex justify-between">
+                    <span>Staff:</span>
+                    <span>₱{employeeCashSubmitted.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Received:</span>
+                    <span>₱{(currentRecord?.cash_actual || 0).toLocaleString()}</span>
+                  </div>
+                  {cashDiscrepancy !== 0 && (
+                    <div className={cn("flex justify-between font-medium", cashDiscrepancy > 0 ? "text-green-600" : "text-red-500")}>
+                      <span>Diff:</span>
+                      <span>{cashDiscrepancy > 0 ? '+' : ''}₱{cashDiscrepancy.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {balanceCashExp > 0 && (
+                    <div className="flex justify-between text-orange-500">
+                      <span>Expenses:</span>
+                      <span>-₱{balanceCashExp.toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -454,10 +499,29 @@ export default function CashRegister() {
                     <ArrowDownCircle className="w-4 h-4 text-blue-500" />
                   </Button>
                 </div>
-                <p className="text-xl font-bold text-blue-500">₱{gcashOnHand.toLocaleString()}</p>
-                {balanceGcashExp > 0 && (
-                  <p className="text-[10px] text-muted-foreground">-₱{balanceGcashExp.toLocaleString()} expenses</p>
-                )}
+                <p className="text-xl font-bold text-blue-500">₱{storageGcash.toLocaleString()}</p>
+                <div className="text-[10px] text-muted-foreground space-y-0.5 mt-1">
+                  <div className="flex justify-between">
+                    <span>Staff:</span>
+                    <span>₱{employeeGcashSubmitted.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Received:</span>
+                    <span>₱{(currentRecord?.gcash_actual || 0).toLocaleString()}</span>
+                  </div>
+                  {gcashDiscrepancy !== 0 && (
+                    <div className={cn("flex justify-between font-medium", gcashDiscrepancy > 0 ? "text-green-600" : "text-red-500")}>
+                      <span>Diff:</span>
+                      <span>{gcashDiscrepancy > 0 ? '+' : ''}₱{gcashDiscrepancy.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {balanceGcashExp > 0 && (
+                    <div className="flex justify-between text-orange-500">
+                      <span>Expenses:</span>
+                      <span>-₱{balanceGcashExp.toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
