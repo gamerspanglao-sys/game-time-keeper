@@ -3,7 +3,7 @@ import { Timer, DURATION_PRESETS, TimerCategory } from '@/types/timer';
 import { formatTime, getStatusLabel } from '@/lib/timerUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Play, Square, RotateCcw, Plus, Users, Circle, Gamepad2, Crown, Pencil, Minus } from 'lucide-react';
+import { Play, Square, RotateCcw, Plus, Users, Circle, Gamepad2, Crown, Pencil, Minus, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CloseoutDialog } from './CloseoutDialog';
 import { QueueDialog } from './QueueDialog';
@@ -28,6 +28,7 @@ interface TimerCardProps {
   onReset: (id: string) => void;
   onSetDuration: (id: string, minutes: number) => void;
   onAdjustTime: (id: string, minutes: number) => void;
+  onStartPromo?: (id: string) => void;
   playConfirmSound: () => void;
   stopAlarm: (id: string) => void;
   notifyQueueNext?: (timerName: string, personName: string) => void;
@@ -45,6 +46,7 @@ export function TimerCard({
   onReset, 
   onSetDuration, 
   onAdjustTime,
+  onStartPromo,
   playConfirmSound,
   stopAlarm,
   notifyQueueNext,
@@ -269,15 +271,29 @@ export function TimerCard({
         {/* Controls */}
         <div className="flex items-center gap-2">
           {(status === 'idle' || status === 'stopped') && (
-            <Button 
-              variant="success" 
-              size={compact ? "default" : "lg"}
-              onClick={() => setShowPaymentDialog(true)}
-              className="flex-1"
-            >
-              <Play className="w-5 h-5" />
-              Start
-            </Button>
+            <>
+              <Button 
+                variant="success" 
+                size={compact ? "default" : "lg"}
+                onClick={() => setShowPaymentDialog(true)}
+                className="flex-1"
+              >
+                <Play className="w-5 h-5" />
+                Start
+              </Button>
+              {/* Promo button for VIP Super */}
+              {onStartPromo && status === 'idle' && (
+                <Button 
+                  variant="default" 
+                  size={compact ? "default" : "lg"}
+                  onClick={() => onStartPromo(id)}
+                  className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg shadow-amber-500/25"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  Promo
+                </Button>
+              )}
+            </>
           )}
 
           {(status === 'running' || status === 'warning' || status === 'finished') && (

@@ -24,6 +24,15 @@ const TIMER_CONFIG: Record<string, {
   'vip-comfort': { sku: '10081', price: 250 },
 };
 
+// Promo products configuration
+const PROMO_CONFIG: Record<string, {
+  sku: string;
+  name: string;
+  price: number;
+}> = {
+  'basket-redhorse': { sku: '10069', name: 'Basket Red Horse', price: 1000 },
+};
+
 const STORE_ID = '77f9b0db-9be9-4907-b4ec-9d68653f7a21';
 
 const PAYMENT_TYPES: Record<string, string> = {
@@ -121,9 +130,87 @@ serve(async (req) => {
       throw new Error('LOYVERSE_ACCESS_TOKEN not configured');
     }
 
-    const { timerId, paymentType = 'cash', amount } = await req.json();
+    const { timerId, paymentType = 'cash', amount, promoId } = await req.json();
 
-    console.log(`📝 Creating receipt for timer: ${timerId}, payment: ${paymentType}`);
+    console.log(`📝 Creating receipt for timer: ${timerId}, payment: ${paymentType}, promo: ${promoId || 'none'}`);
+
+    // Handle promo receipt
+    if (promoId) {
+      const promoConfig = PROMO_CONFIG[promoId];
+      if (!promoConfig) {
+        console.log(`⚠️ Promo ${promoId} not configured`);
+        return new Response(
+          JSON.stringify({ success: true, skipped: true, message: `Promo ${promoId} not configured` }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Find promo item by SKU
+      const promoItemData = await findItemBySku(promoConfig.sku, loyverseToken);
+      if (!promoItemData) {
+        console.log(`⚠️ Skipping promo receipt - item with SKU ${promoConfig.sku} not found`);
+        return new Response(
+          JSON.stringify({ success: true, skipped: true, message: `Promo item not found` }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const promoPrice = amount || promoConfig.price;
+      const promoPaymentTypeId = PAYMENT_TYPES[paymentType] || PAYMENT_TYPES['cash'];
+
+      const promoReceiptData = {
+        store_id: STORE_ID,
+        source: 'Gaming Timer App - Promo',
+        receipt_type: 'SALE',
+        line_items: [
+          {
+            variant_id: promoItemData.variant_id,
+            quantity: 1,
+            price: promoPrice,
+          }
+        ],
+        payments: [
+          {
+            payment_type_id: promoPaymentTypeId,
+            amount: promoPrice,
+          }
+        ],
+        note: `PROMO: ${promoConfig.name} - Timer: ${timerId}`,
+      };
+
+      console.log('📤 Sending promo receipt to Loyverse:', JSON.stringify(promoReceiptData, null, 2));
+
+      const promoResponse = await fetch('https://api.loyverse.com/v1.0/receipts', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${loyverseToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(promoReceiptData),
+      });
+
+      const promoResponseText = await promoResponse.text();
+      console.log(`📥 Loyverse promo response (${promoResponse.status}):`, promoResponseText);
+
+      if (!promoResponse.ok) {
+        throw new Error(`Loyverse API error: ${promoResponse.status} - ${promoResponseText}`);
+      }
+
+      const promoReceipt = JSON.parse(promoResponseText);
+      console.log(`✅ Promo receipt created: ${promoReceipt.receipt_number}`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          receipt_number: promoReceipt.receipt_number,
+          receipt_id: promoReceipt.id,
+          total: promoReceipt.total_money,
+          item_name: promoConfig.name,
+          isPromo: true,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const timerConfig = TIMER_CONFIG[timerId];
     if (!timerConfig) {

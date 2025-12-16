@@ -31,6 +31,7 @@ const Index = () => {
     isPaused,
     pauseAllTimers,
     resumeAllTimers,
+    startPromoTimer,
   } = useSupabaseTimers();
   const { playConfirmSound, stopAlarm, stopAllAlarms, notifyQueueNext, reloadAudio } = useTimerAlerts();
   const { isFullscreen } = useFullscreen();
@@ -222,6 +223,7 @@ const Index = () => {
                 onReset={resetTimer}
                 onSetDuration={setDuration}
                 onAdjustTime={adjustTime}
+                onStartPromo={timer.id === 'vip-super' ? startPromoTimer : undefined}
                 playConfirmSound={playConfirmSound}
                 stopAlarm={stopAlarm}
                 notifyQueueNext={notifyQueueNext}
