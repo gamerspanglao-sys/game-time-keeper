@@ -5,7 +5,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { EmployeeShiftCard } from '@/components/staff/EmployeeShiftCard';
 import { EmployeeManagement } from '@/components/staff/EmployeeManagement';
 import { PayrollReport } from '@/components/staff/PayrollReport';
-import { ExpenseManager } from '@/components/staff/ExpenseManager';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -2370,20 +2369,13 @@ export default function Finance() {
         )}
 
         {/* Tabs Navigation */}
-        <TabsList className="grid w-full max-w-xl grid-cols-4 bg-secondary/50 p-1 rounded-xl">
+        <TabsList className="grid w-full max-w-md grid-cols-3 bg-secondary/50 p-1 rounded-xl">
           <TabsTrigger 
             value="shifts" 
             className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all"
           >
             <Users className="w-4 h-4" />
             <span className="hidden sm:inline">Shifts</span>
-          </TabsTrigger>
-          <TabsTrigger 
-            value="finance" 
-            className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg transition-all"
-          >
-            <Receipt className="w-4 h-4" />
-            <span className="hidden sm:inline">Expenses</span>
           </TabsTrigger>
           <TabsTrigger 
             value="cash" 
@@ -2428,106 +2420,7 @@ export default function Finance() {
           )}
         </TabsContent>
 
-        {/* FINANCE TAB */}
-        <TabsContent value="finance" className="space-y-6 animate-fade-in">
-          {/* Header with Admin Button */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
-                Finance
-              </h2>
-              <p className="text-sm text-muted-foreground">Manage expenses and cash register</p>
-            </div>
-            {!isAdminMode && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => requestAdminAction('admin')}
-                className="gap-2 border-primary/30 hover:border-primary hover:bg-primary/10"
-              >
-                <Lock className="w-4 h-4" />
-                Admin
-              </Button>
-            )}
-          </div>
 
-          {/* Stats Cards Row */}
-          {todayRecord && todayRecord.expected_sales > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border-green-500/20 overflow-hidden relative">
-                <div className="absolute top-0 right-0 w-20 h-20 bg-green-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5 text-green-500" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground font-medium">Today's Sales</p>
-                      <p className="text-2xl font-bold text-green-500">₱{todayRecord.expected_sales.toLocaleString()}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gradient-to-br from-red-500/10 to-rose-500/5 border-red-500/20 overflow-hidden relative">
-                <div className="absolute top-0 right-0 w-20 h-20 bg-red-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center">
-                      <Receipt className="w-5 h-5 text-red-500" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground font-medium">Expenses</p>
-                      <p className="text-2xl font-bold text-red-500">₱{todayTotalExpenses.toLocaleString()}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {todayRecord.discrepancy !== null && (
-                <Card className={cn(
-                  "overflow-hidden relative",
-                  todayRecord.discrepancy === 0 
-                    ? "bg-gradient-to-br from-green-500/10 to-emerald-500/5 border-green-500/20"
-                    : todayRecord.discrepancy < 0
-                    ? "bg-gradient-to-br from-red-500/10 to-rose-500/5 border-red-500/20"
-                    : "bg-gradient-to-br from-amber-500/10 to-yellow-500/5 border-amber-500/20"
-                )}>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center",
-                        todayRecord.discrepancy === 0 ? "bg-green-500/20" :
-                        todayRecord.discrepancy < 0 ? "bg-red-500/20" : "bg-amber-500/20"
-                      )}>
-                        <Wallet className={cn(
-                          "w-5 h-5",
-                          todayRecord.discrepancy === 0 ? "text-green-500" :
-                          todayRecord.discrepancy < 0 ? "text-red-500" : "text-amber-500"
-                        )} />
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium">Discrepancy</p>
-                        <p className={cn(
-                          "text-2xl font-bold",
-                          todayRecord.discrepancy === 0 ? "text-green-500" :
-                          todayRecord.discrepancy < 0 ? "text-red-500" : "text-amber-500"
-                        )}>
-                          {todayRecord.discrepancy === 0 ? '✓ OK' : 
-                            `${todayRecord.discrepancy > 0 ? '+' : ''}₱${todayRecord.discrepancy.toLocaleString()}`}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {/* Full Expense Manager */}
-          <ExpenseManager />
-
-        </TabsContent>
 
         {/* CASH TAB */}
         <TabsContent value="cash" className="space-y-6 animate-fade-in">
