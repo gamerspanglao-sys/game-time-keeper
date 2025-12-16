@@ -100,6 +100,7 @@ export type Database = {
           created_at: string
           date: string | null
           description: string | null
+          expense_type: string
           id: string
           payment_source: string
           shift: string
@@ -111,6 +112,7 @@ export type Database = {
           created_at?: string
           date?: string | null
           description?: string | null
+          expense_type?: string
           id?: string
           payment_source?: string
           shift?: string
@@ -122,6 +124,7 @@ export type Database = {
           created_at?: string
           date?: string | null
           description?: string | null
+          expense_type?: string
           id?: string
           payment_source?: string
           shift?: string

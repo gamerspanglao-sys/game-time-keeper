@@ -16,7 +16,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type ShiftType = 'day' | 'night';
-type PaymentSource = 'cash' | 'gcash' | 'investor';
+type PaymentSource = 'cash' | 'gcash';
+type ExpenseType = 'shift' | 'balance';
 
 interface CashRecord {
   id: string;
@@ -36,6 +37,7 @@ interface Expense {
   shift: string;
   date: string;
   payment_source: PaymentSource;
+  expense_type: ExpenseType;
 }
 
 const ADMIN_PIN = '8808';
@@ -88,6 +90,7 @@ export default function CashRegister() {
   const [expCategory, setExpCategory] = useState('purchases');
   const [expDescription, setExpDescription] = useState('');
   const [expSource, setExpSource] = useState<PaymentSource>('cash');
+  const [expType, setExpType] = useState<ExpenseType>('shift');
   const [expDate, setExpDate] = useState(getShiftDate());
   const [expShift, setExpShift] = useState<ShiftType>(getCurrentShift());
   
@@ -96,28 +99,37 @@ export default function CashRegister() {
   const [dateTo, setDateTo] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterSource, setFilterSource] = useState<string>('all');
+  const [filterExpType, setFilterExpType] = useState<string>('all');
 
   const currentRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
   const currentExpenses = expenses.filter(e => e.date === selectedDate && e.shift === selectedShift);
   
-  // Calculate balances - investor expenses don't affect cash/gcash
-  const cashExp = currentExpenses.filter(e => e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
-  const gcashExp = currentExpenses.filter(e => e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
-  const investorExp = currentExpenses.filter(e => e.payment_source === 'investor').reduce((s, e) => s + e.amount, 0);
-  const cashOnHand = (currentRecord?.cash_actual || 0) - cashExp;
-  const gcashOnHand = (currentRecord?.gcash_actual || 0) - gcashExp;
+  // Calculate balances by expense type
+  // Shift expenses = from current shift revenue (reduces what staff hands over)
+  // Balance expenses = from saved cash/gcash (reduces accumulated balance)
+  const shiftCashExp = currentExpenses.filter(e => e.expense_type === 'shift' && e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
+  const shiftGcashExp = currentExpenses.filter(e => e.expense_type === 'shift' && e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
+  const balanceCashExp = currentExpenses.filter(e => e.expense_type === 'balance' && e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
+  const balanceGcashExp = currentExpenses.filter(e => e.expense_type === 'balance' && e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
+  
+  const totalCashExp = shiftCashExp + balanceCashExp;
+  const totalGcashExp = shiftGcashExp + balanceGcashExp;
+  const cashOnHand = (currentRecord?.cash_actual || 0) - balanceCashExp;
+  const gcashOnHand = (currentRecord?.gcash_actual || 0) - balanceGcashExp;
 
   // History expenses with filters
   const historyExpenses = expenses.filter(e => {
     if (e.date < dateFrom || e.date > dateTo) return false;
     if (filterCategory !== 'all' && e.category !== filterCategory) return false;
     if (filterSource !== 'all' && e.payment_source !== filterSource) return false;
+    if (filterExpType !== 'all' && e.expense_type !== filterExpType) return false;
     return true;
   });
   
   const historyTotalCash = historyExpenses.filter(e => e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
   const historyTotalGcash = historyExpenses.filter(e => e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
-  const historyTotalInvestor = historyExpenses.filter(e => e.payment_source === 'investor').reduce((s, e) => s + e.amount, 0);
+  const historyShiftTotal = historyExpenses.filter(e => e.expense_type === 'shift').reduce((s, e) => s + e.amount, 0);
+  const historyBalanceTotal = historyExpenses.filter(e => e.expense_type === 'balance').reduce((s, e) => s + e.amount, 0);
 
   const loadData = async () => {
     try {
@@ -223,7 +235,8 @@ export default function CashRegister() {
         description: expDescription || null,
         shift: expShift,
         date: expDate,
-        payment_source: expSource
+        payment_source: expSource,
+        expense_type: expType
       });
       
       toast.success('Expense added');
@@ -243,10 +256,11 @@ export default function CashRegister() {
 
   const exportHistory = () => {
     const csv = [
-      ['Date', 'Shift', 'Category', 'Source', 'Amount', 'Description'].join(','),
+      ['Date', 'Shift', 'Type', 'Category', 'Source', 'Amount', 'Description'].join(','),
       ...historyExpenses.map(e => [
         e.date,
         e.shift,
+        e.expense_type === 'shift' ? 'Shift' : 'Balance',
         getCategoryLabel(e.category),
         e.payment_source.toUpperCase(),
         e.amount,
@@ -341,7 +355,7 @@ export default function CashRegister() {
                 </div>
                 <div className="text-2xl font-bold text-green-600">₱{cashOnHand.toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Received: ₱{(currentRecord?.cash_actual || 0).toLocaleString()} − Expenses: ₱{cashExp.toLocaleString()}
+                  Received: ₱{(currentRecord?.cash_actual || 0).toLocaleString()} − Balance Exp: ₱{balanceCashExp.toLocaleString()}
                 </div>
               </CardContent>
             </Card>
@@ -354,7 +368,7 @@ export default function CashRegister() {
                 </div>
                 <div className="text-2xl font-bold text-blue-600">₱{gcashOnHand.toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Received: ₱{(currentRecord?.gcash_actual || 0).toLocaleString()} − Expenses: ₱{gcashExp.toLocaleString()}
+                  Received: ₱{(currentRecord?.gcash_actual || 0).toLocaleString()} − Balance Exp: ₱{balanceGcashExp.toLocaleString()}
                 </div>
               </CardContent>
             </Card>
@@ -402,14 +416,17 @@ export default function CashRegister() {
             <CardHeader className="py-3 pb-2">
               <CardTitle className="text-sm flex items-center justify-between">
                 <span>Shift Expenses</span>
-                <Badge variant="secondary">₱{(cashExp + gcashExp + investorExp).toLocaleString()}</Badge>
+                <Badge variant="secondary">₱{(totalCashExp + totalGcashExp).toLocaleString()}</Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="py-3">
-              <div className="grid grid-cols-3 gap-2 text-sm">
-                <div className="flex items-center gap-1 text-green-600"><Banknote className="w-4 h-4" /> ₱{cashExp.toLocaleString()}</div>
-                <div className="flex items-center gap-1 text-blue-600"><Smartphone className="w-4 h-4" /> ₱{gcashExp.toLocaleString()}</div>
-                <div className="flex items-center gap-1 text-purple-600"><UserCircle className="w-4 h-4" /> ₱{investorExp.toLocaleString()}</div>
+            <CardContent className="py-3 space-y-2">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="flex items-center gap-1 text-green-600"><Banknote className="w-4 h-4" /> Cash: ₱{totalCashExp.toLocaleString()}</div>
+                <div className="flex items-center gap-1 text-blue-600"><Smartphone className="w-4 h-4" /> GCash: ₱{totalGcashExp.toLocaleString()}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground border-t pt-2">
+                <div>From Shift: ₱{(shiftCashExp + shiftGcashExp).toLocaleString()}</div>
+                <div>From Balance: ₱{(balanceCashExp + balanceGcashExp).toLocaleString()}</div>
               </div>
             </CardContent>
           </Card>
@@ -423,6 +440,26 @@ export default function CashRegister() {
               <CardTitle className="text-sm flex items-center gap-2"><Plus className="w-4 h-4" /> Add Expense</CardTitle>
             </CardHeader>
             <CardContent className="py-3 space-y-3">
+              {/* Expense Type */}
+              <div className="flex gap-1">
+                <Button 
+                  variant={expType === 'shift' ? 'default' : 'outline'} 
+                  size="sm" 
+                  className={cn("flex-1", expType === 'shift' && "bg-orange-600 hover:bg-orange-700")}
+                  onClick={() => setExpType('shift')}
+                >
+                  From Shift
+                </Button>
+                <Button 
+                  variant={expType === 'balance' ? 'default' : 'outline'} 
+                  size="sm" 
+                  className={cn("flex-1", expType === 'balance' && "bg-purple-600 hover:bg-purple-700")}
+                  onClick={() => setExpType('balance')}
+                >
+                  From Balance
+                </Button>
+              </div>
+
               {/* Payment Source */}
               <div className="flex gap-1">
                 <Button 
@@ -440,14 +477,6 @@ export default function CashRegister() {
                   onClick={() => setExpSource('gcash')}
                 >
                   <Smartphone className="w-4 h-4 mr-1" />GCash
-                </Button>
-                <Button 
-                  variant={expSource === 'investor' ? 'default' : 'outline'} 
-                  size="sm" 
-                  className={cn("flex-1", expSource === 'investor' && "bg-purple-600 hover:bg-purple-700")}
-                  onClick={() => setExpSource('investor')}
-                >
-                  <UserCircle className="w-4 h-4 mr-1" />Investor
                 </Button>
               </div>
 
@@ -512,13 +541,11 @@ export default function CashRegister() {
                       <div className="flex items-center gap-2">
                         <span className={cn(
                           "text-sm",
-                          exp.payment_source === 'gcash' ? "text-blue-600" : 
-                          exp.payment_source === 'investor' ? "text-purple-600" : "text-green-600"
+                          exp.payment_source === 'gcash' ? "text-blue-600" : "text-green-600"
                         )}>
-                          {exp.payment_source === 'gcash' ? <Smartphone className="w-4 h-4" /> : 
-                           exp.payment_source === 'investor' ? <UserCircle className="w-4 h-4" /> : 
-                           <Banknote className="w-4 h-4" />}
+                          {exp.payment_source === 'gcash' ? <Smartphone className="w-4 h-4" /> : <Banknote className="w-4 h-4" />}
                         </span>
+                        <Badge variant="outline" className="text-[10px]">{exp.expense_type === 'shift' ? 'Shift' : 'Bal'}</Badge>
                         <div>
                           <div className="text-sm font-medium">{getCategoryLabel(exp.category)}</div>
                           {exp.description && <div className="text-xs text-muted-foreground">{exp.description}</div>}
@@ -549,7 +576,7 @@ export default function CashRegister() {
                 <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="flex-1" />
               </div>
               
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <Select value={filterCategory} onValueChange={setFilterCategory}>
                   <SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger>
                   <SelectContent>
@@ -563,7 +590,14 @@ export default function CashRegister() {
                     <SelectItem value="all">All Sources</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="gcash">GCash</SelectItem>
-                    <SelectItem value="investor">Investor</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterExpType} onValueChange={setFilterExpType}>
+                  <SelectTrigger><SelectValue placeholder="All Types" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="shift">From Shift</SelectItem>
+                    <SelectItem value="balance">From Balance</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -586,18 +620,18 @@ export default function CashRegister() {
                 <div className="font-bold text-blue-600">₱{historyTotalGcash.toLocaleString()}</div>
               </CardContent>
             </Card>
-            <Card className="bg-purple-500/10 border-purple-500/30">
+            <Card className="bg-orange-500/10 border-orange-500/30">
               <CardContent className="p-3 text-center">
-                <UserCircle className="w-4 h-4 mx-auto text-purple-600 mb-1" />
-                <div className="text-xs text-muted-foreground">Investor</div>
-                <div className="font-bold text-purple-600">₱{historyTotalInvestor.toLocaleString()}</div>
+                <Receipt className="w-4 h-4 mx-auto text-orange-600 mb-1" />
+                <div className="text-xs text-muted-foreground">Shift</div>
+                <div className="font-bold text-orange-600">₱{historyShiftTotal.toLocaleString()}</div>
               </CardContent>
             </Card>
-            <Card className="bg-muted">
+            <Card className="bg-purple-500/10 border-purple-500/30">
               <CardContent className="p-3 text-center">
-                <Receipt className="w-4 h-4 mx-auto mb-1" />
-                <div className="text-xs text-muted-foreground">Total</div>
-                <div className="font-bold">₱{(historyTotalCash + historyTotalGcash + historyTotalInvestor).toLocaleString()}</div>
+                <Wallet className="w-4 h-4 mx-auto text-purple-600 mb-1" />
+                <div className="text-xs text-muted-foreground">Balance</div>
+                <div className="font-bold text-purple-600">₱{historyBalanceTotal.toLocaleString()}</div>
               </CardContent>
             </Card>
           </div>
@@ -621,15 +655,13 @@ export default function CashRegister() {
                   <div key={exp.id} className="flex items-center justify-between text-xs p-2 bg-muted/20 rounded">
                     <div className="flex items-center gap-2">
                       <span className={cn(
-                        exp.payment_source === 'gcash' ? "text-blue-600" : 
-                        exp.payment_source === 'investor' ? "text-purple-600" : "text-green-600"
+                        exp.payment_source === 'gcash' ? "text-blue-600" : "text-green-600"
                       )}>
-                        {exp.payment_source === 'gcash' ? <Smartphone className="w-3 h-3" /> : 
-                         exp.payment_source === 'investor' ? <UserCircle className="w-3 h-3" /> : 
-                         <Banknote className="w-3 h-3" />}
+                        {exp.payment_source === 'gcash' ? <Smartphone className="w-3 h-3" /> : <Banknote className="w-3 h-3" />}
                       </span>
                       <span className="text-muted-foreground">{exp.date}</span>
                       <Badge variant="outline" className="text-[10px] px-1">{exp.shift === 'day' ? 'D' : 'N'}</Badge>
+                      <Badge variant={exp.expense_type === 'shift' ? 'default' : 'secondary'} className="text-[10px] px-1">{exp.expense_type === 'shift' ? 'S' : 'B'}</Badge>
                       <span>{getCategoryLabel(exp.category)}</span>
                     </div>
                     <div className="flex items-center gap-2">
