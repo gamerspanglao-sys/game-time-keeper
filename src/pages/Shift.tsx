@@ -5,12 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Trash2, Square, AlertTriangle, Wallet, CheckCircle2 } from 'lucide-react';
+import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Trash2, Square, AlertTriangle, CheckCircle2, Send } from 'lucide-react';
 
 type ShiftType = 'day' | 'night';
 
@@ -76,21 +76,13 @@ export default function Shift() {
   const [activeShifts, setActiveShifts] = useState<ActiveShift[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Cash handover dialog
-  const [showHandoverDialog, setShowHandoverDialog] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<string>('');
+  // Cash submission section
+  const [cashSubmissions, setCashSubmissions] = useState<CashSubmission[]>([]);
+  const [cashEmployee, setCashEmployee] = useState<string>('');
   const [cashAmount, setCashAmount] = useState('');
   const [gcashAmount, setGcashAmount] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  // Track if cash already submitted this shift
-  const [cashAlreadySubmitted, setCashAlreadySubmitted] = useState(false);
-  const [cashSubmissions, setCashSubmissions] = useState<CashSubmission[]>([]);
-
-  // Change fund dialog
-  const [showChangeFundDialog, setShowChangeFundDialog] = useState(false);
   const [changeFundAmount, setChangeFundAmount] = useState('');
-  const [submittingChangeFund, setSubmittingChangeFund] = useState(false);
+  const [submittingCash, setSubmittingCash] = useState(false);
 
   // Expense tracking
   const [shiftExpenses, setShiftExpenses] = useState<ShiftExpense[]>([]);
@@ -136,7 +128,6 @@ export default function Shift() {
           .select('id, employee_id, shift_start, shift_type, status, employees!inner(name)')
           .eq('status', 'open')
           .order('shift_start', { ascending: false }),
-        // Check for closed shifts with cash submission for current date/shift
         supabase
           .from('shifts')
           .select('id, employee_id, cash_handed_over, gcash_handed_over, shift_type, employees!inner(name)')
@@ -155,7 +146,6 @@ export default function Shift() {
         status: s.status
       })));
 
-      // Check if any cash was already submitted for this shift type
       const currentShiftType = currentShift === 'day' ? 'Day (5AM-5PM)' : 'Night (5PM-5AM)';
       const shiftSubmissions = (closedShifts || [])
         .filter((s: any) => s.shift_type === currentShiftType)
@@ -166,7 +156,6 @@ export default function Shift() {
         }));
       
       setCashSubmissions(shiftSubmissions);
-      setCashAlreadySubmitted(shiftSubmissions.length > 0);
       
       await loadShiftExpenses();
     } catch (e) {
@@ -178,7 +167,6 @@ export default function Shift() {
 
   const loadShiftExpenses = async () => {
     try {
-      // Get cash register for current shift
       const { data: register } = await supabase
         .from('cash_register')
         .select('id')
@@ -219,7 +207,6 @@ export default function Shift() {
 
       if (error) throw error;
 
-      // Send Telegram notification for shift start
       try {
         await supabase.functions.invoke('telegram-notify', {
           body: {
@@ -249,25 +236,14 @@ export default function Shift() {
     setShowEndShiftConfirm(true);
   };
 
-  const handleConfirmEndShift = () => {
-    if (pendingEndShiftEmployee) {
-      if (cashAlreadySubmitted) {
-        // End shift without cash submission
-        endShiftWithoutCash(pendingEndShiftEmployee);
-      } else {
-        openHandoverDialog(pendingEndShiftEmployee);
-      }
-    }
-    setShowEndShiftConfirm(false);
-    setPendingEndShiftEmployee(null);
-  };
-
-  const endShiftWithoutCash = async (employeeId: string) => {
-    try {
-      const activeShift = activeShifts.find(s => s.employee_id === employeeId);
-      const employeeName = employees.find(e => e.id === employeeId)?.name || 'Unknown';
-      
-      if (activeShift) {
+  const handleConfirmEndShift = async () => {
+    if (!pendingEndShiftEmployee) return;
+    
+    const activeShift = activeShifts.find(s => s.employee_id === pendingEndShiftEmployee);
+    const employeeName = employees.find(e => e.id === pendingEndShiftEmployee)?.name || 'Unknown';
+    
+    if (activeShift) {
+      try {
         const totalHours = calculateTotalHours(activeShift.shift_start);
         
         const { error } = await supabase
@@ -281,7 +257,6 @@ export default function Shift() {
 
         if (error) throw error;
 
-        // Send Telegram notification
         try {
           await supabase.functions.invoke('telegram-notify', {
             body: {
@@ -298,95 +273,41 @@ export default function Shift() {
 
         toast.success('Shift ended');
         loadData();
+      } catch (e) {
+        console.error(e);
+        toast.error('Failed to end shift');
       }
-    } catch (e) {
-      console.error(e);
-      toast.error('Failed to end shift');
     }
-  };
-
-  const submitChangeFund = async () => {
-    const amount = parseInt(changeFundAmount) || 0;
-    if (amount <= 0) {
-      toast.error('Enter amount');
-      return;
-    }
-
-    setSubmittingChangeFund(true);
-    try {
-      // Get or create cash register for current shift
-      let { data: register } = await supabase
-        .from('cash_register')
-        .select('id')
-        .eq('date', currentDate)
-        .eq('shift', currentShift)
-        .single();
-
-      if (!register) {
-        const { data: newRegister, error: createError } = await supabase
-          .from('cash_register')
-          .insert({ date: currentDate, shift: currentShift })
-          .select('id')
-          .single();
-        
-        if (createError) throw createError;
-        register = newRegister;
-      }
-
-      // Update cash register with change fund info
-      const { error } = await supabase
-        .from('cash_register')
-        .update({ opening_balance: amount })
-        .eq('id', register!.id);
-
-      if (error) throw error;
-
-      toast.success(`Change fund: ₱${amount.toLocaleString()} left for next shift`);
-      setShowChangeFundDialog(false);
-      setChangeFundAmount('');
-    } catch (e) {
-      console.error(e);
-      toast.error('Failed to save change fund');
-    } finally {
-      setSubmittingChangeFund(false);
-    }
-  };
-
-  const calculateTotalHours = (startTime: string): number => {
-    const start = new Date(startTime).getTime();
-    const end = Date.now();
-    return parseFloat(((end - start) / (1000 * 60 * 60)).toFixed(2));
-  };
-
-  const openHandoverDialog = (employeeId?: string) => {
-    setSelectedEmployee(employeeId || '');
-    setCashAmount('');
-    setGcashAmount('');
-    setShowHandoverDialog(true);
+    
+    setShowEndShiftConfirm(false);
+    setPendingEndShiftEmployee(null);
   };
 
   const submitCashHandover = async () => {
-    if (!selectedEmployee) {
+    if (!cashEmployee) {
       toast.error('Select employee');
       return;
     }
 
     const cash = parseInt(cashAmount) || 0;
     const gcash = parseInt(gcashAmount) || 0;
+    const changeFund = parseInt(changeFundAmount) || 0;
 
     if (cash === 0 && gcash === 0) {
-      toast.error('Enter amount');
+      toast.error('Enter cash or GCash amount');
       return;
     }
 
-    setSubmitting(true);
+    setSubmittingCash(true);
     try {
-      const activeShift = activeShifts.find(s => s.employee_id === selectedEmployee);
-      const employeeName = employees.find(e => e.id === selectedEmployee)?.name || 'Unknown';
-      let totalHours = 0;
-
+      const employeeName = employees.find(e => e.id === cashEmployee)?.name || 'Unknown';
+      const shiftType = currentShift === 'day' ? 'Day (5AM-5PM)' : 'Night (5PM-5AM)';
+      
+      // Check if employee has an active shift
+      const activeShift = activeShifts.find(s => s.employee_id === cashEmployee);
+      
       if (activeShift) {
-        totalHours = calculateTotalHours(activeShift.shift_start);
+        const totalHours = calculateTotalHours(activeShift.shift_start);
         
         const { error } = await supabase
           .from('shifts')
@@ -401,10 +322,9 @@ export default function Shift() {
 
         if (error) throw error;
       } else {
-        const shiftType = currentShift === 'day' ? 'Day (5AM-5PM)' : 'Night (5PM-5AM)';
-        
+        // Create a new closed shift for cash submission only
         const { error } = await supabase.from('shifts').insert({
-          employee_id: selectedEmployee,
+          employee_id: cashEmployee,
           date: currentDate,
           shift_start: new Date().toISOString(),
           shift_end: new Date().toISOString(),
@@ -418,30 +338,66 @@ export default function Shift() {
         if (error) throw error;
       }
 
-      // Send enhanced Telegram notification
+      // Save change fund if entered
+      if (changeFund > 0) {
+        let { data: register } = await supabase
+          .from('cash_register')
+          .select('id')
+          .eq('date', currentDate)
+          .eq('shift', currentShift)
+          .single();
+
+        if (!register) {
+          const { data: newRegister, error: createError } = await supabase
+            .from('cash_register')
+            .insert({ date: currentDate, shift: currentShift })
+            .select('id')
+            .single();
+          
+          if (createError) throw createError;
+          register = newRegister;
+        }
+
+        await supabase
+          .from('cash_register')
+          .update({ opening_balance: changeFund })
+          .eq('id', register!.id);
+      }
+
+      // Send Telegram notification
       try {
         await supabase.functions.invoke('telegram-notify', {
           body: {
-            action: 'shift_end',
+            action: 'cash_handover',
             employeeName,
-            totalHours: totalHours.toFixed(1),
-            cashHandedOver: cash + gcash,
-            baseSalary: 500
+            cash,
+            gcash,
+            changeFund,
+            shiftType: currentShift === 'day' ? 'Day' : 'Night'
           }
         });
       } catch (e) {
         console.log('Telegram notification failed:', e);
       }
 
-      toast.success('Cash submitted for verification');
-      setShowHandoverDialog(false);
+      toast.success('Cash submitted');
+      setCashEmployee('');
+      setCashAmount('');
+      setGcashAmount('');
+      setChangeFundAmount('');
       loadData();
     } catch (e) {
       console.error(e);
       toast.error('Failed to submit');
     } finally {
-      setSubmitting(false);
+      setSubmittingCash(false);
     }
+  };
+
+  const calculateTotalHours = (startTime: string): number => {
+    const start = new Date(startTime).getTime();
+    const end = Date.now();
+    return parseFloat(((end - start) / (1000 * 60 * 60)).toFixed(2));
   };
 
   const openExpenseDialog = () => {
@@ -470,7 +426,6 @@ export default function Shift() {
 
     setAddingExpense(true);
     try {
-      // Get or create cash register for current shift
       let { data: register } = await supabase
         .from('cash_register')
         .select('id')
@@ -543,6 +498,9 @@ export default function Shift() {
   const cashExpenses = shiftExpenses.filter(e => e.payment_source === 'cash').reduce((sum, e) => sum + e.amount, 0);
   const gcashExpenses = shiftExpenses.filter(e => e.payment_source === 'gcash').reduce((sum, e) => sum + e.amount, 0);
 
+  const totalSubmittedCash = cashSubmissions.reduce((sum, s) => sum + s.cash, 0);
+  const totalSubmittedGCash = cashSubmissions.reduce((sum, s) => sum + s.gcash, 0);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -571,45 +529,11 @@ export default function Shift() {
           </div>
         </div>
         
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={openExpenseDialog} className="gap-1.5 h-9 border-border/50 hover:bg-secondary">
-            <Plus className="w-4 h-4" />
-            Expense
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowChangeFundDialog(true)} className="gap-1.5 h-9 border-border/50 hover:bg-secondary">
-            <Wallet className="w-4 h-4" />
-            Change
-          </Button>
-          <Button size="sm" onClick={() => openHandoverDialog()} className="gap-1.5 h-9 shadow-lg shadow-primary/20">
-            <Banknote className="w-4 h-4" />
-            Cash
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={openExpenseDialog} className="gap-1.5 h-9 border-border/50 hover:bg-secondary">
+          <Plus className="w-4 h-4" />
+          Expense
+        </Button>
       </div>
-
-      {/* Cash Already Submitted Indicator */}
-      {cashAlreadySubmitted && (
-        <Card className="border-green-500/30 bg-gradient-to-br from-green-500/5 to-transparent">
-          <CardContent className="py-3">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                <CheckCircle2 className="w-4 h-4 text-green-500" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-green-500">Cash already submitted this shift</p>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  {cashSubmissions.map((sub, i) => (
-                    <span key={i}>
-                      {sub.employeeName}: ₱{(sub.cash + sub.gcash).toLocaleString()}
-                      {i < cashSubmissions.length - 1 && ' • '}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Active Shifts */}
       {activeShifts.length > 0 && (
@@ -646,13 +570,112 @@ export default function Shift() {
                   className="gap-1.5 h-8"
                 >
                   <Square className="w-3 h-3" />
-                  End Shift
+                  End
                 </Button>
               </div>
             ))}
           </CardContent>
         </Card>
       )}
+
+      {/* Cash Submission Section */}
+      <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent overflow-hidden">
+        <CardHeader className="py-3 border-b border-primary/10">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+              <Banknote className="w-3 h-3 text-primary" />
+            </div>
+            Cash Submission
+            {(totalSubmittedCash > 0 || totalSubmittedGCash > 0) && (
+              <Badge className="ml-auto bg-green-500/20 text-green-500 border-green-500/30">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                Submitted
+              </Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="py-3 space-y-4">
+          {/* Already submitted */}
+          {cashSubmissions.length > 0 && (
+            <div className="p-3 bg-green-500/10 rounded-xl border border-green-500/20">
+              <div className="text-xs text-muted-foreground mb-2">Already submitted this shift:</div>
+              {cashSubmissions.map((sub, i) => (
+                <div key={i} className="flex justify-between text-sm py-1">
+                  <span className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3 h-3 text-green-500" />
+                    {sub.employeeName}
+                  </span>
+                  <span className="font-medium">
+                    {sub.cash > 0 && <span className="text-green-500">₱{sub.cash.toLocaleString()}</span>}
+                    {sub.cash > 0 && sub.gcash > 0 && ' + '}
+                    {sub.gcash > 0 && <span className="text-blue-500">GC ₱{sub.gcash.toLocaleString()}</span>}
+                  </span>
+                </div>
+              ))}
+              {cashSubmissions.length > 1 && (
+                <div className="border-t border-green-500/20 mt-2 pt-2 flex justify-between font-semibold">
+                  <span>Total</span>
+                  <span>₱{(totalSubmittedCash + totalSubmittedGCash).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Add new submission */}
+          <div className="space-y-3">
+            <Select value={cashEmployee} onValueChange={setCashEmployee}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select employee" />
+              </SelectTrigger>
+              <SelectContent>
+                {employees.map(emp => (
+                  <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Cash ₱</label>
+                <Input
+                  type="number"
+                  value={cashAmount}
+                  onChange={e => setCashAmount(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">GCash ₱</label>
+                <Input
+                  type="number"
+                  value={gcashAmount}
+                  onChange={e => setGcashAmount(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground">Change fund left ₱ (optional)</label>
+              <Input
+                type="number"
+                value={changeFundAmount}
+                onChange={e => setChangeFundAmount(e.target.value)}
+                placeholder="2000"
+              />
+            </div>
+
+            <Button 
+              onClick={submitCashHandover} 
+              disabled={submittingCash || !cashEmployee}
+              className="w-full gap-2"
+            >
+              <Send className="w-4 h-4" />
+              {submittingCash ? 'Submitting...' : 'Submit Cash'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Shift Expenses */}
       <Card className="border-border/50 overflow-hidden">
@@ -856,138 +879,6 @@ export default function Shift() {
         </DialogContent>
       </Dialog>
 
-      {/* Cash Handover Dialog */}
-      <Dialog open={showHandoverDialog} onOpenChange={setShowHandoverDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Banknote className="w-5 h-5" />
-              Cash Handover
-            </DialogTitle>
-            <DialogDescription>
-              Submit cash collected during shift for admin verification
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Employee</label>
-              <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map(emp => (
-                    <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Show shift expenses summary */}
-            {totalShiftExpenses > 0 && (
-              <div className="p-3 bg-secondary/50 rounded-lg border border-border/50">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground flex items-center gap-2">
-                    <Receipt className="w-4 h-4" />
-                    Shift Expenses
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-500">₱{cashExpenses.toLocaleString()} cash</span>
-                    <span className="text-muted-foreground">•</span>
-                    <span className="text-blue-500">₱{gcashExpenses.toLocaleString()} GCash</span>
-                  </div>
-                </div>
-                <div className="text-right mt-1">
-                  <span className="font-semibold">Total: ₱{totalShiftExpenses.toLocaleString()}</span>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground">Cash ₱</label>
-                <Input
-                  type="number"
-                  value={cashAmount}
-                  onChange={e => setCashAmount(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground">GCash ₱</label>
-                <Input
-                  type="number"
-                  value={gcashAmount}
-                  onChange={e => setGcashAmount(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowHandoverDialog(false)}>Cancel</Button>
-              <Button onClick={submitCashHandover} disabled={submitting}>
-                {submitting ? 'Submitting...' : 'Submit'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Change Fund Dialog */}
-      <Dialog open={showChangeFundDialog} onOpenChange={setShowChangeFundDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Wallet className="w-5 h-5" />
-              Change Fund
-            </DialogTitle>
-            <DialogDescription>
-              Enter amount left for next shift as change fund
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 pt-2">
-            {/* Show total submitted */}
-            {cashSubmissions.length > 0 && (
-              <div className="p-3 bg-secondary/50 rounded-lg border border-border/50">
-                <div className="text-sm text-muted-foreground mb-2">Cash submitted this shift:</div>
-                {cashSubmissions.map((sub, i) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span>{sub.employeeName}</span>
-                    <span className="font-medium">
-                      ₱{sub.cash.toLocaleString()} + GC ₱{sub.gcash.toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-                <div className="border-t border-border/50 mt-2 pt-2 flex justify-between font-semibold">
-                  <span>Total</span>
-                  <span>₱{cashSubmissions.reduce((sum, s) => sum + s.cash + s.gcash, 0).toLocaleString()}</span>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Amount left for change ₱</label>
-              <Input
-                type="number"
-                value={changeFundAmount}
-                onChange={e => setChangeFundAmount(e.target.value)}
-                placeholder="2000"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowChangeFundDialog(false)}>Cancel</Button>
-              <Button onClick={submitChangeFund} disabled={submittingChangeFund}>
-                {submittingChangeFund ? 'Saving...' : 'Save'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* End Shift Confirmation Dialog */}
       <AlertDialog open={showEndShiftConfirm} onOpenChange={setShowEndShiftConfirm}>
         <AlertDialogContent>
@@ -997,10 +888,7 @@ export default function Shift() {
               End Shift?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {cashAlreadySubmitted 
-                ? "Cash was already submitted for this shift. Your shift will be closed without additional cash submission."
-                : "Are you sure you want to end this shift? You will need to submit your cash handover."
-              }
+              Are you sure you want to end this shift? A notification will be sent to Telegram.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
