@@ -86,7 +86,9 @@ export function EmployeeShiftCard() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingShift, setEditingShift] = useState<ActiveShiftWithEmployee | null>(null);
   const [editStartDate, setEditStartDate] = useState('');
-  const [editStartTime, setEditStartTime] = useState('');
+  const [editHour, setEditHour] = useState('12');
+  const [editMinute, setEditMinute] = useState('00');
+  const [editAmPm, setEditAmPm] = useState<'AM' | 'PM'>('AM');
   const [editSalary, setEditSalary] = useState('');
   const [saving, setSaving] = useState(false);
   
@@ -501,23 +503,37 @@ export function EmployeeShiftCard() {
     if (shift.shift_start) {
       const startDate = new Date(shift.shift_start);
       setEditStartDate(format(startDate, 'yyyy-MM-dd'));
-      setEditStartTime(format(startDate, 'HH:mm'));
+      // Convert to 12-hour format
+      let hour = startDate.getHours();
+      const minute = startDate.getMinutes();
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      hour = hour % 12;
+      if (hour === 0) hour = 12;
+      setEditHour(hour.toString());
+      setEditMinute(minute.toString().padStart(2, '0'));
+      setEditAmPm(ampm);
     } else {
-      // Default to shift date for date, empty for time
+      // Default to shift date for date, 12:00 AM for time
       setEditStartDate(shift.date);
-      setEditStartTime('');
+      setEditHour('12');
+      setEditMinute('00');
+      setEditAmPm('AM');
     }
     setEditSalary(shift.base_salary?.toString() || '500');
     setShowEditDialog(true);
   };
 
   const saveShiftEdit = async () => {
-    if (!editingShift || !editStartTime || !editStartDate) return;
+    if (!editingShift || !editStartDate) return;
 
     setSaving(true);
     try {
-      // Parse the date and time together
-      const [hours, minutes] = editStartTime.split(':').map(Number);
+      // Convert 12-hour format to 24-hour
+      let hours = parseInt(editHour);
+      const minutes = parseInt(editMinute);
+      if (editAmPm === 'PM' && hours !== 12) hours += 12;
+      if (editAmPm === 'AM' && hours === 12) hours = 0;
+      
       const shiftStart = new Date(editStartDate + 'T00:00:00');
       shiftStart.setHours(hours, minutes, 0, 0);
       
@@ -900,25 +916,49 @@ export function EmployeeShiftCard() {
                     className="mt-2"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Start Time</Label>
-                    <Input
-                      type="time"
-                      value={editStartTime}
-                      onChange={(e) => setEditStartTime(e.target.value)}
-                      className="mt-2"
-                    />
+                <div>
+                  <Label>Start Time</Label>
+                  <div className="flex gap-2 mt-2">
+                    <Select value={editHour} onValueChange={setEditHour}>
+                      <SelectTrigger className="w-20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((h) => (
+                          <SelectItem key={h} value={h.toString()}>{h}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span className="flex items-center text-lg">:</span>
+                    <Select value={editMinute} onValueChange={setEditMinute}>
+                      <SelectTrigger className="w-20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['00', '15', '30', '45'].map((m) => (
+                          <SelectItem key={m} value={m}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={editAmPm} onValueChange={(v) => setEditAmPm(v as 'AM' | 'PM')}>
+                      <SelectTrigger className="w-20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="AM">AM</SelectItem>
+                        <SelectItem value="PM">PM</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div>
-                    <Label>Base Salary (₱)</Label>
-                    <Input
-                      type="number"
-                      value={editSalary}
-                      onChange={(e) => setEditSalary(e.target.value)}
-                      className="mt-2"
-                    />
-                  </div>
+                </div>
+                <div>
+                  <Label>Base Salary (₱)</Label>
+                  <Input
+                    type="number"
+                    value={editSalary}
+                    onChange={(e) => setEditSalary(e.target.value)}
+                    className="mt-2"
+                  />
                 </div>
               </div>
               
