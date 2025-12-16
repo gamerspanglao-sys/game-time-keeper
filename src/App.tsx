@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Finance from "./pages/Finance";
 import Activity from "./pages/Activity";
-import CashRegister from "./pages/CashRegister";
 import Shift from "./pages/Shift";
 import Inventory from "./pages/Inventory";
 import NotFound from "./pages/NotFound";
@@ -24,7 +23,6 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/finance" element={<Layout><Finance /></Layout>} />
           <Route path="/activity" element={<Layout><Activity /></Layout>} />
-          <Route path="/cash" element={<Layout><CashRegister /></Layout>} />
           <Route path="/shift" element={<Layout><Shift /></Layout>} />
           <Route path="/inventory" element={<Layout><Inventory /></Layout>} />
           <Route path="*" element={<NotFound />} />
