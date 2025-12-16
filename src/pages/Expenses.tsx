@@ -15,6 +15,8 @@ import { toast } from 'sonner';
 import { Loader2, Pencil, Trash2, Plus, Receipt, Search, CalendarIcon, Download, ShoppingCart, Wrench, Coffee, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+type PaymentSource = 'cash' | 'gcash';
+
 interface Expense {
   id: string;
   cash_register_id: string;
@@ -23,6 +25,7 @@ interface Expense {
   description: string | null;
   shift: string;
   date: string;
+  payment_source: PaymentSource;
   created_at: string;
 }
 
@@ -119,6 +122,7 @@ export default function Expenses() {
   const [newCategory, setNewCategory] = useState('purchases');
   const [newDate, setNewDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [newShift, setNewShift] = useState<'day' | 'night'>('day');
+  const [newPaymentSource, setNewPaymentSource] = useState<PaymentSource>('cash');
 
   // Inline editing
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
@@ -159,7 +163,7 @@ export default function Expenses() {
         .order('date', { ascending: false });
 
       if (expensesError) throw expensesError;
-      setExpenses(expensesData || []);
+      setExpenses((expensesData || []) as Expense[]);
 
       // Load investor contributions
       const { data: investorData, error: investorError } = await supabase
@@ -354,7 +358,8 @@ export default function Expenses() {
           amount,
           description: newDescription || null,
           shift: newShift,
-          date: newDate
+          date: newDate,
+          payment_source: newPaymentSource
         });
 
       toast.success('Расход добавлен');
@@ -607,9 +612,24 @@ export default function Expenses() {
                   {filteredExpenses.map((expense) => (
                     <tr key={expense.id} className="border-b hover:bg-muted/50">
                       <td className="py-3 px-4">
-                        <div>{expense.date ? format(new Date(expense.date), 'dd.MM.yyyy') : format(new Date(expense.created_at), 'dd.MM.yyyy')}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {expense.shift === 'day' ? '☀️ День' : '🌙 Ночь'}
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant="outline" 
+                            className={cn(
+                              "text-xs h-5 px-1.5",
+                              expense.payment_source === 'gcash' 
+                                ? "bg-blue-500/10 text-blue-600 border-blue-500/30" 
+                                : "bg-green-500/10 text-green-600 border-green-500/30"
+                            )}
+                          >
+                            {expense.payment_source === 'gcash' ? '📱' : '💵'}
+                          </Badge>
+                          <div>
+                            <div>{expense.date ? format(new Date(expense.date), 'dd.MM.yyyy') : format(new Date(expense.created_at), 'dd.MM.yyyy')}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {expense.shift === 'day' ? '☀️ День' : '🌙 Ночь'}
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="py-3 px-4">
@@ -874,6 +894,27 @@ export default function Expenses() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Источник оплаты</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={newPaymentSource === 'cash' ? 'default' : 'outline'}
+                  className={cn("flex-1", newPaymentSource === 'cash' && "bg-green-600 hover:bg-green-700")}
+                  onClick={() => setNewPaymentSource('cash')}
+                >
+                  💵 Cash
+                </Button>
+                <Button
+                  type="button"
+                  variant={newPaymentSource === 'gcash' ? 'default' : 'outline'}
+                  className={cn("flex-1", newPaymentSource === 'gcash' && "bg-blue-600 hover:bg-blue-700")}
+                  onClick={() => setNewPaymentSource('gcash')}
+                >
+                  📱 GCash
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Сумма (₱)</Label>
