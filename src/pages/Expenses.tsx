@@ -11,9 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Loader2, Pencil, Trash2, Plus, Receipt, Search, CalendarIcon, Download, ShoppingCart, Wallet, Coffee, Users } from 'lucide-react';
+import { Loader2, Pencil, Trash2, Plus, Receipt, Search, CalendarIcon, Download, ShoppingCart, Wrench, Coffee, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Expense {
@@ -26,40 +25,56 @@ interface Expense {
   created_at: string;
 }
 
-// Categories organized by accounting type
-const RETURNABLE_CATEGORIES = [
-  { value: 'purchases', label: 'Закупки товара', icon: ShoppingCart }
-];
-
-const NON_RETURNABLE_CATEGORIES = [
-  { value: 'salaries', label: 'Зарплаты', icon: Users },
-  { value: 'advance', label: 'Аванс', icon: Wallet },
-  { value: 'employee_food', label: 'Еда сотрудников', icon: Coffee },
-  { value: 'food_hunters', label: 'Food Hunters', icon: Coffee },
-  { value: 'other', label: 'Прочее', icon: Receipt }
-];
-
-const ALL_CATEGORIES = [...RETURNABLE_CATEGORIES, ...NON_RETURNABLE_CATEGORIES];
-
-const CATEGORY_LABELS: Record<string, string> = {
-  purchases: 'Закупки',
-  salaries: 'Зарплаты',
-  other: 'Прочее',
-  employee_food: 'Еда сотрудников',
-  food_hunters: 'Food Hunters',
-  advance: 'Аванс'
+// Category groups
+const EXPENSE_CATEGORIES = {
+  // Оборотные - закупки товара для продажи
+  returnable: [
+    { value: 'purchases', label: 'Закупки товара', color: 'bg-orange-500/20 text-orange-500 border-orange-500/30' }
+  ],
+  // Невозвратные - операционные расходы бизнеса
+  nonReturnable: [
+    { value: 'equipment', label: 'Оборудование', color: 'bg-blue-500/20 text-blue-500 border-blue-500/30' },
+    { value: 'inventory', label: 'Инвентарь', color: 'bg-purple-500/20 text-purple-500 border-purple-500/30' },
+    { value: 'employee_food', label: 'Еда сотрудников', color: 'bg-green-500/20 text-green-500 border-green-500/30' },
+    { value: 'food_hunters', label: 'Food Hunters', color: 'bg-pink-500/20 text-pink-500 border-pink-500/30' },
+    { value: 'other', label: 'Прочее', color: 'bg-gray-500/20 text-gray-500 border-gray-500/30' }
+  ],
+  // Инвесторские возвратные - вложения в оборотные средства
+  investorReturnable: [
+    { value: 'investor_purchases', label: 'Инвестор: Закупки', color: 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30' }
+  ],
+  // Инвесторские невозвратные - вложения в основные средства
+  investorNonReturnable: [
+    { value: 'investor_equipment', label: 'Инвестор: Оборудование', color: 'bg-teal-500/20 text-teal-500 border-teal-500/30' },
+    { value: 'investor_inventory', label: 'Инвестор: Инвентарь', color: 'bg-cyan-500/20 text-cyan-500 border-cyan-500/30' },
+    { value: 'investor_other', label: 'Инвестор: Прочее', color: 'bg-sky-500/20 text-sky-500 border-sky-500/30' }
+  ]
 };
 
-const CATEGORY_COLORS: Record<string, string> = {
-  purchases: 'bg-orange-500/20 text-orange-500 border-orange-500/30',
-  salaries: 'bg-blue-500/20 text-blue-500 border-blue-500/30',
-  other: 'bg-purple-500/20 text-purple-500 border-purple-500/30',
-  employee_food: 'bg-green-500/20 text-green-500 border-green-500/30',
-  food_hunters: 'bg-pink-500/20 text-pink-500 border-pink-500/30',
-  advance: 'bg-cyan-500/20 text-cyan-500 border-cyan-500/30'
+const ALL_CATEGORIES = [
+  ...EXPENSE_CATEGORIES.returnable,
+  ...EXPENSE_CATEGORIES.nonReturnable,
+  ...EXPENSE_CATEGORIES.investorReturnable,
+  ...EXPENSE_CATEGORIES.investorNonReturnable
+];
+
+const getCategoryLabel = (value: string) => {
+  const cat = ALL_CATEGORIES.find(c => c.value === value);
+  return cat?.label || value;
 };
 
-const isReturnable = (category: string) => RETURNABLE_CATEGORIES.some(c => c.value === category);
+const getCategoryColor = (value: string) => {
+  const cat = ALL_CATEGORIES.find(c => c.value === value);
+  return cat?.color || 'bg-muted text-muted-foreground';
+};
+
+const getCategoryGroup = (value: string): string => {
+  if (EXPENSE_CATEGORIES.returnable.some(c => c.value === value)) return 'returnable';
+  if (EXPENSE_CATEGORIES.nonReturnable.some(c => c.value === value)) return 'nonReturnable';
+  if (EXPENSE_CATEGORIES.investorReturnable.some(c => c.value === value)) return 'investorReturnable';
+  if (EXPENSE_CATEGORIES.investorNonReturnable.some(c => c.value === value)) return 'investorNonReturnable';
+  return 'other';
+};
 
 type DatePreset = 'today' | 'week' | 'month' | 'custom';
 
@@ -68,13 +83,12 @@ export default function Expenses() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState('all');
   
   // Date filters
   const today = new Date();
-  const [datePreset, setDatePreset] = useState<DatePreset>('week');
-  const [dateFrom, setDateFrom] = useState<Date>(startOfWeek(today, { weekStartsOn: 1 }));
-  const [dateTo, setDateTo] = useState<Date>(endOfWeek(today, { weekStartsOn: 1 }));
+  const [datePreset, setDatePreset] = useState<DatePreset>('month');
+  const [dateFrom, setDateFrom] = useState<Date>(startOfMonth(today));
+  const [dateTo, setDateTo] = useState<Date>(endOfMonth(today));
   
   // Edit dialog
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -87,7 +101,7 @@ export default function Expenses() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newAmount, setNewAmount] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [newCategory, setNewCategory] = useState('other');
+  const [newCategory, setNewCategory] = useState('purchases');
   const [newDate, setNewDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [newShift, setNewShift] = useState<'day' | 'night'>('day');
 
@@ -128,7 +142,7 @@ export default function Expenses() {
       setExpenses(data || []);
     } catch (error) {
       console.error('Error loading expenses:', error);
-      toast.error('Failed to load expenses');
+      toast.error('Ошибка загрузки расходов');
     } finally {
       setLoading(false);
     }
@@ -138,37 +152,23 @@ export default function Expenses() {
     loadExpenses();
   }, [dateFrom, dateTo]);
 
-  // Filter expenses based on tab and search
-  const getFilteredExpenses = () => {
-    return expenses.filter(e => {
-      const matchesSearch = !searchTerm || 
-        e.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        CATEGORY_LABELS[e.category]?.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesCategory = filterCategory === 'all' || e.category === filterCategory;
-      
-      let matchesTab = true;
-      if (activeTab === 'returnable') {
-        matchesTab = isReturnable(e.category);
-      } else if (activeTab === 'non-returnable') {
-        matchesTab = !isReturnable(e.category);
-      }
-      
-      return matchesSearch && matchesCategory && matchesTab;
-    });
+  const filteredExpenses = expenses.filter(e => {
+    const matchesSearch = !searchTerm || 
+      e.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getCategoryLabel(e.category).toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = filterCategory === 'all' || e.category === filterCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  // Calculate totals by group
+  const totals = {
+    returnable: expenses.filter(e => getCategoryGroup(e.category) === 'returnable').reduce((s, e) => s + e.amount, 0),
+    nonReturnable: expenses.filter(e => getCategoryGroup(e.category) === 'nonReturnable').reduce((s, e) => s + e.amount, 0),
+    investorReturnable: expenses.filter(e => getCategoryGroup(e.category) === 'investorReturnable').reduce((s, e) => s + e.amount, 0),
+    investorNonReturnable: expenses.filter(e => getCategoryGroup(e.category) === 'investorNonReturnable').reduce((s, e) => s + e.amount, 0)
   };
 
-  const filteredExpenses = getFilteredExpenses();
-
-  // Calculate totals
-  const totalAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const returnableTotal = expenses.filter(e => isReturnable(e.category)).reduce((sum, e) => sum + e.amount, 0);
-  const nonReturnableTotal = expenses.filter(e => !isReturnable(e.category)).reduce((sum, e) => sum + e.amount, 0);
-  
-  const categoryTotals = filteredExpenses.reduce((acc, e) => {
-    acc[e.category] = (acc[e.category] || 0) + e.amount;
-    return acc;
-  }, {} as Record<string, number>);
+  const grandTotal = totals.returnable + totals.nonReturnable + totals.investorReturnable + totals.investorNonReturnable;
 
   const openEditDialog = (expense: Expense) => {
     setEditingExpense(expense);
@@ -188,9 +188,6 @@ export default function Expenses() {
         return;
       }
 
-      const amountDiff = newAmount - editingExpense.amount;
-      const categoryChanged = editCategory !== editingExpense.category;
-
       const { error } = await supabase
         .from('cash_expenses')
         .update({
@@ -201,39 +198,6 @@ export default function Expenses() {
         .eq('id', editingExpense.id);
 
       if (error) throw error;
-
-      if (amountDiff !== 0 || categoryChanged) {
-        const { data: record } = await supabase
-          .from('cash_register')
-          .select('*')
-          .eq('id', editingExpense.cash_register_id)
-          .maybeSingle();
-
-        if (record) {
-          const updates: Record<string, number> = {};
-
-          if (categoryChanged) {
-            const oldField = editingExpense.category === 'purchases' ? 'purchases' : 
-                           editingExpense.category === 'salaries' || editingExpense.category === 'advance' ? 'salaries' : 'other_expenses';
-            updates[oldField] = Math.max(0, (record[oldField] || 0) - editingExpense.amount);
-            
-            const newField = editCategory === 'purchases' ? 'purchases' : 
-                           editCategory === 'salaries' || editCategory === 'advance' ? 'salaries' : 'other_expenses';
-            updates[newField] = (record[newField] || 0) + newAmount;
-          } else if (amountDiff !== 0) {
-            const field = editCategory === 'purchases' ? 'purchases' : 
-                         editCategory === 'salaries' || editCategory === 'advance' ? 'salaries' : 'other_expenses';
-            updates[field] = Math.max(0, (record[field] || 0) + amountDiff);
-          }
-
-          if (Object.keys(updates).length > 0) {
-            await supabase
-              .from('cash_register')
-              .update(updates)
-              .eq('id', record.id);
-          }
-        }
-      }
 
       toast.success('Расход обновлен');
       setShowEditDialog(false);
@@ -252,21 +216,6 @@ export default function Expenses() {
         .from('cash_expenses')
         .delete()
         .eq('id', expense.id);
-
-      const { data: record } = await supabase
-        .from('cash_register')
-        .select('*')
-        .eq('id', expense.cash_register_id)
-        .maybeSingle();
-
-      if (record) {
-        const field = expense.category === 'purchases' ? 'purchases' : 
-                     expense.category === 'salaries' || expense.category === 'advance' ? 'salaries' : 'other_expenses';
-        await supabase
-          .from('cash_register')
-          .update({ [field]: Math.max(0, (record[field] || 0) - expense.amount) })
-          .eq('id', record.id);
-      }
 
       toast.success('Удалено');
       loadExpenses();
@@ -311,20 +260,6 @@ export default function Expenses() {
           shift: newShift
         });
 
-      const field = newCategory === 'purchases' ? 'purchases' : 
-                   newCategory === 'salaries' || newCategory === 'advance' ? 'salaries' : 'other_expenses';
-      
-      const { data: record } = await supabase
-        .from('cash_register')
-        .select(field)
-        .eq('id', existing.id)
-        .single();
-
-      await supabase
-        .from('cash_register')
-        .update({ [field]: ((record as any)?.[field] || 0) + amount })
-        .eq('id', existing.id);
-
       toast.success('Расход добавлен');
       setShowAddDialog(false);
       setNewAmount('');
@@ -340,52 +275,78 @@ export default function Expenses() {
     const fromStr = format(dateFrom, 'dd.MM.yyyy');
     const toStr = format(dateTo, 'dd.MM.yyyy');
     
-    // Group by category type
-    const returnableExpenses = filteredExpenses.filter(e => isReturnable(e.category));
-    const nonReturnableExpenses = filteredExpenses.filter(e => !isReturnable(e.category));
-    
     const rows: any[] = [];
     
-    // Header
-    rows.push(['Расходы', `${fromStr} - ${toStr}`]);
+    rows.push(['РАСХОДЫ', `${fromStr} - ${toStr}`]);
     rows.push([]);
     
-    // Returnable section
-    rows.push(['ОБОРОТНЫЕ (Returnable)']);
+    // Оборотные
+    rows.push(['═══ ОБОРОТНЫЕ (Закупки товара) ═══']);
     rows.push(['Дата', 'Смена', 'Категория', 'Описание', 'Сумма']);
-    returnableExpenses.forEach(e => {
+    expenses.filter(e => getCategoryGroup(e.category) === 'returnable').forEach(e => {
       rows.push([
         format(new Date(e.created_at), 'dd.MM.yyyy'),
         e.shift === 'day' ? 'День' : 'Ночь',
-        CATEGORY_LABELS[e.category] || e.category,
+        getCategoryLabel(e.category),
         e.description || '',
         e.amount
       ]);
     });
-    rows.push(['', '', '', 'Итого оборотные:', returnableTotal]);
+    rows.push(['', '', '', 'ИТОГО Оборотные:', totals.returnable]);
     rows.push([]);
     
-    // Non-returnable section
-    rows.push(['НЕВОЗВРАТНЫЕ (Non-returnable)']);
+    // Невозвратные
+    rows.push(['═══ НЕВОЗВРАТНЫЕ (Операционные) ═══']);
     rows.push(['Дата', 'Смена', 'Категория', 'Описание', 'Сумма']);
-    nonReturnableExpenses.forEach(e => {
+    expenses.filter(e => getCategoryGroup(e.category) === 'nonReturnable').forEach(e => {
       rows.push([
         format(new Date(e.created_at), 'dd.MM.yyyy'),
         e.shift === 'day' ? 'День' : 'Ночь',
-        CATEGORY_LABELS[e.category] || e.category,
+        getCategoryLabel(e.category),
         e.description || '',
         e.amount
       ]);
     });
-    rows.push(['', '', '', 'Итого невозвратные:', nonReturnableTotal]);
+    rows.push(['', '', '', 'ИТОГО Невозвратные:', totals.nonReturnable]);
     rows.push([]);
     
-    // Summary by category
-    rows.push(['ИТОГО ПО КАТЕГОРИЯМ']);
-    Object.entries(categoryTotals).forEach(([cat, total]) => {
-      rows.push([CATEGORY_LABELS[cat] || cat, '', '', '', total]);
+    // Инвесторские возвратные
+    rows.push(['═══ ИНВЕСТОР: ВОЗВРАТНЫЕ ═══']);
+    rows.push(['Дата', 'Смена', 'Категория', 'Описание', 'Сумма']);
+    expenses.filter(e => getCategoryGroup(e.category) === 'investorReturnable').forEach(e => {
+      rows.push([
+        format(new Date(e.created_at), 'dd.MM.yyyy'),
+        e.shift === 'day' ? 'День' : 'Ночь',
+        getCategoryLabel(e.category),
+        e.description || '',
+        e.amount
+      ]);
     });
-    rows.push(['', '', '', 'ОБЩИЙ ИТОГ:', totalAmount]);
+    rows.push(['', '', '', 'ИТОГО Инвестор возвратные:', totals.investorReturnable]);
+    rows.push([]);
+    
+    // Инвесторские невозвратные
+    rows.push(['═══ ИНВЕСТОР: НЕВОЗВРАТНЫЕ ═══']);
+    rows.push(['Дата', 'Смена', 'Категория', 'Описание', 'Сумма']);
+    expenses.filter(e => getCategoryGroup(e.category) === 'investorNonReturnable').forEach(e => {
+      rows.push([
+        format(new Date(e.created_at), 'dd.MM.yyyy'),
+        e.shift === 'day' ? 'День' : 'Ночь',
+        getCategoryLabel(e.category),
+        e.description || '',
+        e.amount
+      ]);
+    });
+    rows.push(['', '', '', 'ИТОГО Инвестор невозвратные:', totals.investorNonReturnable]);
+    rows.push([]);
+    
+    // Итого
+    rows.push(['═══ ОБЩИЙ ИТОГ ═══']);
+    rows.push(['Оборотные (закупки)', '', '', '', totals.returnable]);
+    rows.push(['Невозвратные (операционные)', '', '', '', totals.nonReturnable]);
+    rows.push(['Инвестор: возвратные', '', '', '', totals.investorReturnable]);
+    rows.push(['Инвестор: невозвратные', '', '', '', totals.investorNonReturnable]);
+    rows.push(['', '', '', 'ВСЕГО:', grandTotal]);
     
     const ws = XLSX.utils.aoa_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -395,85 +356,20 @@ export default function Expenses() {
     toast.success('Экспорт завершен');
   };
 
-  const renderExpenseTable = (expenseList: Expense[]) => (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-muted/30">
-            <th className="text-left py-3 px-4 font-semibold">Дата</th>
-            <th className="text-left py-3 px-4 font-semibold">Смена</th>
-            <th className="text-left py-3 px-4 font-semibold">Категория</th>
-            <th className="text-left py-3 px-4 font-semibold">Описание</th>
-            <th className="text-right py-3 px-4 font-semibold">Сумма</th>
-            <th className="py-3 px-4 w-24"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {expenseList.map((expense) => (
-            <tr key={expense.id} className="border-b hover:bg-muted/50">
-              <td className="py-3 px-4">{format(new Date(expense.created_at), 'dd.MM.yyyy')}</td>
-              <td className="py-3 px-4">
-                <Badge variant="outline" className="text-xs">
-                  {expense.shift === 'day' ? '☀️ День' : '🌙 Ночь'}
-                </Badge>
-              </td>
-              <td className="py-3 px-4">
-                <Badge className={cn("border", CATEGORY_COLORS[expense.category] || 'bg-muted text-muted-foreground')}>
-                  {CATEGORY_LABELS[expense.category] || expense.category}
-                </Badge>
-              </td>
-              <td className="py-3 px-4 text-muted-foreground max-w-xs truncate">
-                {expense.description || '—'}
-              </td>
-              <td className="text-right py-3 px-4 font-medium">₱{expense.amount.toLocaleString()}</td>
-              <td className="py-3 px-4">
-                <div className="flex gap-1 justify-end">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(expense)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => deleteExpense(expense)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-
   return (
     <div className="space-y-4 p-4">
-      {/* Header with Date Filter */}
+      {/* Header */}
       <Card className="p-4">
         <div className="flex flex-wrap gap-4 items-end justify-between">
           <div className="flex flex-wrap gap-2 items-center">
             <div className="flex gap-1">
-              <Button 
-                size="sm" 
-                variant={datePreset === 'today' ? 'default' : 'outline'}
-                onClick={() => applyDatePreset('today')}
-              >
+              <Button size="sm" variant={datePreset === 'today' ? 'default' : 'outline'} onClick={() => applyDatePreset('today')}>
                 Сегодня
               </Button>
-              <Button 
-                size="sm" 
-                variant={datePreset === 'week' ? 'default' : 'outline'}
-                onClick={() => applyDatePreset('week')}
-              >
+              <Button size="sm" variant={datePreset === 'week' ? 'default' : 'outline'} onClick={() => applyDatePreset('week')}>
                 Неделя
               </Button>
-              <Button 
-                size="sm" 
-                variant={datePreset === 'month' ? 'default' : 'outline'}
-                onClick={() => applyDatePreset('month')}
-              >
+              <Button size="sm" variant={datePreset === 'month' ? 'default' : 'outline'} onClick={() => applyDatePreset('month')}>
                 Месяц
               </Button>
             </div>
@@ -529,47 +425,57 @@ export default function Expenses() {
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
-          <CardContent className="py-4 px-4">
-            <div className="flex items-center gap-3">
-              <Receipt className="w-8 h-8 text-purple-500" />
-              <div>
-                <div className="text-sm text-muted-foreground">Всего расходов</div>
-                <div className="text-2xl font-bold">₱{(returnableTotal + nonReturnableTotal).toLocaleString()}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="bg-gradient-to-br from-orange-500/10 to-orange-500/5 border-orange-500/20">
-          <CardContent className="py-4 px-4">
-            <div className="flex items-center gap-3">
-              <ShoppingCart className="w-8 h-8 text-orange-500" />
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5 text-orange-500" />
               <div>
-                <div className="text-sm text-muted-foreground">Оборотные</div>
-                <div className="text-2xl font-bold">₱{returnableTotal.toLocaleString()}</div>
-                <div className="text-xs text-muted-foreground">Закупки товара</div>
+                <div className="text-xs text-muted-foreground">Оборотные</div>
+                <div className="text-lg font-bold">₱{totals.returnable.toLocaleString()}</div>
               </div>
             </div>
           </CardContent>
         </Card>
         
         <Card className="bg-gradient-to-br from-red-500/10 to-red-500/5 border-red-500/20">
-          <CardContent className="py-4 px-4">
-            <div className="flex items-center gap-3">
-              <Wallet className="w-8 h-8 text-red-500" />
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center gap-2">
+              <Wrench className="w-5 h-5 text-red-500" />
               <div>
-                <div className="text-sm text-muted-foreground">Невозвратные</div>
-                <div className="text-2xl font-bold">₱{nonReturnableTotal.toLocaleString()}</div>
-                <div className="text-xs text-muted-foreground">Зарплаты, еда, прочее</div>
+                <div className="text-xs text-muted-foreground">Невозвратные</div>
+                <div className="text-lg font-bold">₱{totals.nonReturnable.toLocaleString()}</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border-emerald-500/20">
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-500" />
+              <div>
+                <div className="text-xs text-muted-foreground">Инвестор ↺</div>
+                <div className="text-lg font-bold">₱{totals.investorReturnable.toLocaleString()}</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-gradient-to-br from-teal-500/10 to-teal-500/5 border-teal-500/20">
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center gap-2">
+              <TrendingDown className="w-5 h-5 text-teal-500" />
+              <div>
+                <div className="text-xs text-muted-foreground">Инвестор ✗</div>
+                <div className="text-lg font-bold">₱{totals.investorNonReturnable.toLocaleString()}</div>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Search and Category Filter */}
+      {/* Search */}
       <Card className="p-4">
         <div className="flex flex-wrap gap-4 items-end">
           <div className="flex flex-col gap-1">
@@ -587,7 +493,7 @@ export default function Expenses() {
           <div className="flex flex-col gap-1">
             <Label className="text-xs text-muted-foreground">Категория</Label>
             <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="w-48 bg-background">
+              <SelectTrigger className="w-56 bg-background">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-popover">
@@ -601,106 +507,74 @@ export default function Expenses() {
         </div>
       </Card>
 
-      {/* Expenses Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="bg-secondary/50">
-          <TabsTrigger value="all" className="gap-2">
-            <Receipt className="w-4 h-4" />
-            Все ({expenses.length})
-          </TabsTrigger>
-          <TabsTrigger value="returnable" className="gap-2">
-            <ShoppingCart className="w-4 h-4" />
-            Оборотные ({expenses.filter(e => isReturnable(e.category)).length})
-          </TabsTrigger>
-          <TabsTrigger value="non-returnable" className="gap-2">
-            <Wallet className="w-4 h-4" />
-            Невозвратные ({expenses.filter(e => !isReturnable(e.category)).length})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all" className="mt-0">
-          <Card>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex items-center justify-center h-32">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : filteredExpenses.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground">Нет расходов</div>
-              ) : (
-                renderExpenseTable(filteredExpenses)
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="returnable" className="mt-0">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-orange-500" />
-                Оборотные расходы (Закупки)
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">Расходы на товар, которые возвращаются через продажи</p>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex items-center justify-center h-32">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : filteredExpenses.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground">Нет оборотных расходов</div>
-              ) : (
-                renderExpenseTable(filteredExpenses)
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="non-returnable" className="mt-0">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-red-500" />
-                Невозвратные расходы
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">Зарплаты, еда сотрудников и прочие операционные расходы</p>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex items-center justify-center h-32">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : filteredExpenses.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground">Нет невозвратных расходов</div>
-              ) : (
-                renderExpenseTable(filteredExpenses)
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* Category Breakdown */}
-      {Object.keys(categoryTotals).length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">По категориям</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {Object.entries(categoryTotals).map(([cat, total]) => (
-                <div key={cat} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                  <Badge className={cn("border", CATEGORY_COLORS[cat] || 'bg-muted')}>
-                    {CATEGORY_LABELS[cat] || cat}
-                  </Badge>
-                  <span className="font-semibold">₱{total.toLocaleString()}</span>
-                </div>
-              ))}
+      {/* Expenses Table */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg flex items-center justify-between">
+            <span>Расходы ({filteredExpenses.length})</span>
+            <span className="text-muted-foreground">Всего: ₱{grandTotal.toLocaleString()}</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : filteredExpenses.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">Нет расходов</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="text-left py-3 px-4 font-semibold">Дата</th>
+                    <th className="text-left py-3 px-4 font-semibold">Категория</th>
+                    <th className="text-left py-3 px-4 font-semibold">Описание</th>
+                    <th className="text-right py-3 px-4 font-semibold">Сумма</th>
+                    <th className="py-3 px-4 w-24"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredExpenses.map((expense) => (
+                    <tr key={expense.id} className="border-b hover:bg-muted/50">
+                      <td className="py-3 px-4">
+                        <div>{format(new Date(expense.created_at), 'dd.MM.yyyy')}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {expense.shift === 'day' ? '☀️ День' : '🌙 Ночь'}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge className={cn("border", getCategoryColor(expense.category))}>
+                          {getCategoryLabel(expense.category)}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground max-w-xs truncate">
+                        {expense.description || '—'}
+                      </td>
+                      <td className="text-right py-3 px-4 font-medium">₱{expense.amount.toLocaleString()}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex gap-1 justify-end">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(expense)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => deleteExpense(expense)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
@@ -716,12 +590,20 @@ export default function Expenses() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  <SelectItem value="" disabled className="text-muted-foreground">— Оборотные —</SelectItem>
-                  {RETURNABLE_CATEGORIES.map(cat => (
+                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Оборотные —</SelectItem>
+                  {EXPENSE_CATEGORIES.returnable.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
-                  <SelectItem value="" disabled className="text-muted-foreground">— Невозвратные —</SelectItem>
-                  {NON_RETURNABLE_CATEGORIES.map(cat => (
+                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Невозвратные —</SelectItem>
+                  {EXPENSE_CATEGORIES.nonReturnable.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Инвестор: Возвратные —</SelectItem>
+                  {EXPENSE_CATEGORIES.investorReturnable.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Инвестор: Невозвратные —</SelectItem>
+                  {EXPENSE_CATEGORIES.investorNonReturnable.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -788,11 +670,19 @@ export default function Expenses() {
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
                   <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Оборотные —</SelectItem>
-                  {RETURNABLE_CATEGORIES.map(cat => (
+                  {EXPENSE_CATEGORIES.returnable.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
                   <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Невозвратные —</SelectItem>
-                  {NON_RETURNABLE_CATEGORIES.map(cat => (
+                  {EXPENSE_CATEGORIES.nonReturnable.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Инвестор: Возвратные —</SelectItem>
+                  {EXPENSE_CATEGORIES.investorReturnable.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                  <SelectItem value="" disabled className="text-muted-foreground font-semibold">— Инвестор: Невозвратные —</SelectItem>
+                  {EXPENSE_CATEGORIES.investorNonReturnable.map(cat => (
                     <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
                 </SelectContent>
