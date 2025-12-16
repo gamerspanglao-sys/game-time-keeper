@@ -61,7 +61,19 @@ const CATEGORIES = [
   { value: 'other', label: 'Other' }
 ];
 
-const getCategoryLabel = (v: string) => CATEGORIES.find(c => c.value === v)?.label || v;
+const INVESTOR_CATEGORIES = [
+  { value: 'investor_purchases', label: 'Purchases' },
+  { value: 'investor_equipment', label: 'Equipment' },
+  { value: 'investor_inventory', label: 'Inventory' },
+  { value: 'investor_other', label: 'Other' }
+];
+
+const getCategoryLabel = (v: string) => 
+  CATEGORIES.find(c => c.value === v)?.label || 
+  INVESTOR_CATEGORIES.find(c => c.value === v)?.label || 
+  v;
+
+
 
 const getCurrentShift = (): ShiftType => {
   const now = new Date();
@@ -109,6 +121,7 @@ export default function CashRegister() {
   const [expDescription, setExpDescription] = useState('');
   const [expSource, setExpSource] = useState<PaymentSource>('cash');
   const [expType, setExpType] = useState<ExpenseType>('balance');
+  const [isInvestorExpense, setIsInvestorExpense] = useState(false);
   
   // History filters
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
@@ -264,11 +277,12 @@ export default function CashRegister() {
     }
   };
 
-  const openExpenseDialog = (source: PaymentSource, type: ExpenseType) => {
+  const openExpenseDialog = (source: PaymentSource, type: ExpenseType, investor: boolean = false) => {
     setExpSource(source);
     setExpType(type);
+    setIsInvestorExpense(investor);
     setExpAmount('');
-    setExpCategory('purchases');
+    setExpCategory(investor ? 'investor_purchases' : 'purchases');
     setExpDescription('');
     setShowExpenseDialog(true);
   };
@@ -281,26 +295,39 @@ export default function CashRegister() {
     }
     
     try {
-      let existingRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
-      let regId = existingRecord?.id;
-      
-      if (!regId) {
-        const { data } = await supabase.from('cash_register').insert({ date: selectedDate, shift: selectedShift }).select('id').single();
-        regId = data?.id;
+      if (isInvestorExpense) {
+        // Investor expenses go to investor_contributions table
+        const contributionType = expCategory === 'investor_purchases' ? 'returnable' : 'non-returnable';
+        await supabase.from('investor_contributions').insert({
+          category: expCategory,
+          amount,
+          description: expDescription || null,
+          date: selectedDate,
+          contribution_type: contributionType
+        });
+      } else {
+        // Regular expenses go to cash_expenses table
+        let existingRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
+        let regId = existingRecord?.id;
+        
+        if (!regId) {
+          const { data } = await supabase.from('cash_register').insert({ date: selectedDate, shift: selectedShift }).select('id').single();
+          regId = data?.id;
+        }
+        
+        await supabase.from('cash_expenses').insert({
+          cash_register_id: regId,
+          category: expCategory,
+          amount,
+          description: expDescription || null,
+          shift: selectedShift,
+          date: selectedDate,
+          payment_source: expSource,
+          expense_type: expType
+        });
       }
       
-      await supabase.from('cash_expenses').insert({
-        cash_register_id: regId,
-        category: expCategory,
-        amount,
-        description: expDescription || null,
-        shift: selectedShift,
-        date: selectedDate,
-        payment_source: expSource,
-        expense_type: expType
-      });
-      
-      toast.success('Expense added');
+      toast.success(isInvestorExpense ? 'Investor expense added' : 'Expense added');
       setShowExpenseDialog(false);
       loadData();
     } catch (e) {
@@ -428,13 +455,19 @@ export default function CashRegister() {
               {selectedShift === 'day' ? <Sun className="w-4 h-4 text-muted-foreground" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
               <span className="text-sm text-muted-foreground">{selectedDate} • {selectedShift === 'day' ? 'Day' : 'Night'}</span>
             </div>
-            <Button size="sm" variant="ghost" onClick={() => {
-              setEditCash((currentRecord?.cash_actual || 0).toString());
-              setEditGcash((currentRecord?.gcash_actual || 0).toString());
-              setShowCashDialog(true);
-            }}>
-              <Plus className="w-4 h-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="ghost" className="text-purple-500 hover:bg-purple-500/10" onClick={() => openExpenseDialog('cash', 'balance', true)}>
+                <Wallet className="w-4 h-4" />
+                <span className="text-xs">Investor</span>
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => {
+                setEditCash((currentRecord?.cash_actual || 0).toString());
+                setEditGcash((currentRecord?.gcash_actual || 0).toString());
+                setShowCashDialog(true);
+              }}>
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Storage Section - Two Columns */}
@@ -742,12 +775,16 @@ export default function CashRegister() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {expSource === 'cash' 
-                ? <Banknote className="w-5 h-5 text-green-500" /> 
-                : <Smartphone className="w-5 h-5 text-blue-500" />
+              {isInvestorExpense 
+                ? <Wallet className="w-5 h-5 text-purple-500" />
+                : expSource === 'cash' 
+                  ? <Banknote className="w-5 h-5 text-green-500" /> 
+                  : <Smartphone className="w-5 h-5 text-blue-500" />
               }
-              {expType === 'balance' ? 'Spend from ' : 'Shift Expense: '}
-              {expSource === 'cash' ? 'Cash' : 'GCash'}
+              {isInvestorExpense 
+                ? 'Investor Expense'
+                : `${expType === 'balance' ? 'Spend from ' : 'Shift Expense: '}${expSource === 'cash' ? 'Cash' : 'GCash'}`
+              }
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -767,7 +804,9 @@ export default function CashRegister() {
               <Select value={expCategory} onValueChange={setExpCategory}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                  {(isInvestorExpense ? INVESTOR_CATEGORIES : CATEGORIES).map(c => 
+                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
