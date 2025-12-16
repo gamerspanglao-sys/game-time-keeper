@@ -81,6 +81,20 @@ export default function Inventory() {
     .filter(item => showZeroStock || item.in_stock > 0)
     .filter(item => item.item_name.toLowerCase().includes(searchTerm.toLowerCase()));
 
+  // Group by category
+  const groupedItems = filteredItems.reduce((acc, item) => {
+    const category = item.category || 'Other';
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(item);
+    return acc;
+  }, {} as Record<string, InventoryItem[]>);
+
+  const sortedCategories = Object.keys(groupedItems).sort((a, b) => {
+    if (a === 'Other') return 1;
+    if (b === 'Other') return -1;
+    return a.localeCompare(b);
+  });
+
   const itemsInStock = items.filter(i => i.in_stock > 0);
   const totalValue = itemsInStock.reduce((sum, item) => sum + item.total_value, 0);
   const totalQty = itemsInStock.reduce((sum, item) => sum + item.in_stock, 0);
@@ -271,64 +285,65 @@ export default function Inventory() {
             <div className="p-8 text-center text-muted-foreground">No items found</div>
           ) : (
             <div className="max-h-[500px] overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-background border-b">
-                  <tr className="bg-muted/30">
-                    <th className="text-left py-2 px-3 font-medium">Item</th>
-                    <th className="text-right py-2 px-3 font-medium w-24">Qty</th>
-                    <th className="text-right py-2 px-3 font-medium w-24">Value</th>
-                    <th className="py-2 px-2 w-16"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredItems.map((item) => (
-                    <tr key={item.item_id} className="border-b hover:bg-muted/30">
-                      <td className="py-2 px-3">
-                        <div className="font-medium">{item.item_name}</div>
-                        {item.category && <div className="text-xs text-muted-foreground">{item.category}</div>}
-                      </td>
-                      <td className="text-right py-2 px-3">
-                        {editingId === item.item_id ? (
-                          <Input
-                            type="number"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            className="w-20 h-7 text-right"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') saveEdit(item);
-                              if (e.key === 'Escape') cancelEdit();
-                            }}
-                          />
-                        ) : (
-                          <Badge variant={item.in_stock > 0 ? "secondary" : "destructive"}>
-                            {item.in_stock}
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="text-right py-2 px-3 text-muted-foreground">
-                        ₱{item.total_value.toLocaleString()}
-                      </td>
-                      <td className="py-2 px-2">
-                        {editingId === item.item_id ? (
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" onClick={() => saveEdit(item)}>
-                              <Check className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600" onClick={cancelEdit}>
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(item)}>
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {sortedCategories.map(category => (
+                <div key={category}>
+                  <div className="sticky top-0 bg-primary/10 px-3 py-2 font-semibold text-sm border-b flex items-center justify-between">
+                    <span>{category}</span>
+                    <Badge variant="outline" className="text-xs">
+                      {groupedItems[category].length} items
+                    </Badge>
+                  </div>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {groupedItems[category].map((item) => (
+                        <tr key={item.item_id} className="border-b hover:bg-muted/30">
+                          <td className="py-2 px-3">
+                            <div className="font-medium">{item.item_name}</div>
+                          </td>
+                          <td className="text-right py-2 px-3 w-24">
+                            {editingId === item.item_id ? (
+                              <Input
+                                type="number"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="w-20 h-7 text-right"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') saveEdit(item);
+                                  if (e.key === 'Escape') cancelEdit();
+                                }}
+                              />
+                            ) : (
+                              <Badge variant={item.in_stock > 0 ? "secondary" : "destructive"}>
+                                {item.in_stock}
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="text-right py-2 px-3 w-24 text-muted-foreground">
+                            ₱{item.total_value.toLocaleString()}
+                          </td>
+                          <td className="py-2 px-2 w-16">
+                            {editingId === item.item_id ? (
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" onClick={() => saveEdit(item)}>
+                                  <Check className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600" onClick={cancelEdit}>
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(item)}>
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
