@@ -5,11 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Trash2, Square } from 'lucide-react';
+import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Trash2, Square, AlertTriangle } from 'lucide-react';
 
 type ShiftType = 'day' | 'night';
 
@@ -83,7 +84,12 @@ export default function Shift() {
   const [expenseCategory, setExpenseCategory] = useState('');
   const [expenseDescription, setExpenseDescription] = useState('');
   const [expensePaymentSource, setExpensePaymentSource] = useState<'cash' | 'gcash'>('cash');
+  const [expenseResponsible, setExpenseResponsible] = useState('');
   const [addingExpense, setAddingExpense] = useState(false);
+
+  // Confirmation dialog
+  const [showEndShiftConfirm, setShowEndShiftConfirm] = useState(false);
+  const [pendingEndShiftEmployee, setPendingEndShiftEmployee] = useState<string | null>(null);
 
   const currentShift = getCurrentShift();
   const currentDate = getShiftDate();
@@ -165,6 +171,7 @@ export default function Shift() {
 
   const startShift = async (employeeId: string) => {
     const shiftType = currentShift === 'day' ? 'Day (5AM-5PM)' : 'Night (5PM-5AM)';
+    const employeeName = employees.find(e => e.id === employeeId)?.name || 'Unknown';
     
     try {
       const { error } = await supabase.from('shifts').insert({
@@ -176,12 +183,49 @@ export default function Shift() {
       });
 
       if (error) throw error;
+
+      // Send Telegram notification for shift start
+      try {
+        await supabase.functions.invoke('telegram-notify', {
+          body: {
+            action: 'shift_start',
+            employeeName,
+            time: new Date().toLocaleTimeString('en-PH', { 
+              timeZone: 'Asia/Manila',
+              hour: '2-digit', 
+              minute: '2-digit' 
+            })
+          }
+        });
+      } catch (e) {
+        console.log('Telegram notification failed:', e);
+      }
+
       toast.success('Shift started');
       loadData();
     } catch (e) {
       console.error(e);
       toast.error('Failed to start shift');
     }
+  };
+
+  const confirmEndShift = (employeeId: string) => {
+    setPendingEndShiftEmployee(employeeId);
+    setShowEndShiftConfirm(true);
+  };
+
+  const handleConfirmEndShift = () => {
+    if (pendingEndShiftEmployee) {
+      openHandoverDialog(pendingEndShiftEmployee);
+    }
+    setShowEndShiftConfirm(false);
+    setPendingEndShiftEmployee(null);
+  };
+
+  const calculateTotalHours = (startTime: string): number => {
+    const start = new Date(startTime).getTime();
+    const end = Date.now();
+    return parseFloat(((end - start) / (1000 * 60 * 60)).toFixed(2));
   };
 
   const openHandoverDialog = (employeeId?: string) => {
@@ -208,14 +252,19 @@ export default function Shift() {
     setSubmitting(true);
     try {
       const activeShift = activeShifts.find(s => s.employee_id === selectedEmployee);
+      const employeeName = employees.find(e => e.id === selectedEmployee)?.name || 'Unknown';
+      let totalHours = 0;
 
       if (activeShift) {
+        totalHours = calculateTotalHours(activeShift.shift_start);
+        
         const { error } = await supabase
           .from('shifts')
           .update({
             cash_handed_over: cash,
             gcash_handed_over: gcash,
             shift_end: new Date().toISOString(),
+            total_hours: totalHours,
             status: 'closed'
           })
           .eq('id', activeShift.id);
@@ -232,17 +281,22 @@ export default function Shift() {
           shift_type: shiftType,
           cash_handed_over: cash,
           gcash_handed_over: gcash,
+          total_hours: 0,
           status: 'closed'
         });
 
         if (error) throw error;
       }
 
+      // Send enhanced Telegram notification
       try {
-        const employeeName = employees.find(e => e.id === selectedEmployee)?.name || 'Unknown';
         await supabase.functions.invoke('telegram-notify', {
           body: {
-            message: `💰 Cash Handover\n\nEmployee: ${employeeName}\nCash: ₱${cash.toLocaleString()}\nGCash: ₱${gcash.toLocaleString()}\nTotal: ₱${(cash + gcash).toLocaleString()}\n\nPending admin verification in Cash page.`
+            action: 'shift_end',
+            employeeName,
+            totalHours: totalHours.toFixed(1),
+            cashHandedOver: cash + gcash,
+            baseSalary: 500
           }
         });
       } catch (e) {
@@ -265,6 +319,7 @@ export default function Shift() {
     setExpenseCategory('');
     setExpenseDescription('');
     setExpensePaymentSource('cash');
+    setExpenseResponsible('');
     setShowExpenseDialog(true);
   };
 
@@ -276,6 +331,10 @@ export default function Shift() {
     }
     if (!expenseCategory) {
       toast.error('Select category');
+      return;
+    }
+    if (!expenseResponsible) {
+      toast.error('Select responsible person');
       return;
     }
 
@@ -308,7 +367,8 @@ export default function Shift() {
         payment_source: expensePaymentSource,
         expense_type: 'shift',
         shift: currentShift,
-        date: currentDate
+        date: currentDate,
+        responsible_employee_id: expenseResponsible
       });
 
       if (error) throw error;
@@ -424,7 +484,7 @@ export default function Shift() {
                 <Button 
                   size="sm" 
                   variant="destructive"
-                  onClick={() => openHandoverDialog(shift.employee_id)}
+                  onClick={() => confirmEndShift(shift.employee_id)}
                   className="gap-1.5 h-8"
                 >
                   <Square className="w-3 h-3" />
@@ -593,6 +653,20 @@ export default function Shift() {
             </div>
 
             <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Responsible Person</label>
+              <Select value={expenseResponsible} onValueChange={setExpenseResponsible}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select responsible person" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map(emp => (
+                    <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <label className="text-sm text-muted-foreground">Payment Source</label>
               <Select value={expensePaymentSource} onValueChange={(v) => setExpensePaymentSource(v as 'cash' | 'gcash')}>
                 <SelectTrigger>
@@ -652,6 +726,26 @@ export default function Shift() {
               </Select>
             </div>
 
+            {/* Show shift expenses summary */}
+            {totalShiftExpenses > 0 && (
+              <div className="p-3 bg-secondary/50 rounded-lg border border-border/50">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <Receipt className="w-4 h-4" />
+                    Shift Expenses
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-500">₱{cashExpenses.toLocaleString()} cash</span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-blue-500">₱{gcashExpenses.toLocaleString()} GCash</span>
+                  </div>
+                </div>
+                <div className="text-right mt-1">
+                  <span className="font-semibold">Total: ₱{totalShiftExpenses.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <label className="text-sm text-muted-foreground">Cash ₱</label>
@@ -682,6 +776,27 @@ export default function Shift() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* End Shift Confirmation Dialog */}
+      <AlertDialog open={showEndShiftConfirm} onOpenChange={setShowEndShiftConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              End Shift?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to end this shift? You will need to submit your cash handover.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingEndShiftEmployee(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmEndShift}>
+              Yes, End Shift
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
