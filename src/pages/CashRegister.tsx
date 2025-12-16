@@ -5,17 +5,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
   RefreshCw, Lock, Loader2, Sun, Moon, Plus, Trash2, Banknote, Smartphone, 
-  Calendar, ChevronDown, ChevronUp
+  Calendar, Wallet, Receipt, History, UserCircle, Download
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type ShiftType = 'day' | 'night';
-type PaymentSource = 'cash' | 'gcash';
+type PaymentSource = 'cash' | 'gcash' | 'investor';
 
 interface CashRecord {
   id: string;
@@ -40,12 +41,13 @@ interface Expense {
 const ADMIN_PIN = '8808';
 
 const CATEGORIES = [
-  { value: 'purchases', label: 'Закупки' },
-  { value: 'salaries', label: 'Зарплаты' },
-  { value: 'equipment', label: 'Оборудование' },
-  { value: 'employee_food', label: 'Еда сотрудников' },
+  { value: 'purchases', label: 'Purchases' },
+  { value: 'salaries', label: 'Salaries' },
+  { value: 'equipment', label: 'Equipment' },
+  { value: 'employee_food', label: 'Employee Food' },
   { value: 'food_hunters', label: 'Food Hunters' },
-  { value: 'other', label: 'Прочее' }
+  { value: 'inventory', label: 'Inventory' },
+  { value: 'other', label: 'Other' }
 ];
 
 const getCategoryLabel = (v: string) => CATEGORIES.find(c => c.value === v)?.label || v;
@@ -76,35 +78,46 @@ export default function CashRegister() {
   const [selectedDate, setSelectedDate] = useState(getShiftDate());
   const [selectedShift, setSelectedShift] = useState<ShiftType>(getCurrentShift());
   
-  // Edit cash
+  // Edit cash dialog
   const [showCashDialog, setShowCashDialog] = useState(false);
   const [editCash, setEditCash] = useState('');
   const [editGcash, setEditGcash] = useState('');
   
-  // Add expense
-  const [showExpenseDialog, setShowExpenseDialog] = useState(false);
+  // Add expense form state
   const [expAmount, setExpAmount] = useState('');
   const [expCategory, setExpCategory] = useState('purchases');
   const [expDescription, setExpDescription] = useState('');
   const [expSource, setExpSource] = useState<PaymentSource>('cash');
+  const [expDate, setExpDate] = useState(getShiftDate());
+  const [expShift, setExpShift] = useState<ShiftType>(getCurrentShift());
   
-  // Show history
-  const [showHistory, setShowHistory] = useState(false);
+  // History filters
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterSource, setFilterSource] = useState<string>('all');
 
   const currentRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
   const currentExpenses = expenses.filter(e => e.date === selectedDate && e.shift === selectedShift);
   
+  // Calculate balances - investor expenses don't affect cash/gcash
   const cashExp = currentExpenses.filter(e => e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
   const gcashExp = currentExpenses.filter(e => e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
+  const investorExp = currentExpenses.filter(e => e.payment_source === 'investor').reduce((s, e) => s + e.amount, 0);
   const cashOnHand = (currentRecord?.cash_actual || 0) - cashExp;
   const gcashOnHand = (currentRecord?.gcash_actual || 0) - gcashExp;
 
-  // History expenses
-  const historyExpenses = expenses.filter(e => e.date >= dateFrom && e.date <= dateTo);
+  // History expenses with filters
+  const historyExpenses = expenses.filter(e => {
+    if (e.date < dateFrom || e.date > dateTo) return false;
+    if (filterCategory !== 'all' && e.category !== filterCategory) return false;
+    if (filterSource !== 'all' && e.payment_source !== filterSource) return false;
+    return true;
+  });
+  
   const historyTotalCash = historyExpenses.filter(e => e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
   const historyTotalGcash = historyExpenses.filter(e => e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
+  const historyTotalInvestor = historyExpenses.filter(e => e.payment_source === 'investor').reduce((s, e) => s + e.amount, 0);
 
   const loadData = async () => {
     try {
@@ -137,7 +150,7 @@ export default function CashRegister() {
       setShowPinDialog(false);
       setPinInput('');
     } else {
-      toast.error('Неверный PIN');
+      toast.error('Invalid PIN');
     }
   };
 
@@ -148,10 +161,10 @@ export default function CashRegister() {
       if (error) throw error;
       if (data?.success) {
         await loadData();
-        toast.success('Синхронизировано');
+        toast.success('Synced successfully');
       }
     } catch (e) {
-      toast.error('Ошибка синхронизации');
+      toast.error('Sync failed');
     } finally {
       setSyncing(false);
     }
@@ -178,25 +191,28 @@ export default function CashRegister() {
           actual_cash: cash + gcash
         });
       }
-      toast.success('Сохранено');
+      toast.success('Saved');
       setShowCashDialog(false);
       loadData();
     } catch (e) {
-      toast.error('Ошибка сохранения');
+      toast.error('Save failed');
     }
   };
 
   const addExpense = async () => {
     const amount = parseInt(expAmount);
     if (!amount || amount <= 0) {
-      toast.error('Введите сумму');
+      toast.error('Enter valid amount');
       return;
     }
     
     try {
-      let regId = currentRecord?.id;
+      // Find or create cash register entry for the expense date/shift
+      let existingRecord = records.find(r => r.date === expDate && r.shift === expShift);
+      let regId = existingRecord?.id;
+      
       if (!regId) {
-        const { data } = await supabase.from('cash_register').insert({ date: selectedDate, shift: selectedShift }).select('id').single();
+        const { data } = await supabase.from('cash_register').insert({ date: expDate, shift: expShift }).select('id').single();
         regId = data?.id;
       }
       
@@ -205,25 +221,45 @@ export default function CashRegister() {
         category: expCategory,
         amount,
         description: expDescription || null,
-        shift: selectedShift,
-        date: selectedDate,
+        shift: expShift,
+        date: expDate,
         payment_source: expSource
       });
       
-      toast.success('Расход добавлен');
-      setShowExpenseDialog(false);
+      toast.success('Expense added');
       setExpAmount('');
       setExpDescription('');
       loadData();
     } catch (e) {
-      toast.error('Ошибка');
+      toast.error('Failed to add expense');
     }
   };
 
   const deleteExpense = async (id: string) => {
     await supabase.from('cash_expenses').delete().eq('id', id);
-    toast.success('Удалено');
+    toast.success('Deleted');
     loadData();
+  };
+
+  const exportHistory = () => {
+    const csv = [
+      ['Date', 'Shift', 'Category', 'Source', 'Amount', 'Description'].join(','),
+      ...historyExpenses.map(e => [
+        e.date,
+        e.shift,
+        getCategoryLabel(e.category),
+        e.payment_source.toUpperCase(),
+        e.amount,
+        `"${e.description || ''}"`
+      ].join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `expenses_${dateFrom}_${dateTo}.csv`;
+    a.click();
   };
 
   const uniqueDates = [...new Set(records.map(r => r.date))].slice(0, 14);
@@ -238,16 +274,16 @@ export default function CashRegister() {
         <Card className="mt-10">
           <CardContent className="py-8 text-center space-y-4">
             <Lock className="w-12 h-12 mx-auto text-muted-foreground" />
-            <h2 className="text-xl font-semibold">Касса</h2>
-            <p className="text-muted-foreground">Требуется доступ администратора</p>
-            <Button onClick={() => setShowPinDialog(true)}><Lock className="w-4 h-4 mr-2" />Войти</Button>
+            <h2 className="text-xl font-semibold">Cash Register</h2>
+            <p className="text-muted-foreground">Admin access required</p>
+            <Button onClick={() => setShowPinDialog(true)}><Lock className="w-4 h-4 mr-2" />Login</Button>
           </CardContent>
         </Card>
         <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
           <DialogContent className="max-w-xs">
-            <DialogHeader><DialogTitle>Введите PIN</DialogTitle></DialogHeader>
-            <Input type="password" value={pinInput} onChange={e => setPinInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="PIN" />
-            <Button onClick={handleLogin} className="w-full">Войти</Button>
+            <DialogHeader><DialogTitle>Enter PIN</DialogTitle></DialogHeader>
+            <Input type="password" value={pinInput} onChange={e => setPinInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="PIN" autoFocus />
+            <Button onClick={handleLogin} className="w-full">Login</Button>
           </DialogContent>
         </Dialog>
       </div>
@@ -258,7 +294,9 @@ export default function CashRegister() {
     <div className="p-4 space-y-4 max-w-2xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">💰 Касса</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2">
+          <Wallet className="w-5 h-5" /> Cash Register
+        </h1>
         <Button variant="outline" size="sm" onClick={syncLoyverse} disabled={syncing}>
           {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           <span className="ml-1">Sync</span>
@@ -275,212 +313,369 @@ export default function CashRegister() {
         </Select>
         <div className="flex border rounded-md">
           <Button variant={selectedShift === 'day' ? 'default' : 'ghost'} size="sm" className="rounded-r-none" onClick={() => setSelectedShift('day')}>
-            <Sun className="w-4 h-4 mr-1" />День
+            <Sun className="w-4 h-4 mr-1" />Day
           </Button>
           <Button variant={selectedShift === 'night' ? 'default' : 'ghost'} size="sm" className="rounded-l-none" onClick={() => setSelectedShift('night')}>
-            <Moon className="w-4 h-4 mr-1" />Ночь
+            <Moon className="w-4 h-4 mr-1" />Night
           </Button>
         </div>
       </div>
 
-      {/* Balance Cards */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="bg-green-500/10 border-green-500/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Banknote className="w-5 h-5 text-green-600" />
-              <span className="text-xs text-green-600 font-semibold">CASH НА РУКАХ</span>
-            </div>
-            <div className="text-2xl font-bold text-green-600">₱{cashOnHand.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              Получено: ₱{(currentRecord?.cash_actual || 0).toLocaleString()} − Расходы: ₱{cashExp.toLocaleString()}
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-blue-500/10 border-blue-500/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Smartphone className="w-5 h-5 text-blue-600" />
-              <span className="text-xs text-blue-600 font-semibold">GCASH НА РУКАХ</span>
-            </div>
-            <div className="text-2xl font-bold text-blue-600">₱{gcashOnHand.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              Получено: ₱{(currentRecord?.gcash_actual || 0).toLocaleString()} − Расходы: ₱{gcashExp.toLocaleString()}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Tabs */}
+      <Tabs defaultValue="balance" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="balance" className="gap-1"><Wallet className="w-4 h-4" />Balance</TabsTrigger>
+          <TabsTrigger value="expenses" className="gap-1"><Receipt className="w-4 h-4" />Expenses</TabsTrigger>
+          <TabsTrigger value="history" className="gap-1"><History className="w-4 h-4" />History</TabsTrigger>
+        </TabsList>
 
-      {/* Quick Actions */}
-      <div className="flex gap-2">
-        <Button className="flex-1 bg-primary" onClick={() => {
-          setEditCash((currentRecord?.cash_actual || 0).toString());
-          setEditGcash((currentRecord?.gcash_actual || 0).toString());
-          setShowCashDialog(true);
-        }}>
-          <Banknote className="w-4 h-4 mr-2" />Ввести кассу
-        </Button>
-        <Button variant="outline" className="flex-1" onClick={() => setShowExpenseDialog(true)}>
-          <Plus className="w-4 h-4 mr-2" />Добавить расход
-        </Button>
-      </div>
+        {/* Balance Tab */}
+        <TabsContent value="balance" className="space-y-4 mt-4">
+          {/* Balance Cards */}
+          <div className="grid grid-cols-2 gap-3">
+            <Card className="bg-green-500/10 border-green-500/30">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Banknote className="w-5 h-5 text-green-600" />
+                  <span className="text-xs text-green-600 font-semibold">CASH ON HAND</span>
+                </div>
+                <div className="text-2xl font-bold text-green-600">₱{cashOnHand.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Received: ₱{(currentRecord?.cash_actual || 0).toLocaleString()} − Expenses: ₱{cashExp.toLocaleString()}
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-blue-500/10 border-blue-500/30">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Smartphone className="w-5 h-5 text-blue-600" />
+                  <span className="text-xs text-blue-600 font-semibold">GCASH ON HAND</span>
+                </div>
+                <div className="text-2xl font-bold text-blue-600">₱{gcashOnHand.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Received: ₱{(currentRecord?.gcash_actual || 0).toLocaleString()} − Expenses: ₱{gcashExp.toLocaleString()}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-      {/* Expected vs Actual */}
-      {currentRecord && (
-        <Card>
-          <CardContent className="p-3">
-            <div className="grid grid-cols-3 text-xs gap-2">
-              <div></div>
-              <div className="text-center font-medium text-muted-foreground">Ожидается</div>
-              <div className="text-center font-medium text-muted-foreground">Получено</div>
-              <div className="font-medium">💵 Cash</div>
-              <div className="text-center">₱{(currentRecord.cash_expected || 0).toLocaleString()}</div>
-              <div className={cn("text-center font-medium", (currentRecord.cash_actual || 0) >= (currentRecord.cash_expected || 0) ? "text-green-600" : "text-red-600")}>
-                ₱{(currentRecord.cash_actual || 0).toLocaleString()}
+          {/* Enter Cash Button */}
+          <Button className="w-full" onClick={() => {
+            setEditCash((currentRecord?.cash_actual || 0).toString());
+            setEditGcash((currentRecord?.gcash_actual || 0).toString());
+            setShowCashDialog(true);
+          }}>
+            <Banknote className="w-4 h-4 mr-2" />Enter Actual Cash
+          </Button>
+
+          {/* Expected vs Actual */}
+          {currentRecord && (
+            <Card>
+              <CardHeader className="py-3 pb-2">
+                <CardTitle className="text-sm">Expected vs Received</CardTitle>
+              </CardHeader>
+              <CardContent className="py-3">
+                <div className="grid grid-cols-3 text-sm gap-2">
+                  <div></div>
+                  <div className="text-center font-medium text-muted-foreground">Expected</div>
+                  <div className="text-center font-medium text-muted-foreground">Received</div>
+                  
+                  <div className="font-medium flex items-center gap-1"><Banknote className="w-4 h-4" /> Cash</div>
+                  <div className="text-center">₱{(currentRecord.cash_expected || 0).toLocaleString()}</div>
+                  <div className={cn("text-center font-medium", (currentRecord.cash_actual || 0) >= (currentRecord.cash_expected || 0) ? "text-green-600" : "text-red-600")}>
+                    ₱{(currentRecord.cash_actual || 0).toLocaleString()}
+                  </div>
+                  
+                  <div className="font-medium flex items-center gap-1"><Smartphone className="w-4 h-4" /> GCash</div>
+                  <div className="text-center">₱{(currentRecord.gcash_expected || 0).toLocaleString()}</div>
+                  <div className={cn("text-center font-medium", (currentRecord.gcash_actual || 0) >= (currentRecord.gcash_expected || 0) ? "text-green-600" : "text-red-600")}>
+                    ₱{(currentRecord.gcash_actual || 0).toLocaleString()}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Shift Expenses Summary */}
+          <Card>
+            <CardHeader className="py-3 pb-2">
+              <CardTitle className="text-sm flex items-center justify-between">
+                <span>Shift Expenses</span>
+                <Badge variant="secondary">₱{(cashExp + gcashExp + investorExp).toLocaleString()}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="py-3">
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="flex items-center gap-1 text-green-600"><Banknote className="w-4 h-4" /> ₱{cashExp.toLocaleString()}</div>
+                <div className="flex items-center gap-1 text-blue-600"><Smartphone className="w-4 h-4" /> ₱{gcashExp.toLocaleString()}</div>
+                <div className="flex items-center gap-1 text-purple-600"><UserCircle className="w-4 h-4" /> ₱{investorExp.toLocaleString()}</div>
               </div>
-              <div className="font-medium">📱 GCash</div>
-              <div className="text-center">₱{(currentRecord.gcash_expected || 0).toLocaleString()}</div>
-              <div className={cn("text-center font-medium", (currentRecord.gcash_actual || 0) >= (currentRecord.gcash_expected || 0) ? "text-green-600" : "text-red-600")}>
-                ₱{(currentRecord.gcash_actual || 0).toLocaleString()}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* Expenses List */}
-      <Card>
-        <CardHeader className="py-3 pb-2">
-          <CardTitle className="text-sm flex items-center justify-between">
-            <span>Расходы за смену</span>
-            <Badge variant="secondary">₱{(cashExp + gcashExp).toLocaleString()}</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="py-2">
-          {currentExpenses.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Нет расходов</p>
-          ) : (
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {currentExpenses.map(exp => (
-                <div key={exp.id} className="flex items-center justify-between p-2 bg-muted/30 rounded">
-                  <div className="flex items-center gap-2">
-                    <span className={cn("text-sm", exp.payment_source === 'gcash' ? "text-blue-600" : "text-green-600")}>
-                      {exp.payment_source === 'gcash' ? '📱' : '💵'}
-                    </span>
-                    <div>
-                      <div className="text-sm font-medium">{getCategoryLabel(exp.category)}</div>
-                      {exp.description && <div className="text-xs text-muted-foreground">{exp.description}</div>}
+        {/* Expenses Tab */}
+        <TabsContent value="expenses" className="space-y-4 mt-4">
+          {/* Add Expense Form */}
+          <Card>
+            <CardHeader className="py-3 pb-2">
+              <CardTitle className="text-sm flex items-center gap-2"><Plus className="w-4 h-4" /> Add Expense</CardTitle>
+            </CardHeader>
+            <CardContent className="py-3 space-y-3">
+              {/* Payment Source */}
+              <div className="flex gap-1">
+                <Button 
+                  variant={expSource === 'cash' ? 'default' : 'outline'} 
+                  size="sm" 
+                  className={cn("flex-1", expSource === 'cash' && "bg-green-600 hover:bg-green-700")}
+                  onClick={() => setExpSource('cash')}
+                >
+                  <Banknote className="w-4 h-4 mr-1" />Cash
+                </Button>
+                <Button 
+                  variant={expSource === 'gcash' ? 'default' : 'outline'} 
+                  size="sm" 
+                  className={cn("flex-1", expSource === 'gcash' && "bg-blue-600 hover:bg-blue-700")}
+                  onClick={() => setExpSource('gcash')}
+                >
+                  <Smartphone className="w-4 h-4 mr-1" />GCash
+                </Button>
+                <Button 
+                  variant={expSource === 'investor' ? 'default' : 'outline'} 
+                  size="sm" 
+                  className={cn("flex-1", expSource === 'investor' && "bg-purple-600 hover:bg-purple-700")}
+                  onClick={() => setExpSource('investor')}
+                >
+                  <UserCircle className="w-4 h-4 mr-1" />Investor
+                </Button>
+              </div>
+
+              {/* Category & Amount */}
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={expCategory} onValueChange={setExpCategory}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Input 
+                  type="number" 
+                  placeholder="Amount" 
+                  value={expAmount} 
+                  onChange={e => setExpAmount(e.target.value)} 
+                />
+              </div>
+
+              {/* Date & Shift */}
+              <div className="grid grid-cols-2 gap-2">
+                <Input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} />
+                <Select value={expShift} onValueChange={(v: ShiftType) => setExpShift(v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day"><Sun className="w-4 h-4 inline mr-1" />Day</SelectItem>
+                    <SelectItem value="night"><Moon className="w-4 h-4 inline mr-1" />Night</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Description */}
+              <Input 
+                placeholder="Description (optional)" 
+                value={expDescription} 
+                onChange={e => setExpDescription(e.target.value)} 
+              />
+
+              <Button className="w-full" onClick={addExpense}>
+                <Plus className="w-4 h-4 mr-2" />Add Expense
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Current Shift Expenses List */}
+          <Card>
+            <CardHeader className="py-3 pb-2">
+              <CardTitle className="text-sm flex items-center justify-between">
+                <span>Expenses ({selectedDate} / {selectedShift === 'day' ? 'Day' : 'Night'})</span>
+                <Badge variant="secondary">{currentExpenses.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="py-2">
+              {currentExpenses.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No expenses</p>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto">
+                  {currentExpenses.map(exp => (
+                    <div key={exp.id} className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "text-sm",
+                          exp.payment_source === 'gcash' ? "text-blue-600" : 
+                          exp.payment_source === 'investor' ? "text-purple-600" : "text-green-600"
+                        )}>
+                          {exp.payment_source === 'gcash' ? <Smartphone className="w-4 h-4" /> : 
+                           exp.payment_source === 'investor' ? <UserCircle className="w-4 h-4" /> : 
+                           <Banknote className="w-4 h-4" />}
+                        </span>
+                        <div>
+                          <div className="text-sm font-medium">{getCategoryLabel(exp.category)}</div>
+                          {exp.description && <div className="text-xs text-muted-foreground">{exp.description}</div>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">₱{exp.amount.toLocaleString()}</span>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteExpense(exp.id)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* History Tab */}
+        <TabsContent value="history" className="space-y-4 mt-4">
+          {/* Filters */}
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex gap-2 items-center">
+                <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="flex-1" />
+                <span className="text-muted-foreground">to</span>
+                <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="flex-1" />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={filterCategory} onValueChange={setFilterCategory}>
+                  <SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterSource} onValueChange={setFilterSource}>
+                  <SelectTrigger><SelectValue placeholder="All Sources" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sources</SelectItem>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="gcash">GCash</SelectItem>
+                    <SelectItem value="investor">Investor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Totals */}
+          <div className="grid grid-cols-4 gap-2">
+            <Card className="bg-green-500/10 border-green-500/30">
+              <CardContent className="p-3 text-center">
+                <Banknote className="w-4 h-4 mx-auto text-green-600 mb-1" />
+                <div className="text-xs text-muted-foreground">Cash</div>
+                <div className="font-bold text-green-600">₱{historyTotalCash.toLocaleString()}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-blue-500/10 border-blue-500/30">
+              <CardContent className="p-3 text-center">
+                <Smartphone className="w-4 h-4 mx-auto text-blue-600 mb-1" />
+                <div className="text-xs text-muted-foreground">GCash</div>
+                <div className="font-bold text-blue-600">₱{historyTotalGcash.toLocaleString()}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-purple-500/10 border-purple-500/30">
+              <CardContent className="p-3 text-center">
+                <UserCircle className="w-4 h-4 mx-auto text-purple-600 mb-1" />
+                <div className="text-xs text-muted-foreground">Investor</div>
+                <div className="font-bold text-purple-600">₱{historyTotalInvestor.toLocaleString()}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-muted">
+              <CardContent className="p-3 text-center">
+                <Receipt className="w-4 h-4 mx-auto mb-1" />
+                <div className="text-xs text-muted-foreground">Total</div>
+                <div className="font-bold">₱{(historyTotalCash + historyTotalGcash + historyTotalInvestor).toLocaleString()}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Export Button */}
+          <Button variant="outline" className="w-full" onClick={exportHistory}>
+            <Download className="w-4 h-4 mr-2" />Export CSV
+          </Button>
+
+          {/* History List */}
+          <Card>
+            <CardHeader className="py-3 pb-2">
+              <CardTitle className="text-sm flex items-center justify-between">
+                <span>Expense History</span>
+                <Badge variant="secondary">{historyExpenses.length} items</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="py-2">
+              <div className="space-y-1 max-h-80 overflow-y-auto">
+                {historyExpenses.slice(0, 100).map(exp => (
+                  <div key={exp.id} className="flex items-center justify-between text-xs p-2 bg-muted/20 rounded">
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        exp.payment_source === 'gcash' ? "text-blue-600" : 
+                        exp.payment_source === 'investor' ? "text-purple-600" : "text-green-600"
+                      )}>
+                        {exp.payment_source === 'gcash' ? <Smartphone className="w-3 h-3" /> : 
+                         exp.payment_source === 'investor' ? <UserCircle className="w-3 h-3" /> : 
+                         <Banknote className="w-3 h-3" />}
+                      </span>
+                      <span className="text-muted-foreground">{exp.date}</span>
+                      <Badge variant="outline" className="text-[10px] px-1">{exp.shift === 'day' ? 'D' : 'N'}</Badge>
+                      <span>{getCategoryLabel(exp.category)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">₱{exp.amount.toLocaleString()}</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => deleteExpense(exp.id)}>
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">₱{exp.amount.toLocaleString()}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteExpense(exp.id)}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
-      {/* History Toggle */}
-      <Button variant="ghost" className="w-full justify-between" onClick={() => setShowHistory(!showHistory)}>
-        <span className="flex items-center gap-2"><Calendar className="w-4 h-4" />История расходов</span>
-        {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-      </Button>
-
-      {showHistory && (
-        <Card>
-          <CardContent className="p-4 space-y-4">
-            <div className="flex gap-2 items-center">
-              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="flex-1" />
-              <span>—</span>
-              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="flex-1" />
-            </div>
-            
-            <div className="flex gap-4 text-sm">
-              <div>💵 Cash: <span className="font-semibold">₱{historyTotalCash.toLocaleString()}</span></div>
-              <div>📱 GCash: <span className="font-semibold">₱{historyTotalGcash.toLocaleString()}</span></div>
-              <div>Всего: <span className="font-semibold">₱{(historyTotalCash + historyTotalGcash).toLocaleString()}</span></div>
-            </div>
-            
-            <div className="space-y-1 max-h-60 overflow-y-auto">
-              {historyExpenses.slice(0, 50).map(exp => (
-                <div key={exp.id} className="flex items-center justify-between text-xs p-2 bg-muted/20 rounded">
-                  <div className="flex items-center gap-2">
-                    <span>{exp.payment_source === 'gcash' ? '📱' : '💵'}</span>
-                    <span className="text-muted-foreground">{exp.date}</span>
-                    <span>{getCategoryLabel(exp.category)}</span>
-                  </div>
-                  <span className="font-medium">₱{exp.amount.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Cash Dialog */}
+      {/* Enter Cash Dialog */}
       <Dialog open={showCashDialog} onOpenChange={setShowCashDialog}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Ввести кассу</DialogTitle>
-            <DialogDescription>{selectedDate} {selectedShift === 'day' ? '☀️' : '🌙'}</DialogDescription>
+            <DialogTitle>Enter Actual Cash</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm text-muted-foreground">Ожидается: ₱{(currentRecord?.cash_expected || 0).toLocaleString()}</label>
-              <div className="flex items-center gap-2 mt-1">
-                <Banknote className="w-4 h-4 text-green-600" />
-                <Input type="number" placeholder="Cash" value={editCash} onChange={e => setEditCash(e.target.value)} />
-              </div>
+              <label className="text-sm text-muted-foreground flex items-center gap-1 mb-1">
+                <Banknote className="w-4 h-4" /> Cash Received
+              </label>
+              <Input 
+                type="number" 
+                value={editCash} 
+                onChange={e => setEditCash(e.target.value)} 
+                placeholder="0" 
+              />
             </div>
             <div>
-              <label className="text-sm text-muted-foreground">Ожидается: ₱{(currentRecord?.gcash_expected || 0).toLocaleString()}</label>
-              <div className="flex items-center gap-2 mt-1">
-                <Smartphone className="w-4 h-4 text-blue-600" />
-                <Input type="number" placeholder="GCash" value={editGcash} onChange={e => setEditGcash(e.target.value)} />
-              </div>
+              <label className="text-sm text-muted-foreground flex items-center gap-1 mb-1">
+                <Smartphone className="w-4 h-4" /> GCash Received
+              </label>
+              <Input 
+                type="number" 
+                value={editGcash} 
+                onChange={e => setEditGcash(e.target.value)} 
+                placeholder="0" 
+              />
             </div>
-            <Button onClick={saveCash} className="w-full">Сохранить</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Expense Dialog */}
-      <Dialog open={showExpenseDialog} onOpenChange={setShowExpenseDialog}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader>
-            <DialogTitle>Добавить расход</DialogTitle>
-            <DialogDescription>{selectedDate} {selectedShift === 'day' ? '☀️' : '🌙'}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={expSource === 'cash' ? 'default' : 'outline'}
-                className={cn("flex-1", expSource === 'cash' && "bg-green-600 hover:bg-green-700")}
-                onClick={() => setExpSource('cash')}
-              >💵 Cash</Button>
-              <Button
-                type="button"
-                variant={expSource === 'gcash' ? 'default' : 'outline'}
-                className={cn("flex-1", expSource === 'gcash' && "bg-blue-600 hover:bg-blue-700")}
-                onClick={() => setExpSource('gcash')}
-              >📱 GCash</Button>
-            </div>
-            <Select value={expCategory} onValueChange={setExpCategory}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Input type="number" placeholder="Сумма" value={expAmount} onChange={e => setExpAmount(e.target.value)} />
-            <Input placeholder="Описание (опционально)" value={expDescription} onChange={e => setExpDescription(e.target.value)} />
-            <Button onClick={addExpense} className="w-full">Добавить</Button>
+            <Button className="w-full" onClick={saveCash}>Save</Button>
           </div>
         </DialogContent>
       </Dialog>
