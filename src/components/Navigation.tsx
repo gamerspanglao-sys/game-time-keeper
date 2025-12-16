@@ -96,21 +96,6 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
         </NavLink>
 
         <NavLink
-          to="/finance"
-          className={({ isActive }) =>
-            cn(
-              'flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 py-3 md:py-0 px-2 md:px-3 md:h-10 text-xs md:text-sm font-medium transition-all',
-              isActive
-                ? 'text-primary bg-primary/10 md:rounded-lg md:border md:border-primary/20'
-                : 'text-muted-foreground hover:text-foreground hover:bg-secondary md:rounded-lg'
-            )
-          }
-        >
-          <Wallet className="w-5 h-5" />
-          <span>Finance</span>
-        </NavLink>
-
-        <NavLink
           to="/shift"
           className={({ isActive }) =>
             cn(
@@ -126,7 +111,7 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
         </NavLink>
 
         <NavLink
-          to="/cash"
+          to="/finance"
           className={({ isActive }) =>
             cn(
               'flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 py-3 md:py-0 px-2 md:px-3 md:h-10 text-xs md:text-sm font-medium transition-all',
@@ -136,8 +121,8 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
             )
           }
         >
-          <Banknote className="w-5 h-5" />
-          <span>Cash</span>
+          <Wallet className="w-5 h-5" />
+          <span>Finance</span>
         </NavLink>
 
         <NavLink
