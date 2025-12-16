@@ -110,17 +110,24 @@ export default function CashRegister() {
   const currentRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
   const currentExpenses = expenses.filter(e => e.date === selectedDate && e.shift === selectedShift);
   
-  // Balance calculations - shift expenses deducted from Loyverse expected
+  // Shift expenses (deducted from current register)
   const shiftCashExp = currentExpenses.filter(e => e.expense_type === 'shift' && e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
   const shiftGcashExp = currentExpenses.filter(e => e.expense_type === 'shift' && e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
+  const totalShiftExpenses = shiftCashExp + shiftGcashExp;
+  
+  // Balance expenses (deducted from withdrawn cash on hand)
   const balanceCashExp = currentExpenses.filter(e => e.expense_type === 'balance' && e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
   const balanceGcashExp = currentExpenses.filter(e => e.expense_type === 'balance' && e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
   
-  // Cash/GCash on hand = Loyverse expected - shift expenses - balance expenses
-  const cashOnHand = (currentRecord?.cash_expected || 0) - shiftCashExp - balanceCashExp;
-  const gcashOnHand = (currentRecord?.gcash_expected || 0) - shiftGcashExp - balanceGcashExp;
+  // Cash On Hand = withdrawn amount (cash_actual) - balance expenses
+  const cashOnHand = (currentRecord?.cash_actual || 0) - balanceCashExp;
+  const gcashOnHand = (currentRecord?.gcash_actual || 0) - balanceGcashExp;
   const totalOnHand = cashOnHand + gcashOnHand;
-  const totalShiftExpenses = shiftCashExp + shiftGcashExp;
+  
+  // Current Register = Loyverse sales - shift expenses
+  const currentRegisterCash = (currentRecord?.cash_expected || 0) - shiftCashExp;
+  const currentRegisterGcash = (currentRecord?.gcash_expected || 0) - shiftGcashExp;
+  const currentRegisterTotal = currentRegisterCash + currentRegisterGcash;
 
   // History expenses with filters
   const historyExpenses = expenses.filter(e => {
@@ -455,12 +462,12 @@ export default function CashRegister() {
                     <CircleDollarSign className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Current Register (Loyverse)</p>
+                    <p className="text-xs text-muted-foreground">Current Register</p>
                     <p className="text-2xl font-bold text-primary">
-                      ₱{((currentRecord?.cash_expected || 0) + (currentRecord?.gcash_expected || 0) - shiftCashExp - shiftGcashExp).toLocaleString()}
+                      ₱{currentRegisterTotal.toLocaleString()}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      Sales ₱{((currentRecord?.cash_expected || 0) + (currentRecord?.gcash_expected || 0)).toLocaleString()} − Expenses ₱{(shiftCashExp + shiftGcashExp).toLocaleString()}
+                      Cash ₱{currentRegisterCash.toLocaleString()} • GCash ₱{currentRegisterGcash.toLocaleString()}
                     </p>
                   </div>
                 </div>
