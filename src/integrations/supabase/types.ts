@@ -103,6 +103,7 @@ export type Database = {
           expense_type: string
           id: string
           payment_source: string
+          responsible_employee_id: string | null
           shift: string
         }
         Insert: {
@@ -115,6 +116,7 @@ export type Database = {
           expense_type?: string
           id?: string
           payment_source?: string
+          responsible_employee_id?: string | null
           shift?: string
         }
         Update: {
@@ -127,6 +129,7 @@ export type Database = {
           expense_type?: string
           id?: string
           payment_source?: string
+          responsible_employee_id?: string | null
           shift?: string
         }
         Relationships: [
@@ -135,6 +138,13 @@ export type Database = {
             columns: ["cash_register_id"]
             isOneToOne: false
             referencedRelation: "cash_register"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_expenses_responsible_employee_id_fkey"
+            columns: ["responsible_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
