@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Trash2, Square, AlertTriangle } from 'lucide-react';
+import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Trash2, Square, AlertTriangle, Wallet, CheckCircle2 } from 'lucide-react';
 
 type ShiftType = 'day' | 'night';
 
@@ -65,6 +65,12 @@ const getShiftDate = (): string => {
   return format(manilaTime, 'yyyy-MM-dd');
 };
 
+interface CashSubmission {
+  employeeName: string;
+  cash: number;
+  gcash: number;
+}
+
 export default function Shift() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeShifts, setActiveShifts] = useState<ActiveShift[]>([]);
@@ -76,6 +82,15 @@ export default function Shift() {
   const [cashAmount, setCashAmount] = useState('');
   const [gcashAmount, setGcashAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Track if cash already submitted this shift
+  const [cashAlreadySubmitted, setCashAlreadySubmitted] = useState(false);
+  const [cashSubmissions, setCashSubmissions] = useState<CashSubmission[]>([]);
+
+  // Change fund dialog
+  const [showChangeFundDialog, setShowChangeFundDialog] = useState(false);
+  const [changeFundAmount, setChangeFundAmount] = useState('');
+  const [submittingChangeFund, setSubmittingChangeFund] = useState(false);
 
   // Expense tracking
   const [shiftExpenses, setShiftExpenses] = useState<ShiftExpense[]>([]);
@@ -114,13 +129,20 @@ export default function Shift() {
 
   const loadData = async () => {
     try {
-      const [{ data: empData }, { data: shiftsData }] = await Promise.all([
+      const [{ data: empData }, { data: shiftsData }, { data: closedShifts }] = await Promise.all([
         supabase.from('employees').select('id, name').eq('active', true).order('name'),
         supabase
           .from('shifts')
           .select('id, employee_id, shift_start, shift_type, status, employees!inner(name)')
           .eq('status', 'open')
-          .order('shift_start', { ascending: false })
+          .order('shift_start', { ascending: false }),
+        // Check for closed shifts with cash submission for current date/shift
+        supabase
+          .from('shifts')
+          .select('id, employee_id, cash_handed_over, gcash_handed_over, shift_type, employees!inner(name)')
+          .eq('date', currentDate)
+          .eq('status', 'closed')
+          .or('cash_handed_over.gt.0,gcash_handed_over.gt.0')
       ]);
 
       setEmployees(empData || []);
@@ -132,6 +154,19 @@ export default function Shift() {
         shift_type: s.shift_type,
         status: s.status
       })));
+
+      // Check if any cash was already submitted for this shift type
+      const currentShiftType = currentShift === 'day' ? 'Day (5AM-5PM)' : 'Night (5PM-5AM)';
+      const shiftSubmissions = (closedShifts || [])
+        .filter((s: any) => s.shift_type === currentShiftType)
+        .map((s: any) => ({
+          employeeName: s.employees?.name || 'Unknown',
+          cash: s.cash_handed_over || 0,
+          gcash: s.gcash_handed_over || 0
+        }));
+      
+      setCashSubmissions(shiftSubmissions);
+      setCashAlreadySubmitted(shiftSubmissions.length > 0);
       
       await loadShiftExpenses();
     } catch (e) {
@@ -216,10 +251,105 @@ export default function Shift() {
 
   const handleConfirmEndShift = () => {
     if (pendingEndShiftEmployee) {
-      openHandoverDialog(pendingEndShiftEmployee);
+      if (cashAlreadySubmitted) {
+        // End shift without cash submission
+        endShiftWithoutCash(pendingEndShiftEmployee);
+      } else {
+        openHandoverDialog(pendingEndShiftEmployee);
+      }
     }
     setShowEndShiftConfirm(false);
     setPendingEndShiftEmployee(null);
+  };
+
+  const endShiftWithoutCash = async (employeeId: string) => {
+    try {
+      const activeShift = activeShifts.find(s => s.employee_id === employeeId);
+      const employeeName = employees.find(e => e.id === employeeId)?.name || 'Unknown';
+      
+      if (activeShift) {
+        const totalHours = calculateTotalHours(activeShift.shift_start);
+        
+        const { error } = await supabase
+          .from('shifts')
+          .update({
+            shift_end: new Date().toISOString(),
+            total_hours: totalHours,
+            status: 'closed'
+          })
+          .eq('id', activeShift.id);
+
+        if (error) throw error;
+
+        // Send Telegram notification
+        try {
+          await supabase.functions.invoke('telegram-notify', {
+            body: {
+              action: 'shift_end',
+              employeeName,
+              totalHours: totalHours.toFixed(1),
+              cashHandedOver: 0,
+              baseSalary: 500
+            }
+          });
+        } catch (e) {
+          console.log('Telegram notification failed:', e);
+        }
+
+        toast.success('Shift ended');
+        loadData();
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to end shift');
+    }
+  };
+
+  const submitChangeFund = async () => {
+    const amount = parseInt(changeFundAmount) || 0;
+    if (amount <= 0) {
+      toast.error('Enter amount');
+      return;
+    }
+
+    setSubmittingChangeFund(true);
+    try {
+      // Get or create cash register for current shift
+      let { data: register } = await supabase
+        .from('cash_register')
+        .select('id')
+        .eq('date', currentDate)
+        .eq('shift', currentShift)
+        .single();
+
+      if (!register) {
+        const { data: newRegister, error: createError } = await supabase
+          .from('cash_register')
+          .insert({ date: currentDate, shift: currentShift })
+          .select('id')
+          .single();
+        
+        if (createError) throw createError;
+        register = newRegister;
+      }
+
+      // Update cash register with change fund info
+      const { error } = await supabase
+        .from('cash_register')
+        .update({ opening_balance: amount })
+        .eq('id', register!.id);
+
+      if (error) throw error;
+
+      toast.success(`Change fund: ₱${amount.toLocaleString()} left for next shift`);
+      setShowChangeFundDialog(false);
+      setChangeFundAmount('');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to save change fund');
+    } finally {
+      setSubmittingChangeFund(false);
+    }
   };
 
   const calculateTotalHours = (startTime: string): number => {
@@ -446,12 +576,40 @@ export default function Shift() {
             <Plus className="w-4 h-4" />
             Expense
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowChangeFundDialog(true)} className="gap-1.5 h-9 border-border/50 hover:bg-secondary">
+            <Wallet className="w-4 h-4" />
+            Change
+          </Button>
           <Button size="sm" onClick={() => openHandoverDialog()} className="gap-1.5 h-9 shadow-lg shadow-primary/20">
             <Banknote className="w-4 h-4" />
             Cash
           </Button>
         </div>
       </div>
+
+      {/* Cash Already Submitted Indicator */}
+      {cashAlreadySubmitted && (
+        <Card className="border-green-500/30 bg-gradient-to-br from-green-500/5 to-transparent">
+          <CardContent className="py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-500">Cash already submitted this shift</p>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {cashSubmissions.map((sub, i) => (
+                    <span key={i}>
+                      {sub.employeeName}: ₱{(sub.cash + sub.gcash).toLocaleString()}
+                      {i < cashSubmissions.length - 1 && ' • '}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Active Shifts */}
       {activeShifts.length > 0 && (
@@ -777,6 +935,59 @@ export default function Shift() {
         </DialogContent>
       </Dialog>
 
+      {/* Change Fund Dialog */}
+      <Dialog open={showChangeFundDialog} onOpenChange={setShowChangeFundDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="w-5 h-5" />
+              Change Fund
+            </DialogTitle>
+            <DialogDescription>
+              Enter amount left for next shift as change fund
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 pt-2">
+            {/* Show total submitted */}
+            {cashSubmissions.length > 0 && (
+              <div className="p-3 bg-secondary/50 rounded-lg border border-border/50">
+                <div className="text-sm text-muted-foreground mb-2">Cash submitted this shift:</div>
+                {cashSubmissions.map((sub, i) => (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span>{sub.employeeName}</span>
+                    <span className="font-medium">
+                      ₱{sub.cash.toLocaleString()} + GC ₱{sub.gcash.toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+                <div className="border-t border-border/50 mt-2 pt-2 flex justify-between font-semibold">
+                  <span>Total</span>
+                  <span>₱{cashSubmissions.reduce((sum, s) => sum + s.cash + s.gcash, 0).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Amount left for change ₱</label>
+              <Input
+                type="number"
+                value={changeFundAmount}
+                onChange={e => setChangeFundAmount(e.target.value)}
+                placeholder="2000"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowChangeFundDialog(false)}>Cancel</Button>
+              <Button onClick={submitChangeFund} disabled={submittingChangeFund}>
+                {submittingChangeFund ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* End Shift Confirmation Dialog */}
       <AlertDialog open={showEndShiftConfirm} onOpenChange={setShowEndShiftConfirm}>
         <AlertDialogContent>
@@ -786,7 +997,10 @@ export default function Shift() {
               End Shift?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to end this shift? You will need to submit your cash handover.
+              {cashAlreadySubmitted 
+                ? "Cash was already submitted for this shift. Your shift will be closed without additional cash submission."
+                : "Are you sure you want to end this shift? You will need to submit your cash handover."
+              }
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
