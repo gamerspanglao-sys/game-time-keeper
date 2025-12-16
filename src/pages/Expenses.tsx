@@ -206,9 +206,15 @@ export default function Expenses() {
 
       if (error) throw error;
 
+      // Update local state directly to preserve scroll position
+      setExpenses(prev => prev.map(e => 
+        e.id === editingExpense.id 
+          ? { ...e, amount: newAmount, description: editDescription || null, category: editCategory, date: editDate, shift: editShift }
+          : e
+      ));
+
       toast.success('Расход обновлен');
       setShowEditDialog(false);
-      loadExpenses();
     } catch (error) {
       console.error('Error updating expense:', error);
       toast.error('Ошибка обновления');
