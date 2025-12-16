@@ -153,6 +153,7 @@ export default function CashRegister() {
     const channel = supabase.channel('cash-all')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_register' }, loadData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, loadData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, loadData)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
