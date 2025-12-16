@@ -414,14 +414,21 @@ export default function CashRegister() {
           {/* Storage Section - Two Columns */}
           <div className="grid grid-cols-2 gap-3">
             {/* Cash Storage */}
-            <Card 
-              className="cursor-pointer hover:border-green-500/50 transition-all active:scale-[0.99] border-green-500/20 bg-green-500/5"
-              onClick={() => openExpenseDialog('cash', 'balance')}
-            >
+            <Card className="border-green-500/20 bg-green-500/5">
               <CardContent className="p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Banknote className="w-4 h-4 text-green-500" />
-                  <span className="text-xs text-muted-foreground">Storage</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Banknote className="w-4 h-4 text-green-500" />
+                    <span className="text-xs text-muted-foreground">Storage</span>
+                  </div>
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    className="h-6 w-6 hover:bg-green-500/20"
+                    onClick={() => openExpenseDialog('cash', 'balance')}
+                  >
+                    <ArrowDownCircle className="w-4 h-4 text-green-500" />
+                  </Button>
                 </div>
                 <p className="text-xl font-bold text-green-500">₱{cashOnHand.toLocaleString()}</p>
                 {balanceCashExp > 0 && (
@@ -431,14 +438,21 @@ export default function CashRegister() {
             </Card>
 
             {/* GCash Storage */}
-            <Card 
-              className="cursor-pointer hover:border-blue-500/50 transition-all active:scale-[0.99] border-blue-500/20 bg-blue-500/5"
-              onClick={() => openExpenseDialog('gcash', 'balance')}
-            >
+            <Card className="border-blue-500/20 bg-blue-500/5">
               <CardContent className="p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Smartphone className="w-4 h-4 text-blue-500" />
-                  <span className="text-xs text-muted-foreground">GCash</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-blue-500" />
+                    <span className="text-xs text-muted-foreground">GCash</span>
+                  </div>
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    className="h-6 w-6 hover:bg-blue-500/20"
+                    onClick={() => openExpenseDialog('gcash', 'balance')}
+                  >
+                    <ArrowDownCircle className="w-4 h-4 text-blue-500" />
+                  </Button>
                 </div>
                 <p className="text-xl font-bold text-blue-500">₱{gcashOnHand.toLocaleString()}</p>
                 {balanceGcashExp > 0 && (
@@ -460,13 +474,20 @@ export default function CashRegister() {
             <CardContent className="py-2">
               <div className="grid grid-cols-2 gap-3">
                 {/* Cash in Register */}
-                <div 
-                  className="p-3 rounded-lg bg-green-500/10 cursor-pointer hover:bg-green-500/20 transition-colors"
-                  onClick={() => openExpenseDialog('cash', 'shift')}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <Banknote className="w-3 h-3 text-green-500" />
-                    <span className="text-xs text-muted-foreground">Cash</span>
+                <div className="p-3 rounded-lg bg-green-500/10">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <Banknote className="w-3 h-3 text-green-500" />
+                      <span className="text-xs text-muted-foreground">Cash</span>
+                    </div>
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      className="h-5 w-5 hover:bg-green-500/20"
+                      onClick={() => openExpenseDialog('cash', 'shift')}
+                    >
+                      <ArrowDownCircle className="w-3.5 h-3.5 text-green-500" />
+                    </Button>
                   </div>
                   <p className="text-lg font-bold text-green-500">₱{currentRegisterCash.toLocaleString()}</p>
                   <p className="text-[10px] text-muted-foreground">
@@ -475,13 +496,20 @@ export default function CashRegister() {
                 </div>
 
                 {/* GCash in Register */}
-                <div 
-                  className="p-3 rounded-lg bg-blue-500/10 cursor-pointer hover:bg-blue-500/20 transition-colors"
-                  onClick={() => openExpenseDialog('gcash', 'shift')}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <Smartphone className="w-3 h-3 text-blue-500" />
-                    <span className="text-xs text-muted-foreground">GCash</span>
+                <div className="p-3 rounded-lg bg-blue-500/10">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="w-3 h-3 text-blue-500" />
+                      <span className="text-xs text-muted-foreground">GCash</span>
+                    </div>
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      className="h-5 w-5 hover:bg-blue-500/20"
+                      onClick={() => openExpenseDialog('gcash', 'shift')}
+                    >
+                      <ArrowDownCircle className="w-3.5 h-3.5 text-blue-500" />
+                    </Button>
                   </div>
                   <p className="text-lg font-bold text-blue-500">₱{currentRegisterGcash.toLocaleString()}</p>
                   <p className="text-[10px] text-muted-foreground">
