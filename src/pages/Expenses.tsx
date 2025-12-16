@@ -44,6 +44,7 @@ const EXPENSE_CATEGORIES = {
   ],
   // Невозвратные - операционные расходы бизнеса
   nonReturnable: [
+    { value: 'salaries', label: 'Зарплаты', color: 'bg-red-500/20 text-red-500 border-red-500/30' },
     { value: 'equipment', label: 'Оборудование', color: 'bg-blue-500/20 text-blue-500 border-blue-500/30' },
     { value: 'inventory', label: 'Инвентарь', color: 'bg-purple-500/20 text-purple-500 border-purple-500/30' },
     { value: 'employee_food', label: 'Еда сотрудников', color: 'bg-green-500/20 text-green-500 border-green-500/30' },
