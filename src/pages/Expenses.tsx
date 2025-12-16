@@ -22,6 +22,7 @@ interface Expense {
   amount: number;
   description: string | null;
   shift: string;
+  date: string;
   created_at: string;
 }
 
@@ -96,6 +97,8 @@ export default function Expenses() {
   const [editAmount, setEditAmount] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editCategory, setEditCategory] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editShift, setEditShift] = useState<'day' | 'night'>('day');
   
   // Add dialog
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -134,9 +137,9 @@ export default function Expenses() {
       const { data, error } = await supabase
         .from('cash_expenses')
         .select('*')
-        .gte('created_at', `${fromStr}T00:00:00`)
-        .lte('created_at', `${toStr}T23:59:59`)
-        .order('created_at', { ascending: false });
+        .gte('date', fromStr)
+        .lte('date', toStr)
+        .order('date', { ascending: false });
 
       if (error) throw error;
       setExpenses(data || []);
@@ -175,6 +178,8 @@ export default function Expenses() {
     setEditAmount(expense.amount.toString());
     setEditDescription(expense.description || '');
     setEditCategory(expense.category);
+    setEditDate(expense.date || format(new Date(expense.created_at), 'yyyy-MM-dd'));
+    setEditShift(expense.shift as 'day' | 'night');
     setShowEditDialog(true);
   };
 
@@ -193,7 +198,9 @@ export default function Expenses() {
         .update({
           amount: newAmount,
           description: editDescription || null,
-          category: editCategory
+          category: editCategory,
+          date: editDate,
+          shift: editShift
         })
         .eq('id', editingExpense.id);
 
@@ -257,7 +264,8 @@ export default function Expenses() {
           category: newCategory,
           amount,
           description: newDescription || null,
-          shift: newShift
+          shift: newShift,
+          date: newDate
         });
 
       toast.success('Расход добавлен');
@@ -285,7 +293,7 @@ export default function Expenses() {
     rows.push(['Дата', 'Смена', 'Категория', 'Описание', 'Сумма']);
     expenses.filter(e => getCategoryGroup(e.category) === 'returnable').forEach(e => {
       rows.push([
-        format(new Date(e.created_at), 'dd.MM.yyyy'),
+        e.date ? format(new Date(e.date), 'dd.MM.yyyy') : format(new Date(e.created_at), 'dd.MM.yyyy'),
         e.shift === 'day' ? 'День' : 'Ночь',
         getCategoryLabel(e.category),
         e.description || '',
@@ -300,7 +308,7 @@ export default function Expenses() {
     rows.push(['Дата', 'Смена', 'Категория', 'Описание', 'Сумма']);
     expenses.filter(e => getCategoryGroup(e.category) === 'nonReturnable').forEach(e => {
       rows.push([
-        format(new Date(e.created_at), 'dd.MM.yyyy'),
+        e.date ? format(new Date(e.date), 'dd.MM.yyyy') : format(new Date(e.created_at), 'dd.MM.yyyy'),
         e.shift === 'day' ? 'День' : 'Ночь',
         getCategoryLabel(e.category),
         e.description || '',
@@ -315,7 +323,7 @@ export default function Expenses() {
     rows.push(['Дата', 'Смена', 'Категория', 'Описание', 'Сумма']);
     expenses.filter(e => getCategoryGroup(e.category) === 'investorReturnable').forEach(e => {
       rows.push([
-        format(new Date(e.created_at), 'dd.MM.yyyy'),
+        e.date ? format(new Date(e.date), 'dd.MM.yyyy') : format(new Date(e.created_at), 'dd.MM.yyyy'),
         e.shift === 'day' ? 'День' : 'Ночь',
         getCategoryLabel(e.category),
         e.description || '',
@@ -330,7 +338,7 @@ export default function Expenses() {
     rows.push(['Дата', 'Смена', 'Категория', 'Описание', 'Сумма']);
     expenses.filter(e => getCategoryGroup(e.category) === 'investorNonReturnable').forEach(e => {
       rows.push([
-        format(new Date(e.created_at), 'dd.MM.yyyy'),
+        e.date ? format(new Date(e.date), 'dd.MM.yyyy') : format(new Date(e.created_at), 'dd.MM.yyyy'),
         e.shift === 'day' ? 'День' : 'Ночь',
         getCategoryLabel(e.category),
         e.description || '',
@@ -538,7 +546,7 @@ export default function Expenses() {
                   {filteredExpenses.map((expense) => (
                     <tr key={expense.id} className="border-b hover:bg-muted/50">
                       <td className="py-3 px-4">
-                        <div>{format(new Date(expense.created_at), 'dd.MM.yyyy')}</div>
+                        <div>{expense.date ? format(new Date(expense.date), 'dd.MM.yyyy') : format(new Date(expense.created_at), 'dd.MM.yyyy')}</div>
                         <div className="text-xs text-muted-foreground">
                           {expense.shift === 'day' ? '☀️ День' : '🌙 Ночь'}
                         </div>
@@ -583,6 +591,28 @@ export default function Expenses() {
             <DialogTitle>Редактировать расход</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Дата</Label>
+                <Input
+                  type="date"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Смена</Label>
+                <Select value={editShift} onValueChange={(v) => setEditShift(v as 'day' | 'night')}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="day">☀️ День</SelectItem>
+                    <SelectItem value="night">🌙 Ночь</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="space-y-2">
               <Label>Категория</Label>
               <Select value={editCategory} onValueChange={setEditCategory}>
