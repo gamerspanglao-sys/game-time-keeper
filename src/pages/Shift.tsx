@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Clock, Play, Square, Banknote, User, Sun, Moon } from 'lucide-react';
+import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Trash2 } from 'lucide-react';
 
 type ShiftType = 'day' | 'night';
 
@@ -25,6 +25,22 @@ interface ActiveShift {
   shift_type: string;
   status: string;
 }
+
+interface ShiftExpense {
+  id: string;
+  amount: number;
+  category: string;
+  description: string | null;
+  created_at: string;
+  payment_source: string;
+}
+
+const EXPENSE_CATEGORIES = [
+  { value: 'employee_food', label: 'Employee Food' },
+  { value: 'food_hunters', label: 'Food Hunters' },
+  { value: 'purchases', label: 'Purchases' },
+  { value: 'other', label: 'Other' }
+];
 
 const getCurrentShift = (): ShiftType => {
   const now = new Date();
@@ -59,6 +75,15 @@ export default function Shift() {
   const [gcashAmount, setGcashAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Expense tracking
+  const [shiftExpenses, setShiftExpenses] = useState<ShiftExpense[]>([]);
+  const [showExpenseDialog, setShowExpenseDialog] = useState(false);
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState('');
+  const [expenseDescription, setExpenseDescription] = useState('');
+  const [expensePaymentSource, setExpensePaymentSource] = useState<'cash' | 'gcash'>('cash');
+  const [addingExpense, setAddingExpense] = useState(false);
+
   const currentShift = getCurrentShift();
   const currentDate = getShiftDate();
 
@@ -69,6 +94,9 @@ export default function Shift() {
       .channel('shift-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => {
         loadData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, () => {
+        loadShiftExpenses();
       })
       .subscribe();
 
@@ -97,10 +125,40 @@ export default function Shift() {
         shift_type: s.shift_type,
         status: s.status
       })));
+      
+      await loadShiftExpenses();
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadShiftExpenses = async () => {
+    try {
+      // Get cash register for current shift
+      const { data: register } = await supabase
+        .from('cash_register')
+        .select('id')
+        .eq('date', currentDate)
+        .eq('shift', currentShift)
+        .single();
+
+      if (register) {
+        const { data: expenses } = await supabase
+          .from('cash_expenses')
+          .select('*')
+          .eq('cash_register_id', register.id)
+          .eq('expense_type', 'shift')
+          .order('created_at', { ascending: false });
+
+        setShiftExpenses(expenses || []);
+      } else {
+        setShiftExpenses([]);
+      }
+    } catch (e) {
+      console.error(e);
+      setShiftExpenses([]);
     }
   };
 
@@ -148,11 +206,9 @@ export default function Shift() {
 
     setSubmitting(true);
     try {
-      // Find active shift for this employee
       const activeShift = activeShifts.find(s => s.employee_id === selectedEmployee);
 
       if (activeShift) {
-        // Update existing shift with cash handover
         const { error } = await supabase
           .from('shifts')
           .update({
@@ -165,7 +221,6 @@ export default function Shift() {
 
         if (error) throw error;
       } else {
-        // Create new shift record with cash handover (employee closing without starting)
         const shiftType = currentShift === 'day' ? 'Day (5AM-5PM)' : 'Night (5PM-5AM)';
         
         const { error } = await supabase.from('shifts').insert({
@@ -182,7 +237,6 @@ export default function Shift() {
         if (error) throw error;
       }
 
-      // Send Telegram notification
       try {
         const employeeName = employees.find(e => e.id === selectedEmployee)?.name || 'Unknown';
         await supabase.functions.invoke('telegram-notify', {
@@ -205,6 +259,82 @@ export default function Shift() {
     }
   };
 
+  const openExpenseDialog = () => {
+    setExpenseAmount('');
+    setExpenseCategory('');
+    setExpenseDescription('');
+    setExpensePaymentSource('cash');
+    setShowExpenseDialog(true);
+  };
+
+  const addExpense = async () => {
+    const amount = parseInt(expenseAmount) || 0;
+    if (amount <= 0) {
+      toast.error('Enter valid amount');
+      return;
+    }
+    if (!expenseCategory) {
+      toast.error('Select category');
+      return;
+    }
+
+    setAddingExpense(true);
+    try {
+      // Get or create cash register for current shift
+      let { data: register } = await supabase
+        .from('cash_register')
+        .select('id')
+        .eq('date', currentDate)
+        .eq('shift', currentShift)
+        .single();
+
+      if (!register) {
+        const { data: newRegister, error: createError } = await supabase
+          .from('cash_register')
+          .insert({ date: currentDate, shift: currentShift })
+          .select('id')
+          .single();
+        
+        if (createError) throw createError;
+        register = newRegister;
+      }
+
+      const { error } = await supabase.from('cash_expenses').insert({
+        cash_register_id: register!.id,
+        amount,
+        category: expenseCategory,
+        description: expenseDescription || null,
+        payment_source: expensePaymentSource,
+        expense_type: 'shift',
+        shift: currentShift,
+        date: currentDate
+      });
+
+      if (error) throw error;
+
+      toast.success('Expense added');
+      setShowExpenseDialog(false);
+      loadShiftExpenses();
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to add expense');
+    } finally {
+      setAddingExpense(false);
+    }
+  };
+
+  const deleteExpense = async (id: string) => {
+    try {
+      const { error } = await supabase.from('cash_expenses').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Expense deleted');
+      loadShiftExpenses();
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to delete');
+    }
+  };
+
   const getEmployeeShift = (employeeId: string) => {
     return activeShifts.find(s => s.employee_id === employeeId);
   };
@@ -217,6 +347,10 @@ export default function Shift() {
     const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     return `${hours}h ${mins}m`;
   };
+
+  const totalShiftExpenses = shiftExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const cashExpenses = shiftExpenses.filter(e => e.payment_source === 'cash').reduce((sum, e) => sum + e.amount, 0);
+  const gcashExpenses = shiftExpenses.filter(e => e.payment_source === 'gcash').reduce((sum, e) => sum + e.amount, 0);
 
   if (loading) {
     return (
@@ -239,10 +373,16 @@ export default function Shift() {
           </Badge>
         </div>
         
-        <Button onClick={openHandoverDialog} className="gap-2">
-          <Banknote className="w-4 h-4" />
-          Submit Cash
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={openExpenseDialog} className="gap-1">
+            <Plus className="w-4 h-4" />
+            Expense
+          </Button>
+          <Button onClick={openHandoverDialog} className="gap-1">
+            <Banknote className="w-4 h-4" />
+            Cash
+          </Button>
+        </div>
       </div>
 
       {/* Active Shifts */}
@@ -269,6 +409,58 @@ export default function Shift() {
           </CardContent>
         </Card>
       )}
+
+      {/* Shift Expenses */}
+      <Card>
+        <CardHeader className="py-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Receipt className="w-4 h-4" />
+              Shift Expenses
+            </CardTitle>
+            {totalShiftExpenses > 0 && (
+              <div className="text-sm text-muted-foreground">
+                <span className="text-foreground font-medium">₱{totalShiftExpenses.toLocaleString()}</span>
+                <span className="ml-2 text-xs">(Cash: ₱{cashExpenses.toLocaleString()} | GCash: ₱{gcashExpenses.toLocaleString()})</span>
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="py-2">
+          {shiftExpenses.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">No expenses this shift</p>
+          ) : (
+            <div className="space-y-2">
+              {shiftExpenses.map(expense => (
+                <div key={expense.id} className="flex items-center justify-between p-2 bg-secondary/30 rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">₱{expense.amount.toLocaleString()}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label || expense.category}
+                      </Badge>
+                      <Badge variant="secondary" className="text-xs">
+                        {expense.payment_source === 'cash' ? 'Cash' : 'GCash'}
+                      </Badge>
+                    </div>
+                    {expense.description && (
+                      <p className="text-xs text-muted-foreground mt-1">{expense.description}</p>
+                    )}
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => deleteExpense(expense.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Employees */}
       <Card>
@@ -299,6 +491,76 @@ export default function Shift() {
           })}
         </CardContent>
       </Card>
+
+      {/* Add Expense Dialog */}
+      <Dialog open={showExpenseDialog} onOpenChange={setShowExpenseDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="w-5 h-5" />
+              Add Expense
+            </DialogTitle>
+            <DialogDescription>
+              Add expense for current shift (deducted from shift cash)
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Amount ₱</label>
+              <Input
+                type="number"
+                value={expenseAmount}
+                onChange={e => setExpenseAmount(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Category</label>
+              <Select value={expenseCategory} onValueChange={setExpenseCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXPENSE_CATEGORIES.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Payment Source</label>
+              <Select value={expensePaymentSource} onValueChange={(v) => setExpensePaymentSource(v as 'cash' | 'gcash')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="gcash">GCash</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Description (optional)</label>
+              <Input
+                value={expenseDescription}
+                onChange={e => setExpenseDescription(e.target.value)}
+                placeholder="What was it for?"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowExpenseDialog(false)}>Cancel</Button>
+              <Button onClick={addExpense} disabled={addingExpense}>
+                {addingExpense ? 'Adding...' : 'Add'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Cash Handover Dialog */}
       <Dialog open={showHandoverDialog} onOpenChange={setShowHandoverDialog}>
