@@ -63,7 +63,14 @@ const getCurrentShift = (): ShiftType => {
 const getShiftDate = (): string => {
   const now = new Date();
   const manilaTime = new Date(now.getTime() + (now.getTimezoneOffset() + 480) * 60000);
-  if (manilaTime.getHours() < 5) manilaTime.setDate(manilaTime.getDate() - 1);
+  const hours = manilaTime.getHours();
+  
+  // Night shift (17:00-23:59) belongs to next day
+  if (hours >= 17) {
+    manilaTime.setDate(manilaTime.getDate() + 1);
+  }
+  // Early morning (00:00-04:59) and Day shift (05:00-16:59) stay on current day
+  
   return format(manilaTime, 'yyyy-MM-dd');
 };
 
