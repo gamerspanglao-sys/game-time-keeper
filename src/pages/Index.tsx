@@ -223,7 +223,19 @@ const Index = () => {
                 onReset={resetTimer}
                 onSetDuration={setDuration}
                 onAdjustTime={adjustTime}
-                onStartPromo={timer.id === 'vip-super' ? startPromoTimer : undefined}
+                onStartPromo={timer.id === 'vip-super' ? async (id: string) => {
+                  const result = await startPromoTimer(id);
+                  if (!result.success) {
+                    toast.error('Receipt Error', {
+                      description: result.error || 'Failed to create receipt in POS',
+                    });
+                  } else {
+                    toast.success('Promo Started', {
+                      description: 'VIP Super promo started with Basket Red Horse',
+                    });
+                  }
+                  return result;
+                } : undefined}
                 playConfirmSound={playConfirmSound}
                 stopAlarm={stopAlarm}
                 notifyQueueNext={notifyQueueNext}
