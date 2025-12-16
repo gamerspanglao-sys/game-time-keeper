@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { EmployeeShiftCard } from '@/components/staff/EmployeeShiftCard';
 import { EmployeeManagement } from '@/components/staff/EmployeeManagement';
 import { PayrollReport } from '@/components/staff/PayrollReport';
+import { ExpenseManager } from '@/components/staff/ExpenseManager';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -2523,107 +2524,8 @@ export default function Finance() {
             </div>
           )}
 
-          {/* Expense Section */}
-          <Card className="border-border/50 overflow-hidden">
-            <CardHeader className="pb-4 bg-gradient-to-r from-purple-500/5 to-transparent border-b border-border/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                  <Receipt className="w-5 h-5 text-purple-500" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">Expenses</CardTitle>
-                  <p className="text-xs text-muted-foreground">Add and manage expenses</p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-6">
-              {/* Add Expense Buttons */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Button
-                  variant="outline"
-                  className="h-20 flex flex-col gap-2 border-purple-500/30 hover:border-purple-500 hover:bg-purple-500/10 transition-all group"
-                  onClick={() => setShowExpenseDialog(true)}
-                >
-                  <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Receipt className="w-4 h-4 text-purple-500" />
-                  </div>
-                  <span className="text-xs font-medium">Add Expense</span>
-                </Button>
-                
-                {isAdminMode && (
-                  <>
-                    <Button
-                      variant="outline"
-                      className="h-20 flex flex-col gap-2 border-orange-500/30 hover:border-orange-500 hover:bg-orange-500/10 transition-all group"
-                      onClick={() => setShowPurchaseExpenseDialog(true)}
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Package className="w-4 h-4 text-orange-500" />
-                      </div>
-                      <span className="text-xs font-medium">Purchase</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-20 flex flex-col gap-2 border-blue-500/30 hover:border-blue-500 hover:bg-blue-500/10 transition-all group"
-                      onClick={() => setShowSalaryDialog(true)}
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Users className="w-4 h-4 text-blue-500" />
-                      </div>
-                      <span className="text-xs font-medium">Salary</span>
-                    </Button>
-                  </>
-                )}
-              </div>
-
-              {/* Recent Expenses List */}
-              {recentExpenses.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                      <Receipt className="w-4 h-4" />
-                      Recent Expenses
-                    </h4>
-                    <Badge variant="secondary" className="text-xs">Last 10</Badge>
-                  </div>
-                  <div className="space-y-2">
-                    {recentExpenses.map((expense, index) => (
-                      <div 
-                        key={expense.id} 
-                        className="flex items-center justify-between py-3 px-4 bg-secondary/30 hover:bg-secondary/50 rounded-xl transition-all group"
-                        style={{ animationDelay: `${index * 50}ms` }}
-                      >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium",
-                            expense.shift === 'day' 
-                              ? "bg-amber-500/20 text-amber-500" 
-                              : "bg-indigo-500/20 text-indigo-500"
-                          )}>
-                            {expense.shift === 'day' ? '☀️' : '🌙'}
-                          </div>
-                          <span className="text-sm truncate">{expense.description || expense.category}</span>
-                        </div>
-                        <div className="flex items-center gap-3 ml-2">
-                          <span className="font-semibold text-sm whitespace-nowrap">₱{expense.amount.toLocaleString()}</span>
-                          {isAdminMode && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all"
-                              onClick={() => deleteExpense(expense.id, expense.category, expense.amount)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Full Expense Manager */}
+          <ExpenseManager />
 
         </TabsContent>
 
