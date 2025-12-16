@@ -26,6 +26,16 @@ interface Expense {
   created_at: string;
 }
 
+interface InvestorContribution {
+  id: string;
+  amount: number;
+  category: string;
+  contribution_type: string;
+  description: string | null;
+  date: string;
+  created_at: string;
+}
+
 // Category groups
 const EXPENSE_CATEGORIES = {
   // Оборотные - закупки товара для продажи
@@ -81,6 +91,7 @@ type DatePreset = 'today' | 'week' | 'month' | 'custom';
 
 export default function Expenses() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [investorContributions, setInvestorContributions] = useState<InvestorContribution[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -138,15 +149,27 @@ export default function Expenses() {
       const fromStr = format(dateFrom, 'yyyy-MM-dd');
       const toStr = format(dateTo, 'yyyy-MM-dd');
       
-      const { data, error } = await supabase
+      // Load expenses
+      const { data: expensesData, error: expensesError } = await supabase
         .from('cash_expenses')
         .select('*')
         .gte('date', fromStr)
         .lte('date', toStr)
         .order('date', { ascending: false });
 
-      if (error) throw error;
-      setExpenses(data || []);
+      if (expensesError) throw expensesError;
+      setExpenses(expensesData || []);
+
+      // Load investor contributions
+      const { data: investorData, error: investorError } = await supabase
+        .from('investor_contributions')
+        .select('*')
+        .gte('date', fromStr)
+        .lte('date', toStr)
+        .order('date', { ascending: false });
+
+      if (investorError) throw investorError;
+      setInvestorContributions(investorData || []);
     } catch (error) {
       console.error('Error loading expenses:', error);
       toast.error('Ошибка загрузки расходов');
@@ -168,11 +191,24 @@ export default function Expenses() {
   });
 
   // Calculate totals by group
-  const totals = {
+  const expenseTotals = {
     returnable: expenses.filter(e => getCategoryGroup(e.category) === 'returnable').reduce((s, e) => s + e.amount, 0),
     nonReturnable: expenses.filter(e => getCategoryGroup(e.category) === 'nonReturnable').reduce((s, e) => s + e.amount, 0),
     investorReturnable: expenses.filter(e => getCategoryGroup(e.category) === 'investorReturnable').reduce((s, e) => s + e.amount, 0),
     investorNonReturnable: expenses.filter(e => getCategoryGroup(e.category) === 'investorNonReturnable').reduce((s, e) => s + e.amount, 0)
+  };
+
+  // Calculate investor contributions totals
+  const investorContributionTotals = {
+    returnable: investorContributions.filter(c => c.contribution_type === 'returnable').reduce((s, c) => s + c.amount, 0),
+    nonReturnable: investorContributions.filter(c => c.contribution_type === 'non_returnable').reduce((s, c) => s + c.amount, 0)
+  };
+
+  const totals = {
+    returnable: expenseTotals.returnable,
+    nonReturnable: expenseTotals.nonReturnable,
+    investorReturnable: expenseTotals.investorReturnable + investorContributionTotals.returnable,
+    investorNonReturnable: expenseTotals.investorNonReturnable + investorContributionTotals.nonReturnable
   };
 
   const grandTotal = totals.returnable + totals.nonReturnable + totals.investorReturnable + totals.investorNonReturnable;
@@ -572,7 +608,7 @@ export default function Expenses() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-lg flex items-center justify-between">
-            <span>Расходы ({filteredExpenses.length})</span>
+            <span>Расходы ({filteredExpenses.length + investorContributions.length})</span>
             <span className="text-muted-foreground">Всего: ₱{grandTotal.toLocaleString()}</span>
           </CardTitle>
         </CardHeader>
@@ -581,7 +617,7 @@ export default function Expenses() {
             <div className="flex items-center justify-center h-32">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
-          ) : filteredExpenses.length === 0 ? (
+          ) : (filteredExpenses.length === 0 && investorContributions.length === 0) ? (
             <div className="p-8 text-center text-muted-foreground">Нет расходов</div>
           ) : (
             <div className="overflow-x-auto">
@@ -596,6 +632,7 @@ export default function Expenses() {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Regular expenses */}
                   {filteredExpenses.map((expense) => (
                     <tr key={expense.id} className="border-b hover:bg-muted/50">
                       <td className="py-3 px-4">
@@ -674,6 +711,32 @@ export default function Expenses() {
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Investor contributions */}
+                  {investorContributions.map((contribution) => (
+                    <tr key={`inv-${contribution.id}`} className="border-b hover:bg-muted/50 bg-teal-500/5">
+                      <td className="py-3 px-4">
+                        <div>{format(new Date(contribution.date), 'dd.MM.yyyy')}</div>
+                        <div className="text-xs text-muted-foreground">💰 Инвестор</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge className={cn("border", contribution.contribution_type === 'returnable' 
+                          ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30' 
+                          : 'bg-teal-500/20 text-teal-500 border-teal-500/30')}>
+                          {contribution.contribution_type === 'returnable' ? 'Инвестор: Возвратные' : 'Инвестор: Невозвратные'}
+                          {contribution.category && ` (${contribution.category})`}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground max-w-xs truncate">
+                        {contribution.description || '—'}
+                      </td>
+                      <td className="text-right py-3 px-4 font-medium">
+                        ₱{contribution.amount.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4">
+                        {/* Investor contributions are read-only */}
                       </td>
                     </tr>
                   ))}
