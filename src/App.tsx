@@ -7,7 +7,7 @@ import Index from "./pages/Index";
 import Finance from "./pages/Finance";
 import Activity from "./pages/Activity";
 import CashRegister from "./pages/CashRegister";
-import Expenses from "./pages/Expenses";
+
 import Inventory from "./pages/Inventory";
 import NotFound from "./pages/NotFound";
 import { Layout } from "./components/Layout";
@@ -25,7 +25,7 @@ const App = () => (
           <Route path="/finance" element={<Layout><Finance /></Layout>} />
           <Route path="/activity" element={<Layout><Activity /></Layout>} />
           <Route path="/cash" element={<Layout><CashRegister /></Layout>} />
-          <Route path="/expenses" element={<Layout><Expenses /></Layout>} />
+          
           <Route path="/inventory" element={<Layout><Inventory /></Layout>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
