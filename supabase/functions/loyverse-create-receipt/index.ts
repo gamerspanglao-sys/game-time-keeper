@@ -30,7 +30,7 @@ const PROMO_CONFIG: Record<string, {
   name: string;
   price: number;
 }> = {
-  'basket-redhorse': { sku: '10069', name: 'Basket Red Horse', price: 1000 },
+  'basket-redhorse': { sku: '136', name: 'Basket Red Horse', price: 1000 },
 };
 
 const STORE_ID = '77f9b0db-9be9-4907-b4ec-9d68653f7a21';
