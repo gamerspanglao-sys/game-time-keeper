@@ -418,7 +418,7 @@ export default function CashRegister() {
               </CardContent>
             </Card>
 
-            {/* Current Register (Shift Revenue) */}
+            {/* Current Register (Loyverse Expected Revenue) */}
             <Card 
               className="cursor-pointer hover:border-primary/50 transition-all active:scale-[0.99] border-primary/20 bg-primary/5"
               onClick={() => openExpenseDialog('cash', 'shift')}
@@ -429,12 +429,12 @@ export default function CashRegister() {
                     <CircleDollarSign className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Current Register</p>
+                    <p className="text-xs text-muted-foreground">Current Register (Loyverse)</p>
                     <p className="text-2xl font-bold text-primary">
-                      ₱{((currentRecord?.cash_actual || 0) + (currentRecord?.gcash_actual || 0) - shiftCashExp - shiftGcashExp).toLocaleString()}
+                      ₱{((currentRecord?.cash_expected || 0) + (currentRecord?.gcash_expected || 0) - shiftCashExp - shiftGcashExp).toLocaleString()}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      Received ₱{((currentRecord?.cash_actual || 0) + (currentRecord?.gcash_actual || 0)).toLocaleString()} − Expenses ₱{(shiftCashExp + shiftGcashExp).toLocaleString()}
+                      Sales ₱{((currentRecord?.cash_expected || 0) + (currentRecord?.gcash_expected || 0)).toLocaleString()} − Expenses ₱{(shiftCashExp + shiftGcashExp).toLocaleString()}
                     </p>
                   </div>
                 </div>
