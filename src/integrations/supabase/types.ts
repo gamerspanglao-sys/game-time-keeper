@@ -101,6 +101,7 @@ export type Database = {
           date: string | null
           description: string | null
           id: string
+          payment_source: string
           shift: string
         }
         Insert: {
@@ -111,6 +112,7 @@ export type Database = {
           date?: string | null
           description?: string | null
           id?: string
+          payment_source?: string
           shift?: string
         }
         Update: {
@@ -121,6 +123,7 @@ export type Database = {
           date?: string | null
           description?: string | null
           id?: string
+          payment_source?: string
           shift?: string
         }
         Relationships: [

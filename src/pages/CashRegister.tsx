@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -16,13 +16,18 @@ import {
   Loader2,
   Sun,
   Moon,
-  Pencil
+  Pencil,
+  Plus,
+  Trash2,
+  Banknote,
+  Smartphone
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // ============= TYPES =============
 
 type ShiftType = 'day' | 'night';
+type PaymentSource = 'cash' | 'gcash';
 
 interface CashRecord {
   id: string;
@@ -43,6 +48,18 @@ interface CashRecord {
   notes: string | null;
 }
 
+interface Expense {
+  id: string;
+  cash_register_id: string;
+  category: string;
+  amount: number;
+  description: string | null;
+  shift: string;
+  date: string;
+  payment_source: PaymentSource;
+  created_at: string;
+}
+
 interface ShiftHandover {
   employee_name: string;
   cash_handed_over: number | null;
@@ -52,6 +69,20 @@ interface ShiftHandover {
 // ============= CONSTANTS =============
 
 const ADMIN_PIN = '8808';
+
+const EXPENSE_CATEGORIES = [
+  { value: 'purchases', label: 'Закупки товара' },
+  { value: 'salaries', label: 'Зарплаты' },
+  { value: 'equipment', label: 'Оборудование' },
+  { value: 'inventory', label: 'Инвентарь' },
+  { value: 'employee_food', label: 'Еда сотрудников' },
+  { value: 'food_hunters', label: 'Food Hunters' },
+  { value: 'other', label: 'Прочее' }
+];
+
+const getCategoryLabel = (value: string) => {
+  return EXPENSE_CATEGORIES.find(c => c.value === value)?.label || value;
+};
 
 // Get current shift based on Manila time
 const getCurrentShift = (): ShiftType => {
@@ -80,6 +111,7 @@ const getShiftDate = (): string => {
 
 export default function CashRegister() {
   const [records, setRecords] = useState<CashRecord[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [currentShiftHandovers, setCurrentShiftHandovers] = useState<ShiftHandover[]>([]);
@@ -90,11 +122,18 @@ export default function CashRegister() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
   
-  // Edit dialog
+  // Edit cash dialog
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingRecord, setEditingRecord] = useState<CashRecord | null>(null);
   const [editCashActual, setEditCashActual] = useState('');
   const [editGcashActual, setEditGcashActual] = useState('');
+
+  // Add expense dialog
+  const [showAddExpenseDialog, setShowAddExpenseDialog] = useState(false);
+  const [newExpenseAmount, setNewExpenseAmount] = useState('');
+  const [newExpenseCategory, setNewExpenseCategory] = useState('purchases');
+  const [newExpenseDescription, setNewExpenseDescription] = useState('');
+  const [newExpenseSource, setNewExpenseSource] = useState<PaymentSource>('cash');
 
   // Selected shift for viewing
   const [selectedDate, setSelectedDate] = useState<string>(getShiftDate());
@@ -103,6 +142,18 @@ export default function CashRegister() {
   // Calculate totals
   const totalEmployeeCash = currentShiftHandovers.reduce((sum, h) => sum + (h.cash_handed_over || 0), 0);
   const totalEmployeeGcash = currentShiftHandovers.reduce((sum, h) => sum + (h.gcash_handed_over || 0), 0);
+
+  // Get current shift record
+  const currentRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
+
+  // Get expenses for current shift
+  const currentShiftExpenses = expenses.filter(e => e.date === selectedDate && e.shift === selectedShift);
+  const cashExpenses = currentShiftExpenses.filter(e => e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
+  const gcashExpenses = currentShiftExpenses.filter(e => e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
+
+  // Calculate balance on hand
+  const cashOnHand = (currentRecord?.cash_actual || 0) - cashExpenses;
+  const gcashOnHand = (currentRecord?.gcash_actual || 0) - gcashExpenses;
 
   // Load data
   const loadData = async () => {
@@ -120,6 +171,20 @@ export default function CashRegister() {
       toast.error('Failed to load data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadExpenses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('cash_expenses')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setExpenses((data || []) as Expense[]);
+    } catch (error) {
+      console.error('Error loading expenses:', error);
     }
   };
 
@@ -149,6 +214,7 @@ export default function CashRegister() {
 
   useEffect(() => {
     loadData();
+    loadExpenses();
   }, []);
 
   useEffect(() => {
@@ -164,6 +230,9 @@ export default function CashRegister() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => {
         loadCurrentShiftHandovers();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, () => {
+        loadExpenses();
+      })
       .subscribe();
 
     return () => {
@@ -177,11 +246,6 @@ export default function CashRegister() {
       setShowPinDialog(false);
       setPinInput('');
       setPinError('');
-      // Open edit dialog for current record after login
-      const record = records.find(r => r.date === selectedDate && r.shift === selectedShift);
-      if (record) {
-        openEditDialog(record);
-      }
     } else {
       setPinError('Wrong PIN');
     }
@@ -250,14 +314,71 @@ export default function CashRegister() {
     }
   };
 
-  // Get current shift record
-  const currentRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
+  const addExpense = async () => {
+    const amount = parseInt(newExpenseAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Введите корректную сумму');
+      return;
+    }
 
-  // Get recent records (last 7 days)
-  const recentRecords = records.slice(0, 14);
+    try {
+      let cashRegisterId = currentRecord?.id;
+
+      // Create cash_register record if doesn't exist
+      if (!cashRegisterId) {
+        const { data: created, error: createError } = await supabase
+          .from('cash_register')
+          .insert({ date: selectedDate, shift: selectedShift })
+          .select('id')
+          .single();
+        if (createError) throw createError;
+        cashRegisterId = created.id;
+      }
+
+      const { error } = await supabase
+        .from('cash_expenses')
+        .insert({
+          cash_register_id: cashRegisterId,
+          category: newExpenseCategory,
+          amount,
+          description: newExpenseDescription || null,
+          shift: selectedShift,
+          date: selectedDate,
+          payment_source: newExpenseSource
+        });
+
+      if (error) throw error;
+
+      toast.success('Расход добавлен');
+      setShowAddExpenseDialog(false);
+      setNewExpenseAmount('');
+      setNewExpenseDescription('');
+      loadExpenses();
+      loadData();
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      toast.error('Ошибка добавления');
+    }
+  };
+
+  const deleteExpense = async (expenseId: string) => {
+    if (!confirm('Удалить этот расход?')) return;
+    
+    try {
+      await supabase.from('cash_expenses').delete().eq('id', expenseId);
+      toast.success('Удалено');
+      loadExpenses();
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      toast.error('Ошибка удаления');
+    }
+  };
 
   // Get unique dates for selector
   const uniqueDates = [...new Set(records.map(r => r.date))].slice(0, 7);
+
+  // Get recent records (last 7 days)
+  const recentRecords = records.slice(0, 14);
 
   if (loading) {
     return (
@@ -267,11 +388,51 @@ export default function CashRegister() {
     );
   }
 
+  // Non-admin view - just show login prompt
+  if (!isAdminMode) {
+    return (
+      <div className="p-4 max-w-md mx-auto">
+        <Card className="mt-10">
+          <CardContent className="py-8 text-center space-y-4">
+            <Lock className="w-12 h-12 mx-auto text-muted-foreground" />
+            <h2 className="text-xl font-semibold">Cash Register</h2>
+            <p className="text-muted-foreground">Admin access required</p>
+            <Button onClick={() => setShowPinDialog(true)}>
+              <Lock className="w-4 h-4 mr-2" />
+              Enter PIN
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* PIN Dialog */}
+        <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
+          <DialogContent className="max-w-xs">
+            <DialogHeader>
+              <DialogTitle>Admin Access</DialogTitle>
+              <DialogDescription>Enter PIN to access cash register</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <Input
+                type="password"
+                placeholder="Enter PIN"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
+              />
+              {pinError && <p className="text-sm text-red-500">{pinError}</p>}
+              <Button onClick={handleAdminLogin} className="w-full">Login</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 space-y-4 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Cash Register</h1>
+        <h1 className="text-xl font-bold">💰 Cash Register</h1>
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -282,16 +443,6 @@ export default function CashRegister() {
             {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             <span className="ml-2 hidden sm:inline">Sync</span>
           </Button>
-          {!isAdminMode && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowPinDialog(true)}
-            >
-              <Lock className="w-4 h-4" />
-              <span className="ml-2 hidden sm:inline">Admin</span>
-            </Button>
-          )}
         </div>
       </div>
 
@@ -331,204 +482,216 @@ export default function CashRegister() {
         </CardContent>
       </Card>
 
-      {/* Cash Verification Tracker */}
-      {currentRecord && (
-        <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">
-                  {selectedShift === 'day' ? '☀️ Day' : '🌙 Night'} {selectedDate}
-                </Badge>
-                <span className="text-muted-foreground">Cash Verification</span>
+      {/* Balance Tracker - Main Feature */}
+      <Card className="border-2 border-primary/30 bg-gradient-to-br from-primary/10 to-transparent">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">
+                {selectedShift === 'day' ? '☀️ Day' : '🌙 Night'} {selectedDate}
+              </Badge>
+              <span className="text-muted-foreground text-sm">Balance Tracker</span>
+            </div>
+            <Button 
+              variant="default" 
+              size="sm"
+              onClick={() => currentRecord && openEditDialog(currentRecord)}
+            >
+              <Pencil className="w-4 h-4 mr-1" />
+              Set Actual
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Cash On Hand */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <Banknote className="w-5 h-5 text-green-600" />
+                <span className="text-xs text-green-600 font-semibold uppercase">Cash на руках</span>
               </div>
-              <Button 
-                variant="default" 
-                size="sm" 
-                className="bg-blue-600 hover:bg-blue-700"
-                onClick={() => {
-                  if (isAdminMode) {
-                    openEditDialog(currentRecord);
-                  } else {
-                    setShowPinDialog(true);
-                  }
-                }}
-              >
-                <Pencil className="w-4 h-4 mr-1" />
-                Enter Cash
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Section 1: Expected from Loyverse */}
-            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-              <div className="text-[10px] text-green-600 uppercase tracking-wider font-semibold mb-2">
-                📊 Loyverse Expected (POS)
+              <div className="text-3xl font-bold text-green-600">
+                ₱{cashOnHand.toLocaleString()}
               </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <div className="text-[10px] text-muted-foreground">💵 Cash</div>
-                  <div className="font-bold text-lg text-green-600">₱{(currentRecord.cash_expected || 0).toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                <div className="flex justify-between">
+                  <span>Получено:</span>
+                  <span>₱{(currentRecord?.cash_actual || 0).toLocaleString()}</span>
                 </div>
-                <div>
-                  <div className="text-[10px] text-muted-foreground">📱 GCash</div>
-                  <div className="font-bold text-lg text-green-600">₱{(currentRecord.gcash_expected || 0).toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted-foreground">💰 Total</div>
-                  <div className="font-bold text-lg text-green-600">₱{((currentRecord.cash_expected || 0) + (currentRecord.gcash_expected || 0)).toLocaleString()}</div>
+                <div className="flex justify-between text-red-500">
+                  <span>Расходы:</span>
+                  <span>-₱{cashExpenses.toLocaleString()}</span>
                 </div>
               </div>
             </div>
 
-            {/* Section 2: Admin Received */}
-            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-              <div className="text-[10px] text-blue-600 uppercase tracking-wider font-semibold mb-2">
-                ✅ Admin Received (Actual)
+            <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <Smartphone className="w-5 h-5 text-blue-600" />
+                <span className="text-xs text-blue-600 font-semibold uppercase">GCash на руках</span>
               </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <div className="text-[10px] text-muted-foreground">💵 Cash</div>
-                  <div className={cn("font-bold text-lg", (currentRecord.cash_actual || 0) > 0 ? "text-blue-600" : "text-muted-foreground")}>
-                    {(currentRecord.cash_actual || 0) > 0 ? `₱${currentRecord.cash_actual?.toLocaleString()}` : '—'}
-                  </div>
+              <div className="text-3xl font-bold text-blue-600">
+                ₱{gcashOnHand.toLocaleString()}
+              </div>
+              <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                <div className="flex justify-between">
+                  <span>Получено:</span>
+                  <span>₱{(currentRecord?.gcash_actual || 0).toLocaleString()}</span>
                 </div>
-                <div>
-                  <div className="text-[10px] text-muted-foreground">📱 GCash</div>
-                  <div className={cn("font-bold text-lg", (currentRecord.gcash_actual || 0) > 0 ? "text-blue-600" : "text-muted-foreground")}>
-                    {(currentRecord.gcash_actual || 0) > 0 ? `₱${currentRecord.gcash_actual?.toLocaleString()}` : '—'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted-foreground">💰 Total</div>
-                  <div className={cn("font-bold text-lg", ((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)) > 0 ? "text-blue-600" : "text-muted-foreground")}>
-                    {((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)) > 0 
-                      ? `₱${((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)).toLocaleString()}` 
-                      : '—'}
-                  </div>
+                <div className="flex justify-between text-red-500">
+                  <span>Расходы:</span>
+                  <span>-₱{gcashExpenses.toLocaleString()}</span>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Section 3: Difference */}
-            {((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)) > 0 && (() => {
-              const cashDiff = (currentRecord.cash_actual || 0) - (currentRecord.cash_expected || 0);
-              const gcashDiff = (currentRecord.gcash_actual || 0) - (currentRecord.gcash_expected || 0);
-              const totalDiff = currentRecord.discrepancy || 0;
-              
-              // Detect resortitsa: one is positive, one is negative (swap between payment methods)
-              const isResortitsa = (cashDiff > 0 && gcashDiff < 0) || (cashDiff < 0 && gcashDiff > 0);
-              const resortitsaAmount = Math.min(Math.abs(cashDiff), Math.abs(gcashDiff));
-              
+          {/* Resortitsa Detection */}
+          {currentRecord && ((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)) > 0 && (() => {
+            const cashDiff = (currentRecord.cash_actual || 0) - (currentRecord.cash_expected || 0);
+            const gcashDiff = (currentRecord.gcash_actual || 0) - (currentRecord.gcash_expected || 0);
+            const isResortitsa = (cashDiff > 0 && gcashDiff < 0) || (cashDiff < 0 && gcashDiff > 0);
+            const resortitsaAmount = Math.min(Math.abs(cashDiff), Math.abs(gcashDiff));
+            
+            if (isResortitsa && resortitsaAmount >= 50) {
               return (
-                <>
-                  {/* Resortitsa Alert */}
-                  {isResortitsa && resortitsaAmount >= 50 && (
-                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                      <div className="text-[10px] text-amber-600 uppercase tracking-wider font-semibold mb-1">
-                        ⚠️ Пересортица обнаружена!
-                      </div>
-                      <div className="text-sm text-amber-700">
-                        {cashDiff > 0 
-                          ? `GCash в Loyverse записан как Cash: ~₱${resortitsaAmount.toLocaleString()}`
-                          : `Cash в Loyverse записан как GCash: ~₱${resortitsaAmount.toLocaleString()}`
-                        }
-                      </div>
-                      <div className="text-[10px] text-muted-foreground mt-1">
-                        Проверьте транзакции в Loyverse POS
-                      </div>
-                    </div>
-                  )}
-
-                  <div className={cn(
-                    "p-3 rounded-lg border",
-                    totalDiff >= 0 
-                      ? "bg-green-500/10 border-green-500/20" 
-                      : "bg-red-500/10 border-red-500/20"
-                  )}>
-                    <div className={cn(
-                      "text-[10px] uppercase tracking-wider font-semibold mb-2",
-                      totalDiff >= 0 ? "text-green-600" : "text-red-600"
-                    )}>
-                      📈 Difference (Actual - Expected)
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div>
-                        <div className="text-[10px] text-muted-foreground">💵 Cash</div>
-                        <div className={cn(
-                          "font-bold text-lg",
-                          cashDiff >= 0 ? "text-green-600" : "text-red-600",
-                          isResortitsa && "underline decoration-amber-500 decoration-2"
-                        )}>
-                          {cashDiff >= 0 ? '+' : ''}₱{cashDiff.toLocaleString()}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-muted-foreground">📱 GCash</div>
-                        <div className={cn(
-                          "font-bold text-lg",
-                          gcashDiff >= 0 ? "text-green-600" : "text-red-600",
-                          isResortitsa && "underline decoration-amber-500 decoration-2"
-                        )}>
-                          {gcashDiff >= 0 ? '+' : ''}₱{gcashDiff.toLocaleString()}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-muted-foreground">💰 Total</div>
-                        <div className={cn(
-                          "font-bold text-lg",
-                          totalDiff >= 0 ? "text-green-600" : "text-red-600"
-                        )}>
-                          {totalDiff >= 0 ? '+' : ''}₱{totalDiff.toLocaleString()}
-                          <span className="text-xs ml-1">
-                            {totalDiff > 0 ? 'OVER' : totalDiff < 0 ? 'SHORT' : '✓'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <div className="text-[10px] text-amber-600 uppercase tracking-wider font-semibold mb-1">
+                    ⚠️ Пересортица обнаружена!
                   </div>
-                </>
-              );
-            })()}
-
-            {/* Staff Handovers */}
-            {currentShiftHandovers.length > 0 && (
-              <div className="pt-2 border-t">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
-                  👥 Staff Handovers
+                  <div className="text-sm text-amber-700">
+                    {cashDiff > 0 
+                      ? `GCash в Loyverse записан как Cash: ~₱${resortitsaAmount.toLocaleString()}`
+                      : `Cash в Loyverse записан как GCash: ~₱${resortitsaAmount.toLocaleString()}`
+                    }
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  {currentShiftHandovers.map((h, i) => (
-                    <div key={i} className="flex justify-between text-xs bg-secondary/30 p-2 rounded">
-                      <span className="font-medium">{h.employee_name}</span>
-                      <span>
-                        💵 ₱{(h.cash_handed_over || 0).toLocaleString()}
-                        {(h.gcash_handed_over || 0) > 0 && (
-                          <span className="ml-2">📱 ₱{h.gcash_handed_over?.toLocaleString()}</span>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between text-xs font-bold pt-1 border-t">
-                    <span>Total from Staff</span>
-                    <span>
-                      💵 ₱{totalEmployeeCash.toLocaleString()}
-                      {totalEmployeeGcash > 0 && (
-                        <span className="ml-2">📱 ₱{totalEmployeeGcash.toLocaleString()}</span>
-                      )}
-                    </span>
-                  </div>
+              );
+            }
+            return null;
+          })()}
+
+          {/* Expected vs Actual Comparison */}
+          {currentRecord && (
+            <div className="p-3 bg-muted/30 border rounded-lg">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-2">
+                Loyverse Expected vs Actual
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div></div>
+                <div className="text-center font-medium">Expected</div>
+                <div className="text-center font-medium">Actual</div>
+                
+                <div>💵 Cash</div>
+                <div className="text-center">₱{(currentRecord.cash_expected || 0).toLocaleString()}</div>
+                <div className={cn(
+                  "text-center",
+                  (currentRecord.cash_actual || 0) - (currentRecord.cash_expected || 0) >= 0 ? "text-green-600" : "text-red-600"
+                )}>
+                  ₱{(currentRecord.cash_actual || 0).toLocaleString()}
+                </div>
+                
+                <div>📱 GCash</div>
+                <div className="text-center">₱{(currentRecord.gcash_expected || 0).toLocaleString()}</div>
+                <div className={cn(
+                  "text-center",
+                  (currentRecord.gcash_actual || 0) - (currentRecord.gcash_expected || 0) >= 0 ? "text-green-600" : "text-red-600"
+                )}>
+                  ₱{(currentRecord.gcash_actual || 0).toLocaleString()}
                 </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-      {!currentRecord && (
-        <Card className="border-dashed">
-          <CardContent className="py-8 text-center text-muted-foreground">
-            No data for {selectedDate} {selectedShift} shift. Click Sync to fetch from Loyverse.
+      {/* Expenses for Current Shift */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center justify-between">
+            <span>📝 Расходы за смену</span>
+            <Button size="sm" onClick={() => setShowAddExpenseDialog(true)}>
+              <Plus className="w-4 h-4 mr-1" /> Добавить
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {currentShiftExpenses.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Нет расходов за эту смену</p>
+          ) : (
+            <div className="space-y-2">
+              {currentShiftExpenses.map(expense => (
+                <div key={expense.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "text-xs",
+                        expense.payment_source === 'cash' 
+                          ? "bg-green-500/10 text-green-600 border-green-500/30" 
+                          : "bg-blue-500/10 text-blue-600 border-blue-500/30"
+                      )}
+                    >
+                      {expense.payment_source === 'cash' ? '💵' : '📱'}
+                    </Badge>
+                    <div>
+                      <div className="text-sm font-medium">{getCategoryLabel(expense.category)}</div>
+                      {expense.description && (
+                        <div className="text-xs text-muted-foreground">{expense.description}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">₱{expense.amount.toLocaleString()}</span>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => deleteExpense(expense.id)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <div className="pt-2 border-t flex justify-between text-sm font-semibold">
+                <span>Итого расходы:</span>
+                <span>₱{(cashExpenses + gcashExpenses).toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Staff Handovers */}
+      {currentShiftHandovers.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">👥 Staff Handovers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {currentShiftHandovers.map((h, i) => (
+                <div key={i} className="flex justify-between text-sm bg-muted/30 p-2 rounded">
+                  <span className="font-medium">{h.employee_name}</span>
+                  <span>
+                    💵 ₱{(h.cash_handed_over || 0).toLocaleString()}
+                    {(h.gcash_handed_over || 0) > 0 && (
+                      <span className="ml-2">📱 ₱{h.gcash_handed_over?.toLocaleString()}</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+              <div className="flex justify-between text-sm font-bold pt-1 border-t">
+                <span>Total from Staff</span>
+                <span>
+                  💵 ₱{totalEmployeeCash.toLocaleString()}
+                  {totalEmployeeGcash > 0 && (
+                    <span className="ml-2">📱 ₱{totalEmployeeGcash.toLocaleString()}</span>
+                  )}
+                </span>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -536,7 +699,7 @@ export default function CashRegister() {
       {/* Recent History */}
       <Card>
         <CardHeader className="py-3">
-          <CardTitle className="text-base">Recent History</CardTitle>
+          <CardTitle className="text-base">📊 Recent History</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -546,11 +709,9 @@ export default function CashRegister() {
                   <th className="text-left py-2 px-2">Date</th>
                   <th className="text-left py-2 px-2">Shift</th>
                   <th className="text-right py-2 px-2">Expected</th>
-                  <th className="text-right py-2 px-2">Cash</th>
-                  <th className="text-right py-2 px-2">GCash</th>
                   <th className="text-right py-2 px-2">Actual</th>
                   <th className="text-right py-2 px-2">Diff</th>
-                  {isAdminMode && <th className="py-2 px-2 w-10"></th>}
+                  <th className="py-2 px-2 w-10"></th>
                 </tr>
               </thead>
               <tbody>
@@ -577,8 +738,6 @@ export default function CashRegister() {
                         </Badge>
                       </td>
                       <td className="text-right py-2 px-2 text-green-600">₱{expectedTotal.toLocaleString()}</td>
-                      <td className="text-right py-2 px-2">₱{(record.cash_expected || 0).toLocaleString()}</td>
-                      <td className="text-right py-2 px-2">₱{(record.gcash_expected || 0).toLocaleString()}</td>
                       <td className="text-right py-2 px-2 text-blue-600">
                         {actualTotal > 0 ? `₱${actualTotal.toLocaleString()}` : '—'}
                       </td>
@@ -592,21 +751,19 @@ export default function CashRegister() {
                           diff === 0 ? '✓' : `${diff > 0 ? '+' : ''}₱${diff.toLocaleString()}`
                         )}
                       </td>
-                      {isAdminMode && (
-                        <td className="py-2 px-2 text-center">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditDialog(record);
-                            }}
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                        </td>
-                      )}
+                      <td className="py-2 px-2 text-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditDialog(record);
+                          }}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -616,32 +773,11 @@ export default function CashRegister() {
         </CardContent>
       </Card>
 
-      {/* PIN Dialog */}
-      <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader>
-            <DialogTitle>Admin Access</DialogTitle>
-            <DialogDescription>Enter PIN to access admin features</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              type="password"
-              placeholder="Enter PIN"
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
-            />
-            {pinError && <p className="text-sm text-red-500">{pinError}</p>}
-            <Button onClick={handleAdminLogin} className="w-full">Login</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Dialog */}
+      {/* Edit Cash Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Edit Cash Received</DialogTitle>
+            <DialogTitle>Enter Cash Received</DialogTitle>
             <DialogDescription>
               {editingRecord?.date} {editingRecord?.shift === 'day' ? '☀️ Day' : '🌙 Night'}
             </DialogDescription>
@@ -672,6 +808,84 @@ export default function CashRegister() {
               </div>
             </div>
             <Button onClick={saveEdit} className="w-full">Save</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Expense Dialog */}
+      <Dialog open={showAddExpenseDialog} onOpenChange={setShowAddExpenseDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Добавить расход</DialogTitle>
+            <DialogDescription>
+              {selectedDate} {selectedShift === 'day' ? '☀️ Day' : '🌙 Night'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Источник оплаты</label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={newExpenseSource === 'cash' ? 'default' : 'outline'}
+                  className={cn(
+                    "flex-1",
+                    newExpenseSource === 'cash' && "bg-green-600 hover:bg-green-700"
+                  )}
+                  onClick={() => setNewExpenseSource('cash')}
+                >
+                  <Banknote className="w-4 h-4 mr-2" />
+                  Cash
+                </Button>
+                <Button
+                  type="button"
+                  variant={newExpenseSource === 'gcash' ? 'default' : 'outline'}
+                  className={cn(
+                    "flex-1",
+                    newExpenseSource === 'gcash' && "bg-blue-600 hover:bg-blue-700"
+                  )}
+                  onClick={() => setNewExpenseSource('gcash')}
+                >
+                  <Smartphone className="w-4 h-4 mr-2" />
+                  GCash
+                </Button>
+              </div>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium mb-1 block">Категория</label>
+              <Select value={newExpenseCategory} onValueChange={setNewExpenseCategory}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXPENSE_CATEGORIES.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium mb-1 block">Сумма</label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={newExpenseAmount}
+                onChange={(e) => setNewExpenseAmount(e.target.value)}
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium mb-1 block">Описание (опционально)</label>
+              <Input
+                placeholder="Описание расхода..."
+                value={newExpenseDescription}
+                onChange={(e) => setNewExpenseDescription(e.target.value)}
+              />
+            </div>
+            
+            <Button onClick={addExpense} className="w-full">Добавить</Button>
           </div>
         </DialogContent>
       </Dialog>
