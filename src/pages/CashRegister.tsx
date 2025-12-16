@@ -355,117 +355,116 @@ export default function CashRegister() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="balance" className="w-full">
+      <Tabs defaultValue="register" className="w-full">
         <TabsList className="grid w-full grid-cols-3 h-11">
+          <TabsTrigger value="register" className="gap-1.5 text-sm"><CircleDollarSign className="w-4 h-4" />Register</TabsTrigger>
           <TabsTrigger value="balance" className="gap-1.5 text-sm"><Wallet className="w-4 h-4" />Balance</TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5 text-sm"><History className="w-4 h-4" />History</TabsTrigger>
-          <TabsTrigger value="register" className="gap-1.5 text-sm"><CircleDollarSign className="w-4 h-4" />Register</TabsTrigger>
         </TabsList>
 
-        {/* Balance Tab */}
-        <TabsContent value="balance" className="space-y-4 mt-4">
-          {/* Current Session Header */}
-          <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-            <div>
-              <p className="text-xs text-muted-foreground">Current Session</p>
-              <p className="font-semibold">{selectedDate} • {selectedShift === 'day' ? '☀️ Day' : '🌙 Night'}</p>
+        {/* Register Tab - Current Session */}
+        <TabsContent value="register" className="space-y-4 mt-4">
+          {/* Session Info */}
+          <div className="flex items-center justify-between p-3 bg-primary/10 border border-primary/20 rounded-lg">
+            <div className="flex items-center gap-2">
+              {selectedShift === 'day' ? <Sun className="w-5 h-5 text-primary" /> : <Moon className="w-5 h-5 text-primary" />}
+              <div>
+                <p className="text-xs text-muted-foreground">Current Session</p>
+                <p className="font-semibold">{selectedDate} • {selectedShift === 'day' ? 'Day Shift' : 'Night Shift'}</p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground">Received</p>
-              <p className="font-bold text-primary">₱{((currentRecord?.cash_actual || 0) + (currentRecord?.gcash_actual || 0)).toLocaleString()}</p>
-            </div>
+            <Button size="sm" variant="outline" onClick={() => {
+              setEditCash((currentRecord?.cash_actual || 0).toString());
+              setEditGcash((currentRecord?.gcash_actual || 0).toString());
+              setShowCashDialog(true);
+            }}>
+              <Plus className="w-4 h-4 mr-1" />Update
+            </Button>
           </div>
 
-          {/* Cash & GCash Cards - Tappable */}
+          {/* Received Amounts - Tappable for expenses */}
           <div className="grid grid-cols-2 gap-3">
-            {/* Cash Card */}
             <Card 
               className="cursor-pointer hover:border-green-500/50 transition-all active:scale-[0.98] border-green-500/20 bg-green-500/5"
-              onClick={() => openExpenseDialog('cash', 'balance')}
+              onClick={() => openExpenseDialog('cash', 'shift')}
             >
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
                     <Banknote className="w-5 h-5 text-green-500" />
                   </div>
-                  <ArrowDownCircle className="w-5 h-5 text-muted-foreground" />
+                  <ArrowDownCircle className="w-4 h-4 text-muted-foreground" />
                 </div>
-                <p className="text-xs text-muted-foreground">Cash</p>
-                <p className="text-2xl font-bold text-green-500">₱{cashOnHand.toLocaleString()}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Tap to spend from cash
-                </p>
+                <p className="text-xs text-muted-foreground">Cash Received</p>
+                <p className="text-2xl font-bold text-green-500">₱{(currentRecord?.cash_actual || 0).toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Tap to spend from shift</p>
               </CardContent>
             </Card>
             
-            {/* GCash Card */}
             <Card 
               className="cursor-pointer hover:border-blue-500/50 transition-all active:scale-[0.98] border-blue-500/20 bg-blue-500/5"
-              onClick={() => openExpenseDialog('gcash', 'balance')}
+              onClick={() => openExpenseDialog('gcash', 'shift')}
             >
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
                     <Smartphone className="w-5 h-5 text-blue-500" />
                   </div>
-                  <ArrowDownCircle className="w-5 h-5 text-muted-foreground" />
+                  <ArrowDownCircle className="w-4 h-4 text-muted-foreground" />
                 </div>
-                <p className="text-xs text-muted-foreground">GCash</p>
-                <p className="text-2xl font-bold text-blue-500">₱{gcashOnHand.toLocaleString()}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Tap to spend from GCash
-                </p>
+                <p className="text-xs text-muted-foreground">GCash Received</p>
+                <p className="text-2xl font-bold text-blue-500">₱{(currentRecord?.gcash_actual || 0).toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Tap to spend from shift</p>
               </CardContent>
             </Card>
           </div>
 
-          {/* Quick Add Shift Expense */}
-          <Card className="border-orange-500/20">
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center">
-                    <Plus className="w-4 h-4 text-orange-500" />
+          {/* Expected Comparison */}
+          {currentRecord && (
+            <Card className="border-muted">
+              <CardContent className="p-3">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Expected Cash:</span>
+                    <span>₱{(currentRecord.cash_expected || 0).toLocaleString()}</span>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">Shift Expense</p>
-                    <p className="text-[10px] text-muted-foreground">Deduct from revenue</p>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Expected GCash:</span>
+                    <span>₱{(currentRecord.gcash_expected || 0).toLocaleString()}</span>
                   </div>
                 </div>
-                <div className="flex gap-1">
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    className="h-8 text-xs border-green-500/30 text-green-600 hover:bg-green-500/10"
-                    onClick={() => openExpenseDialog('cash', 'shift')}
-                  >
-                    <Banknote className="w-3.5 h-3.5 mr-1" />Cash
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    className="h-8 text-xs border-blue-500/30 text-blue-600 hover:bg-blue-500/10"
-                    onClick={() => openExpenseDialog('gcash', 'shift')}
-                  >
-                    <Smartphone className="w-3.5 h-3.5 mr-1" />GCash
-                  </Button>
+                <div className="mt-2 pt-2 border-t flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Discrepancy:</span>
+                  <span className={cn(
+                    "font-bold",
+                    ((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)) >= 
+                    ((currentRecord.cash_expected || 0) + (currentRecord.gcash_expected || 0)) 
+                      ? "text-green-500" : "text-destructive"
+                  )}>
+                    ₱{(
+                      ((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)) -
+                      ((currentRecord.cash_expected || 0) + (currentRecord.gcash_expected || 0))
+                    ).toLocaleString()}
+                  </span>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Today's Expenses */}
-          {currentExpenses.length > 0 && (
-            <Card>
-              <CardHeader className="py-3 pb-2">
-                <CardTitle className="text-sm flex items-center justify-between">
-                  <span>Today's Expenses</span>
-                  <Badge variant="secondary" className="text-xs">{currentExpenses.length}</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="py-2">
-                <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                  {currentExpenses.map(exp => (
+          {/* Shift Expenses */}
+          <Card>
+            <CardHeader className="py-3 pb-2">
+              <CardTitle className="text-sm flex items-center justify-between">
+                <span>Shift Expenses</span>
+                <Badge variant="secondary">₱{(shiftCashExp + shiftGcashExp).toLocaleString()}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="py-2">
+              {currentExpenses.filter(e => e.expense_type === 'shift').length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-3">No shift expenses</p>
+              ) : (
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {currentExpenses.filter(e => e.expense_type === 'shift').map(exp => (
                     <div key={exp.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
                       <div className="flex items-center gap-2">
                         <span className={cn(
@@ -478,12 +477,7 @@ export default function CashRegister() {
                           }
                         </span>
                         <div>
-                          <div className="text-sm font-medium flex items-center gap-1">
-                            {getCategoryLabel(exp.category)}
-                            <Badge variant={exp.expense_type === 'shift' ? 'outline' : 'secondary'} className="text-[9px] h-4 px-1">
-                              {exp.expense_type === 'shift' ? 'shift' : 'bal'}
-                            </Badge>
-                          </div>
+                          <div className="text-sm font-medium">{getCategoryLabel(exp.category)}</div>
                           {exp.description && <div className="text-[10px] text-muted-foreground">{exp.description}</div>}
                         </div>
                       </div>
@@ -496,21 +490,110 @@ export default function CashRegister() {
                     </div>
                   ))}
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Balance Tab - Cash On Hand */}
+        <TabsContent value="balance" className="space-y-4 mt-4">
+          {/* Balance Cards - Tappable */}
+          <div className="grid grid-cols-2 gap-3">
+            <Card 
+              className="cursor-pointer hover:border-green-500/50 transition-all active:scale-[0.98] border-green-500/20 bg-green-500/5"
+              onClick={() => openExpenseDialog('cash', 'balance')}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <Banknote className="w-5 h-5 text-green-500" />
+                  </div>
+                  <ArrowDownCircle className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <p className="text-xs text-muted-foreground">Cash On Hand</p>
+                <p className="text-2xl font-bold text-green-500">₱{cashOnHand.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Tap to spend from balance</p>
               </CardContent>
             </Card>
-          )}
-
-          {/* Summary */}
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="p-3 bg-muted/30 rounded-lg">
-              <p className="text-xs text-muted-foreground">Shift Expenses</p>
-              <p className="font-semibold">₱{(shiftCashExp + shiftGcashExp).toLocaleString()}</p>
-            </div>
-            <div className="p-3 bg-muted/30 rounded-lg">
-              <p className="text-xs text-muted-foreground">Balance Expenses</p>
-              <p className="font-semibold">₱{(balanceCashExp + balanceGcashExp).toLocaleString()}</p>
-            </div>
+            
+            <Card 
+              className="cursor-pointer hover:border-blue-500/50 transition-all active:scale-[0.98] border-blue-500/20 bg-blue-500/5"
+              onClick={() => openExpenseDialog('gcash', 'balance')}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                    <Smartphone className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <ArrowDownCircle className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <p className="text-xs text-muted-foreground">GCash On Hand</p>
+                <p className="text-2xl font-bold text-blue-500">₱{gcashOnHand.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Tap to spend from balance</p>
+              </CardContent>
+            </Card>
           </div>
+
+          {/* Balance Breakdown */}
+          <Card>
+            <CardContent className="p-3 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Received:</span>
+                <span>₱{((currentRecord?.cash_actual || 0) + (currentRecord?.gcash_actual || 0)).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Balance Expenses:</span>
+                <span className="text-destructive">-₱{(balanceCashExp + balanceGcashExp).toLocaleString()}</span>
+              </div>
+              <div className="border-t pt-2 flex justify-between font-semibold">
+                <span>On Hand:</span>
+                <span className="text-primary">₱{(cashOnHand + gcashOnHand).toLocaleString()}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Balance Expenses */}
+          <Card>
+            <CardHeader className="py-3 pb-2">
+              <CardTitle className="text-sm flex items-center justify-between">
+                <span>Balance Expenses</span>
+                <Badge variant="secondary">{currentExpenses.filter(e => e.expense_type === 'balance').length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="py-2">
+              {currentExpenses.filter(e => e.expense_type === 'balance').length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-3">No balance expenses</p>
+              ) : (
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {currentExpenses.filter(e => e.expense_type === 'balance').map(exp => (
+                    <div key={exp.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "w-6 h-6 rounded-full flex items-center justify-center",
+                          exp.payment_source === 'gcash' ? "bg-blue-500/20" : "bg-green-500/20"
+                        )}>
+                          {exp.payment_source === 'gcash' 
+                            ? <Smartphone className="w-3 h-3 text-blue-500" /> 
+                            : <Banknote className="w-3 h-3 text-green-500" />
+                          }
+                        </span>
+                        <div>
+                          <div className="text-sm font-medium">{getCategoryLabel(exp.category)}</div>
+                          {exp.description && <div className="text-[10px] text-muted-foreground">{exp.description}</div>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-semibold text-sm">₱{exp.amount.toLocaleString()}</span>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive/70 hover:text-destructive" onClick={() => deleteExpense(exp.id)}>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* History Tab */}
@@ -614,110 +697,6 @@ export default function CashRegister() {
           </Card>
         </TabsContent>
 
-        {/* Register Tab */}
-        <TabsContent value="register" className="space-y-4 mt-4">
-          {/* Current Values */}
-          <Card>
-            <CardHeader className="py-3 pb-2">
-              <CardTitle className="text-sm">Actual Amounts Received</CardTitle>
-            </CardHeader>
-            <CardContent className="py-3 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Banknote className="w-4 h-4 text-green-500" />
-                    <span className="text-xs text-muted-foreground">Cash</span>
-                  </div>
-                  <p className="text-2xl font-bold text-green-500">
-                    ₱{(currentRecord?.cash_actual || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Smartphone className="w-4 h-4 text-blue-500" />
-                    <span className="text-xs text-muted-foreground">GCash</span>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-500">
-                    ₱{(currentRecord?.gcash_actual || 0).toLocaleString()}
-                  </p>
-                </div>
-              </div>
-
-              <Button className="w-full" onClick={() => {
-                setEditCash((currentRecord?.cash_actual || 0).toString());
-                setEditGcash((currentRecord?.gcash_actual || 0).toString());
-                setShowCashDialog(true);
-              }}>
-                <Plus className="w-4 h-4 mr-2" />Update Amounts
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Expected vs Actual */}
-          {currentRecord && (
-            <Card>
-              <CardHeader className="py-3 pb-2">
-                <CardTitle className="text-sm">Expected vs Actual</CardTitle>
-              </CardHeader>
-              <CardContent className="py-3">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <Banknote className="w-4 h-4 text-green-500" />
-                      <span className="text-sm">Cash</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs text-muted-foreground">
-                        Expected: ₱{(currentRecord.cash_expected || 0).toLocaleString()}
-                      </div>
-                      <div className={cn(
-                        "font-semibold",
-                        (currentRecord.cash_actual || 0) >= (currentRecord.cash_expected || 0) ? "text-green-500" : "text-destructive"
-                      )}>
-                        Actual: ₱{(currentRecord.cash_actual || 0).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <Smartphone className="w-4 h-4 text-blue-500" />
-                      <span className="text-sm">GCash</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs text-muted-foreground">
-                        Expected: ₱{(currentRecord.gcash_expected || 0).toLocaleString()}
-                      </div>
-                      <div className={cn(
-                        "font-semibold",
-                        (currentRecord.gcash_actual || 0) >= (currentRecord.gcash_expected || 0) ? "text-green-500" : "text-destructive"
-                      )}>
-                        Actual: ₱{(currentRecord.gcash_actual || 0).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Total Discrepancy</span>
-                      <span className={cn(
-                        "font-bold",
-                        ((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)) >= 
-                        ((currentRecord.cash_expected || 0) + (currentRecord.gcash_expected || 0)) 
-                          ? "text-green-500" : "text-destructive"
-                      )}>
-                        ₱{(
-                          ((currentRecord.cash_actual || 0) + (currentRecord.gcash_actual || 0)) -
-                          ((currentRecord.cash_expected || 0) + (currentRecord.gcash_expected || 0))
-                        ).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
       </Tabs>
 
       {/* Add Expense Dialog */}
