@@ -150,6 +150,22 @@ export default function CashRegister() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  // Auto-sync Loyverse on page load
+  useEffect(() => {
+    const autoSync = async () => {
+      setSyncing(true);
+      try {
+        await supabase.functions.invoke('loyverse-history-sync', { body: { days: 3 } });
+        await loadData();
+      } catch (e) {
+        console.error('Auto-sync failed:', e);
+      } finally {
+        setSyncing(false);
+      }
+    };
+    autoSync();
+  }, []);
+
   const handleLogin = () => {
     if (pinInput === ADMIN_PIN) {
       setIsAdmin(true);
