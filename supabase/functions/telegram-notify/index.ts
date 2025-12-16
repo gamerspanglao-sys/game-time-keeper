@@ -511,7 +511,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({ action: 'test' }));
-    const { action, shift, employeeName, time, totalHours, cashHandedOver, expectedCash, difference, bonuses, baseSalary, bonusType, amount } = body;
+    const { action, shift, employeeName, time, totalHours, cashHandedOver, expectedCash, difference, bonuses, baseSalary, bonusType, amount, cash, gcash, changeFund, shiftType } = body;
     
     console.log(`📱 Telegram notify action: ${action}`);
     
@@ -562,6 +562,28 @@ serve(async (req) => {
         message += `   Bonuses: +${formatMoney(bonuses || 0)}\n`;
       }
       message += `   <b>Total: ${formatMoney((baseSalary || 500) + (bonuses || 0))}</b>`;
+    }
+    
+    if (action === 'cash_handover') {
+      const formatMoney = (n: number) => `₱${n?.toLocaleString() || 0}`;
+      const total = (cash || 0) + (gcash || 0);
+      
+      message = `💵 <b>CASH SUBMITTED</b>\n`;
+      message += `━━━━━━━━━━━━━━━━━━\n`;
+      message += `👤 Employee: <b>${employeeName || 'Unknown'}</b>\n`;
+      message += `📅 Shift: ${shiftType === 'Day' ? '☀️ Day' : '🌙 Night'}\n\n`;
+      message += `💰 <b>CASH HANDOVER</b>\n`;
+      if (cash > 0) {
+        message += `   💵 Cash: ${formatMoney(cash)}\n`;
+      }
+      if (gcash > 0) {
+        message += `   📱 GCash: ${formatMoney(gcash)}\n`;
+      }
+      message += `   📊 <b>Total: ${formatMoney(total)}</b>\n`;
+      
+      if (changeFund > 0) {
+        message += `\n🔄 Change fund left: ${formatMoney(changeFund)}`;
+      }
     }
     
     if (action === 'bonus_added') {
