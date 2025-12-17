@@ -109,17 +109,31 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
               <p className="text-xs text-muted-foreground">Timer System</p>
             </div>
           </div>
-          <button
-            onClick={toggleFullscreen}
-            className="p-2 rounded-lg hover:bg-secondary transition-all"
-            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-          >
-            {isFullscreen ? (
-              <Minimize className="w-4 h-4 text-muted-foreground" />
-            ) : (
-              <Maximize className="w-4 h-4 text-muted-foreground" />
-            )}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => isAdmin ? handleLogout() : setShowPinDialog(true)}
+              className={cn(
+                'p-2 rounded-lg transition-all',
+                isAdmin
+                  ? 'text-green-500 bg-green-500/10 hover:bg-green-500/20'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              )}
+              title={isAdmin ? 'Exit Admin Mode' : 'Admin Login'}
+            >
+              {isAdmin ? <ShieldOff className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={toggleFullscreen}
+              className="p-2 rounded-lg hover:bg-secondary transition-all"
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? (
+                <Minimize className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <Maximize className="w-4 h-4 text-muted-foreground" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Global Pause Button - Desktop */}
@@ -166,29 +180,20 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
               </NavLink>
             </>
           )}
+        </div>
 
-          {/* Admin Toggle Button */}
+        {/* Admin Toggle Button - Mobile only */}
+        <div className="md:hidden fixed top-4 right-4 z-50">
           <button
             onClick={() => isAdmin ? handleLogout() : setShowPinDialog(true)}
             className={cn(
-              'flex-1 flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 py-3 md:py-0 px-2 md:px-3 md:h-10 text-xs md:text-sm font-medium transition-all md:rounded-lg',
+              'p-2 rounded-lg backdrop-blur border transition-all',
               isAdmin
-                ? 'text-green-500 bg-green-500/10 md:border md:border-green-500/20 hover:bg-green-500/20'
-                : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                ? 'text-green-500 bg-green-500/10 border-green-500/30'
+                : 'bg-card/90 border-border text-muted-foreground hover:text-foreground'
             )}
           >
-            {isAdmin ? (
-              <>
-                <ShieldOff className="w-5 h-5" />
-                <span className="hidden md:inline">Exit Admin</span>
-                <span className="md:hidden">Admin</span>
-              </>
-            ) : (
-              <>
-                <Shield className="w-5 h-5" />
-                <span>Admin</span>
-              </>
-            )}
+            {isAdmin ? <ShieldOff className="w-5 h-5" /> : <Shield className="w-5 h-5" />}
           </button>
         </div>
       </nav>
