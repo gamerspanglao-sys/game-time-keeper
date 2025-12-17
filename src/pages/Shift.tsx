@@ -255,9 +255,9 @@ export default function Shift() {
 
       const shiftIds = activeShifts.map(s => s.id);
       
-      const { data: expenses } = await supabase
+      const { data: expenses } = await (supabase
         .from('cash_expenses')
-        .select('*, employees:responsible_employee_id(name)')
+        .select('*, employees:responsible_employee_id(name)') as any)
         .in('shift_id', shiftIds)
         .eq('expense_type', 'shift')
         .order('created_at', { ascending: false });
