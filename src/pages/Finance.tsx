@@ -11,8 +11,10 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
   RefreshCw, Loader2, Sun, Moon, Plus, Trash2, Banknote, Smartphone, 
-  Wallet, History, Download, CircleDollarSign, Minus, ShoppingCart, Receipt
+  Wallet, History, Download, CircleDollarSign, Minus, ShoppingCart, Receipt,
+  ClipboardCheck
 } from 'lucide-react';
+import { CashVerification } from '@/components/CashVerification';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 
@@ -289,7 +291,8 @@ export default function Finance() {
         }
         await supabase.from('cash_expenses').insert({
           cash_register_id: regId, category: expCategory, amount, description: expDescription || null,
-          shift: selectedShift, date: selectedDate, payment_source: expSource, expense_type: expType
+          shift: selectedShift, date: selectedDate, payment_source: expSource, expense_type: expType,
+          approved: true  // Admin-added expenses are auto-approved
         });
       }
       toast.success(isInvestorExpense ? 'Investor expense added' : 'Expense added');
@@ -385,8 +388,12 @@ export default function Finance() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="balance" className="w-full">
+      <Tabs defaultValue="pending" className="w-full">
         <TabsList className="w-full">
+          <TabsTrigger value="pending" className="flex-1 gap-2">
+            <ClipboardCheck className="w-4 h-4" />
+            Pending
+          </TabsTrigger>
           <TabsTrigger value="balance" className="flex-1 gap-2">
             <Wallet className="w-4 h-4" />
             Balance
@@ -396,6 +403,10 @@ export default function Finance() {
             History
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="pending" className="space-y-4 mt-4">
+          <CashVerification />
+        </TabsContent>
 
         <TabsContent value="balance" className="space-y-4 mt-4">
           <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">

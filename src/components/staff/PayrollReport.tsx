@@ -23,6 +23,7 @@ interface ShiftEntry {
   base_salary: number;
   salary_paid: boolean;
   salary_paid_amount: number | null;
+  cash_shortage: number;
 }
 
 interface PayrollEntry {
@@ -32,6 +33,7 @@ interface PayrollEntry {
   total_hours: number;
   base_salary_total: number;
   bonuses_total: number;
+  cash_shortage_total: number;
   total_salary: number;
   paid_amount: number;
   unpaid_amount: number;
@@ -99,7 +101,8 @@ export function PayrollReport() {
       total_hours: Number(s.total_hours) || 0,
       base_salary: s.base_salary || 500,
       salary_paid: s.salary_paid || false,
-      salary_paid_amount: s.salary_paid_amount
+      salary_paid_amount: s.salary_paid_amount,
+      cash_shortage: s.cash_shortage || 0
     }));
 
     setShifts(shiftEntries);
@@ -152,6 +155,7 @@ export function PayrollReport() {
             total_hours: 0,
             base_salary_total: 0,
             bonuses_total: 0,
+            cash_shortage_total: 0,
             total_salary: 0,
             paid_amount: 0,
             unpaid_amount: 0
@@ -162,6 +166,7 @@ export function PayrollReport() {
         entry.total_shifts += 1;
         entry.total_hours += Number(shift.total_hours) || 0;
         entry.base_salary_total += shift.base_salary || 500;
+        entry.cash_shortage_total += shift.cash_shortage || 0;
         
         if (shift.salary_paid) {
           entry.paid_amount += shift.salary_paid_amount || shift.base_salary || 500;
@@ -176,7 +181,7 @@ export function PayrollReport() {
       });
 
       employeeMap.forEach((entry) => {
-        entry.total_salary = entry.base_salary_total + entry.bonuses_total;
+        entry.total_salary = entry.base_salary_total + entry.bonuses_total - entry.cash_shortage_total;
         entry.unpaid_amount = entry.total_salary - entry.paid_amount;
       });
 

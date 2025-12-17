@@ -552,8 +552,8 @@ serve(async (req) => {
         const shiftBonuses = bonuses?.filter(b => b.shift_id === s.id) || [];
         const totalBonuses = shiftBonuses.reduce((sum, b) => sum + (b.amount || 0), 0);
         
-        // Cash discrepancy (negative means shortage)
-        const cashShortage = s.cash_difference && s.cash_difference < 0 ? Math.abs(s.cash_difference) : 0;
+        // Cash shortage assigned by admin during cash verification
+        const cashShortage = s.cash_shortage || 0;
         
         // Calculate total pay
         const baseSalary = s.base_salary || 500;
@@ -583,7 +583,7 @@ serve(async (req) => {
       const totalHours = closedShifts.reduce((sum, s) => sum + (Number(s.total_hours) || 0), 0);
       const totalBase = closedShifts.reduce((sum, s) => sum + (s.base_salary || 500), 0);
       const allBonuses = bonuses?.reduce((sum, b) => sum + (b.amount || 0), 0) || 0;
-      const totalShortage = closedShifts.reduce((sum, s) => sum + (s.cash_difference && s.cash_difference < 0 ? Math.abs(s.cash_difference) : 0), 0);
+      const totalShortage = closedShifts.reduce((sum, s) => sum + (s.cash_shortage || 0), 0);
       
       payrollRows.push(Array(13).fill(''));
       payrollRows.push([

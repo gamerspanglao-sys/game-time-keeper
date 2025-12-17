@@ -510,7 +510,8 @@ export default function Shift() {
         change_fund_amount: changeFund,
         handed_by_employee_id: cashEmployee,
         handover_time: new Date().toISOString(),
-        comment: handoverComment || null
+        comment: handoverComment || null,
+        approved: false
       });
 
       if (error) throw error;
@@ -622,7 +623,8 @@ export default function Shift() {
         expense_type: 'shift',
         shift: shiftType,
         date: shiftStartDate,
-        responsible_employee_id: expenseResponsible
+        responsible_employee_id: expenseResponsible,
+        approved: false
       });
 
       if (error) throw error;
