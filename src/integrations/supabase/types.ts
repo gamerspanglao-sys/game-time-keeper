@@ -95,6 +95,7 @@ export type Database = {
       cash_expenses: {
         Row: {
           amount: number
+          approved: boolean | null
           cash_register_id: string
           category: string
           created_at: string
@@ -109,6 +110,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          approved?: boolean | null
           cash_register_id: string
           category: string
           created_at?: string
@@ -123,6 +125,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          approved?: boolean | null
           cash_register_id?: string
           category?: string
           created_at?: string
@@ -161,6 +164,7 @@ export type Database = {
       }
       cash_handovers: {
         Row: {
+          approved: boolean | null
           cash_amount: number
           change_fund_amount: number
           comment: string | null
@@ -173,6 +177,7 @@ export type Database = {
           shift_type: string
         }
         Insert: {
+          approved?: boolean | null
           cash_amount?: number
           change_fund_amount?: number
           comment?: string | null
@@ -185,6 +190,7 @@ export type Database = {
           shift_type: string
         }
         Update: {
+          approved?: boolean | null
           cash_amount?: number
           change_fund_amount?: number
           comment?: string | null
@@ -426,6 +432,7 @@ export type Database = {
           cash_comment: string | null
           cash_difference: number | null
           cash_handed_over: number | null
+          cash_shortage: number | null
           created_at: string
           date: string
           employee_id: string
@@ -448,6 +455,7 @@ export type Database = {
           cash_comment?: string | null
           cash_difference?: number | null
           cash_handed_over?: number | null
+          cash_shortage?: number | null
           created_at?: string
           date?: string
           employee_id: string
@@ -470,6 +478,7 @@ export type Database = {
           cash_comment?: string | null
           cash_difference?: number | null
           cash_handed_over?: number | null
+          cash_shortage?: number | null
           created_at?: string
           date?: string
           employee_id?: string
