@@ -146,6 +146,16 @@ export function CashVerification() {
   const [editTotalCash, setEditTotalCash] = useState(''); // Full cash in register
   const [editGcashSubmitted, setEditGcashSubmitted] = useState('');
   const [editChangeFundLeaving, setEditChangeFundLeaving] = useState('');
+  
+  // Add manual history entry state
+  const [showAddHistoryDialog, setShowAddHistoryDialog] = useState(false);
+  const [addHistoryDate, setAddHistoryDate] = useState('');
+  const [addHistoryShift, setAddHistoryShift] = useState<'day' | 'night'>('night');
+  const [addHistoryCash, setAddHistoryCash] = useState('');
+  const [addHistoryGcash, setAddHistoryGcash] = useState('');
+  const [addHistoryChangeFund, setAddHistoryChangeFund] = useState('2000');
+  const [addHistoryEmployee, setAddHistoryEmployee] = useState('');
+  const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
 
   // Helper to get previous shift date/type
   const getPreviousShift = (date: string, shift: string): { date: string; shift: string } => {
@@ -437,6 +447,19 @@ export function CashVerification() {
 
   useEffect(() => { loadPendingData(); }, []);
 
+  // Load employees for manual history entry
+  useEffect(() => {
+    const loadEmployees = async () => {
+      const { data } = await supabase
+        .from('employees')
+        .select('id, name')
+        .eq('active', true)
+        .order('name');
+      setEmployees(data || []);
+    };
+    loadEmployees();
+  }, []);
+
   // Realtime subscription
   useEffect(() => {
     const channel = supabase.channel('cash-verification')
@@ -447,6 +470,63 @@ export function CashVerification() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+  
+  // Add manual history entry
+  const addManualHistoryEntry = async () => {
+    if (!addHistoryDate || !addHistoryEmployee) {
+      toast.error('Select date and employee');
+      return;
+    }
+    const cash = parseInt(addHistoryCash) || 0;
+    const gcash = parseInt(addHistoryGcash) || 0;
+    const changeFund = parseInt(addHistoryChangeFund) || 2000;
+    
+    setProcessing('add-history');
+    try {
+      // Create cash_handover record
+      await supabase.from('cash_handovers').insert({
+        shift_date: addHistoryDate,
+        shift_type: addHistoryShift === 'night' ? 'Night (5PM-5AM)' : 'Day (5AM-5PM)',
+        cash_amount: cash,
+        gcash_amount: gcash,
+        change_fund_amount: changeFund,
+        handed_by_employee_id: addHistoryEmployee,
+        approved: true
+      });
+      
+      // Update cash_register with actual amounts if record exists
+      const { data: existing } = await supabase
+        .from('cash_register')
+        .select('id, cash_actual, gcash_actual')
+        .eq('date', addHistoryDate)
+        .eq('shift', addHistoryShift)
+        .maybeSingle();
+      
+      if (existing) {
+        await supabase
+          .from('cash_register')
+          .update({
+            cash_actual: (existing.cash_actual || 0) + cash,
+            gcash_actual: (existing.gcash_actual || 0) + gcash
+          })
+          .eq('id', existing.id);
+      }
+      
+      toast.success('History entry added');
+      setShowAddHistoryDialog(false);
+      setAddHistoryDate('');
+      setAddHistoryCash('');
+      setAddHistoryGcash('');
+      setAddHistoryChangeFund('2000');
+      setAddHistoryEmployee('');
+      loadPendingData();
+    } catch (e) {
+      console.error('Error adding history:', e);
+      toast.error('Failed to add history entry');
+    } finally {
+      setProcessing(null);
+    }
+  };
 
   const rejectShift = async (shiftId: string) => {
     try {
@@ -890,6 +970,28 @@ export function CashVerification() {
       loadPendingData();
     } catch (e) {
       toast.error('Failed to update');
+    }
+  };
+  
+  // Delete history entry
+  const deleteHistoryEntry = async (h: ApprovedHistory) => {
+    const key = `${h.date}-${h.shift}`;
+    setProcessing(key + '-del');
+    try {
+      // Delete cash_handovers for this date/shift
+      await supabase
+        .from('cash_handovers')
+        .delete()
+        .eq('shift_date', h.date)
+        .ilike('shift_type', `%${h.shift}%`);
+      
+      toast.success('History entry deleted');
+      loadPendingData();
+    } catch (e) {
+      console.error('Error deleting history:', e);
+      toast.error('Failed to delete');
+    } finally {
+      setProcessing(null);
     }
   };
 
@@ -1658,13 +1760,24 @@ export function CashVerification() {
 
       {/* Approved History - Always show */}
       <Card>
-        <CardHeader className="py-3 pb-2 cursor-pointer" onClick={() => setShowHistory(!showHistory)}>
+        <CardHeader className="py-3 pb-2">
           <CardTitle className="text-sm flex items-center justify-between">
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-2 cursor-pointer" onClick={() => setShowHistory(!showHistory)}>
               <History className="w-4 h-4 text-muted-foreground" />
               Confirmation History ({approvedHistory.length})
+              {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </span>
-            {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowAddHistoryDialog(true);
+              }}
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
           </CardTitle>
         </CardHeader>
         {showHistory && (
@@ -1709,6 +1822,23 @@ export function CashVerification() {
                             <Loader2 className="w-3 h-3 animate-spin" />
                           ) : (
                             <Send className="w-3 h-3" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-red-500 hover:bg-red-500/10"
+                          onClick={() => {
+                            if (confirm('Delete this history entry?')) {
+                              deleteHistoryEntry(h);
+                            }
+                          }}
+                          disabled={processing === `${h.date}-${h.shift}-del`}
+                        >
+                          {processing === `${h.date}-${h.shift}-del` ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3 h-3" />
                           )}
                         </Button>
                       </div>
@@ -1948,6 +2078,94 @@ export function CashVerification() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Manual History Dialog */}
+      <Dialog open={showAddHistoryDialog} onOpenChange={setShowAddHistoryDialog}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              Add History Entry
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Date</label>
+              <Input
+                type="date"
+                value={addHistoryDate}
+                onChange={e => setAddHistoryDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Shift</label>
+              <Select value={addHistoryShift} onValueChange={(v: 'day' | 'night') => setAddHistoryShift(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">☀️ Day</SelectItem>
+                  <SelectItem value="night">🌙 Night</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Employee</label>
+              <Select value={addHistoryEmployee} onValueChange={setAddHistoryEmployee}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map(emp => (
+                    <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                  <Banknote className="w-3 h-3 text-green-500" /> Cash
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={addHistoryCash}
+                  onChange={e => setAddHistoryCash(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                  <Smartphone className="w-3 h-3 text-blue-500" /> GCash
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={addHistoryGcash}
+                  onChange={e => setAddHistoryGcash(e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Change Fund Left</label>
+              <Input
+                type="number"
+                placeholder="2000"
+                value={addHistoryChangeFund}
+                onChange={e => setAddHistoryChangeFund(e.target.value)}
+              />
+            </div>
+            <Button 
+              className="w-full" 
+              onClick={addManualHistoryEntry}
+              disabled={processing === 'add-history'}
+            >
+              {processing === 'add-history' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+              Add Entry
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
