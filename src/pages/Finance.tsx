@@ -96,7 +96,10 @@ const getShiftDate = (): string => {
   const now = new Date();
   const manilaTime = new Date(now.getTime() + (now.getTimezoneOffset() + 480) * 60000);
   const hours = manilaTime.getHours();
-  if (hours >= 17) manilaTime.setDate(manilaTime.getDate() + 1);
+  // Night shift after midnight belongs to previous day
+  if (hours < 5) {
+    manilaTime.setDate(manilaTime.getDate() - 1);
+  }
   return format(manilaTime, 'yyyy-MM-dd');
 };
 
@@ -107,10 +110,30 @@ export default function Finance() {
   const [investorExpenses, setInvestorExpenses] = useState<InvestorContribution[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  
+  const [initialShiftLoaded, setInitialShiftLoaded] = useState(false);
   
   const [selectedDate, setSelectedDate] = useState(getShiftDate());
   const [selectedShift, setSelectedShift] = useState<ShiftType>(getCurrentShift());
+
+  // Load active shifts to determine correct default date/shift
+  useEffect(() => {
+    const loadActiveShift = async () => {
+      const { data } = await supabase
+        .from('shifts')
+        .select('type, shift_start')
+        .in('status', ['open', 'ended'])
+        .order('shift_start', { ascending: false })
+        .limit(1);
+      
+      if (data && data.length > 0) {
+        const activeShift = data[0];
+        setSelectedShift(activeShift.type as ShiftType);
+        setSelectedDate(format(new Date(activeShift.shift_start), 'yyyy-MM-dd'));
+      }
+      setInitialShiftLoaded(true);
+    };
+    loadActiveShift();
+  }, []);
   
   const [showCashDialog, setShowCashDialog] = useState(false);
   const [editCash, setEditCash] = useState('');
