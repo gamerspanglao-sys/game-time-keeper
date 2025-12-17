@@ -136,11 +136,12 @@ export function CashVerification() {
   
   // History expand/edit state
   const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set());
-  const [editingHistory, setEditingHistory] = useState<string | null>(null);
-  const [editHistoryCash, setEditHistoryCash] = useState('');
-  const [editHistoryGcash, setEditHistoryGcash] = useState('');
+  const [editingHistoryKey, setEditingHistoryKey] = useState<string | null>(null);
+  const [editHistoryCashSubmitted, setEditHistoryCashSubmitted] = useState('');
+  const [editHistoryGcashSubmitted, setEditHistoryGcashSubmitted] = useState('');
+  const [editHistoryChangeFund, setEditHistoryChangeFund] = useState('');
   
-  // Edit submitted amounts state
+  // Edit submitted amounts state (pending)
   const [editingSubmitted, setEditingSubmitted] = useState<string | null>(null);
   const [editCashSubmitted, setEditCashSubmitted] = useState('');
   const [editGcashSubmitted, setEditGcashSubmitted] = useState('');
@@ -775,22 +776,33 @@ export function CashVerification() {
 
   const startEditHistory = (h: ApprovedHistory) => {
     const key = `${h.date}-${h.shift}`;
-    setEditingHistory(key);
-    setEditHistoryCash(h.cashActual.toString());
-    setEditHistoryGcash(h.gcashActual.toString());
+    setEditingHistoryKey(key);
+    setEditHistoryCashSubmitted(h.cashSubmitted.toString());
+    setEditHistoryGcashSubmitted(h.gcashSubmitted.toString());
+    setEditHistoryChangeFund(h.changeFundLeft.toString());
   };
 
   const saveEditHistory = async (h: ApprovedHistory) => {
-    const cashActual = parseInt(editHistoryCash) || 0;
-    const gcashActual = parseInt(editHistoryGcash) || 0;
+    const cashSubmitted = parseInt(editHistoryCashSubmitted) || 0;
+    const gcashSubmitted = parseInt(editHistoryGcashSubmitted) || 0;
+    const changeFund = parseInt(editHistoryChangeFund) || 0;
+    
+    const shiftType = h.shift === 'night' ? 'Night Shift' : 'Day Shift';
+    
     try {
+      // Update all cash_handovers for this date/shift
       await supabase
-        .from('cash_register')
-        .update({ cash_actual: cashActual, gcash_actual: gcashActual })
-        .eq('date', h.date)
-        .eq('shift', h.shift);
-      toast.success('Updated');
-      setEditingHistory(null);
+        .from('cash_handovers')
+        .update({ 
+          cash_amount: cashSubmitted, 
+          gcash_amount: gcashSubmitted,
+          change_fund_amount: changeFund
+        })
+        .eq('shift_date', h.date)
+        .ilike('shift_type', `%${h.shift}%`);
+        
+      toast.success('Amounts updated');
+      setEditingHistoryKey(null);
       loadPendingData();
     } catch (e) {
       toast.error('Failed to update');
@@ -817,7 +829,7 @@ export function CashVerification() {
           {approvedHistory.map(h => {
             const key = `${h.date}-${h.shift}`;
             const isExpanded = expandedHistory.has(key);
-            const isEditing = editingHistory === key;
+            const isEditing = editingHistoryKey === key;
             const totalExpected = h.cashExpected + h.gcashExpected;
             
             return (
@@ -934,32 +946,103 @@ export function CashVerification() {
                     
                     {/* Submitted + Change Fund = Accounted */}
                     <div className="space-y-1.5">
-                      <p className="text-xs font-medium text-muted-foreground">Total Accounted For</p>
-                      <div className="bg-background/50 p-2 rounded space-y-1 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Submitted Cash</span>
-                          <span>₱{h.cashSubmitted.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Submitted GCash</span>
-                          <span>₱{h.gcashSubmitted.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">+ Change fund left</span>
-                          <span className="text-amber-600 font-medium">₱{h.changeFundLeft.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between border-t border-border/50 pt-1 font-bold">
-                          <span>= Total Accounted</span>
-                          <span>₱{h.totalAccountedFor.toLocaleString()}</span>
-                        </div>
-                        <div className={cn(
-                          "flex justify-between pt-1 font-bold",
-                          h.difference >= 0 ? "text-green-500" : "text-red-500"
-                        )}>
-                          <span>vs Expected ₱{(h.cashExpected + h.gcashExpected).toLocaleString()}</span>
-                          <span>{h.difference >= 0 ? '+' : ''}₱{h.difference.toLocaleString()}</span>
-                        </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium text-muted-foreground">Total Accounted For</p>
+                        {!isEditing ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                            onClick={(e) => { e.stopPropagation(); startEditHistory(h); }}
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </Button>
+                        ) : (
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-green-500"
+                              onClick={(e) => { e.stopPropagation(); saveEditHistory(h); }}
+                            >
+                              <Check className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-red-500"
+                              onClick={(e) => { e.stopPropagation(); setEditingHistoryKey(null); }}
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
+                      
+                      {isEditing ? (
+                        <div className="bg-background/50 p-2 rounded space-y-2 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-muted-foreground">Cash:</span>
+                            <Input
+                              type="number"
+                              className="h-6 text-xs w-24 text-right"
+                              value={editHistoryCashSubmitted}
+                              onChange={e => setEditHistoryCashSubmitted(e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-muted-foreground">GCash:</span>
+                            <Input
+                              type="number"
+                              className="h-6 text-xs w-24 text-right"
+                              value={editHistoryGcashSubmitted}
+                              onChange={e => setEditHistoryGcashSubmitted(e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-muted-foreground">Change fund:</span>
+                            <Input
+                              type="number"
+                              className="h-6 text-xs w-24 text-right"
+                              value={editHistoryChangeFund}
+                              onChange={e => setEditHistoryChangeFund(e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                            />
+                          </div>
+                          <div className="flex justify-between border-t border-border/50 pt-1 font-bold">
+                            <span>= Total</span>
+                            <span>₱{((parseInt(editHistoryCashSubmitted) || 0) + (parseInt(editHistoryGcashSubmitted) || 0) + (parseInt(editHistoryChangeFund) || 0)).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-background/50 p-2 rounded space-y-1 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Submitted Cash</span>
+                            <span>₱{h.cashSubmitted.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Submitted GCash</span>
+                            <span>₱{h.gcashSubmitted.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">+ Change fund left</span>
+                            <span className="text-amber-600 font-medium">₱{h.changeFundLeft.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between border-t border-border/50 pt-1 font-bold">
+                            <span>= Total Accounted</span>
+                            <span>₱{h.totalAccountedFor.toLocaleString()}</span>
+                          </div>
+                          <div className={cn(
+                            "flex justify-between pt-1 font-bold",
+                            h.difference >= 0 ? "text-green-500" : "text-red-500"
+                          )}>
+                            <span>vs Expected ₱{(h.cashExpected + h.gcashExpected).toLocaleString()}</span>
+                            <span>{h.difference >= 0 ? '+' : ''}₱{h.difference.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     {/* Staff */}
