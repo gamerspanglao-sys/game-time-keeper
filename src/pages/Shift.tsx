@@ -510,123 +510,132 @@ export default function Shift() {
   }
 
   return (
-    <div className="p-4 space-y-5 max-w-2xl mx-auto pb-24">
+    <div className="p-4 space-y-4 max-w-lg mx-auto pb-24">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Clock className="w-5 h-5 text-primary" />
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Clock className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">Shift</h1>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className={cn(
+                "text-[10px] h-5",
+                currentShift === 'day' ? 'border-amber-500/50 text-amber-500' : 'border-indigo-500/50 text-indigo-500'
+              )}>
+                {currentShift === 'day' ? <Sun className="w-3 h-3 mr-1" /> : <Moon className="w-3 h-3 mr-1" />}
+                {currentShift === 'day' ? 'Day' : 'Night'}
+              </Badge>
+              <span className="text-[10px] text-muted-foreground">{currentDate}</span>
             </div>
-            Shift
-          </h1>
-          <div className="flex items-center gap-2 mt-1.5">
-            <Badge className={currentShift === 'day' ? 'bg-amber-500/20 text-amber-500 border-amber-500/30' : 'bg-indigo-500/20 text-indigo-500 border-indigo-500/30'}>
-              {currentShift === 'day' ? <Sun className="w-3 h-3 mr-1" /> : <Moon className="w-3 h-3 mr-1" />}
-              {currentShift === 'day' ? 'Day Shift' : 'Night Shift'}
-            </Badge>
-            <span className="text-xs text-muted-foreground">{currentDate}</span>
           </div>
         </div>
-        
-        {activeShifts.length > 0 && (
-          <Button variant="outline" size="sm" onClick={openExpenseDialog} className="gap-1.5 h-9 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600">
-            <Plus className="w-4 h-4" />
-            Expense
-          </Button>
-        )}
       </div>
 
-      {/* Active Shifts */}
-      {activeShifts.length > 0 && (
-        <Card className="border-green-500/30 bg-gradient-to-br from-green-500/5 to-transparent overflow-hidden">
-          <CardHeader className="py-3 border-b border-green-500/10">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center">
-                <Play className="w-3 h-3 text-green-500" />
-              </div>
-              Active Shifts
-              <Badge variant="secondary" className="ml-auto bg-green-500/20 text-green-500 text-xs">
-                {activeShifts.length}
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="py-3 space-y-2">
-            {activeShifts.map(shift => (
-              <div key={shift.id} className="flex items-center justify-between p-3 bg-green-500/10 rounded-xl border border-green-500/20 transition-all hover:border-green-500/40">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                    <User className="w-4 h-4 text-green-500" />
-                  </div>
-                  <div>
-                    <span className="font-medium">{shift.employee_name}</span>
-                    <div className="text-xs text-muted-foreground font-mono">
-                      {formatDuration(shift.shift_start)}
-                    </div>
-                  </div>
-                </div>
-                <Button 
-                  size="sm" 
-                  variant="destructive"
-                  onClick={() => confirmEndShift(shift.employee_id)}
-                  className="gap-1.5 h-8"
-                >
-                  <Square className="w-3 h-3" />
-                  End
-                </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Cash Submission Section */}
-      <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent overflow-hidden">
-        <CardHeader className="py-3 border-b border-primary/10">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
-              <Banknote className="w-3 h-3 text-primary" />
-            </div>
-            Cash Submission
-            {(totalSubmittedCash > 0 || totalSubmittedGCash > 0) && (
-              <Badge className="ml-auto bg-green-500/20 text-green-500 border-green-500/30">
-                <CheckCircle2 className="w-3 h-3 mr-1" />
-                Submitted
+      {/* Employees - Combined Section */}
+      <Card className="border-border/50">
+        <CardHeader className="py-2.5 px-3">
+          <CardTitle className="text-xs flex items-center gap-2 text-muted-foreground">
+            <User className="w-3.5 h-3.5" />
+            Staff
+            {activeShifts.length > 0 && (
+              <Badge className="ml-auto bg-green-500/20 text-green-500 border-0 text-[10px]">
+                {activeShifts.length} working
               </Badge>
             )}
           </CardTitle>
         </CardHeader>
-        <CardContent className="py-3 space-y-4">
-          {/* Already submitted */}
+        <CardContent className="px-3 pb-3 pt-0 space-y-1.5">
+          {employees.map(emp => {
+            const activeShift = getEmployeeShift(emp.id);
+            return (
+              <div key={emp.id} className={cn(
+                "flex items-center justify-between p-2.5 rounded-lg border transition-all",
+                activeShift 
+                  ? "bg-green-500/5 border-green-500/20" 
+                  : "bg-muted/30 border-transparent"
+              )}>
+                <div className="flex items-center gap-2.5">
+                  <div className={cn(
+                    "w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold",
+                    activeShift ? "bg-green-500/20 text-green-500" : "bg-muted text-muted-foreground"
+                  )}>
+                    {emp.name.charAt(0)}
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium">{emp.name}</span>
+                    {activeShift && (
+                      <div className="text-[10px] text-green-500 font-mono">
+                        {formatDuration(activeShift.shift_start)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {activeShift ? (
+                  <Button 
+                    size="sm" 
+                    variant="ghost"
+                    onClick={() => confirmEndShift(emp.id)}
+                    className="h-7 px-2.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Square className="w-3 h-3 mr-1" />
+                    End
+                  </Button>
+                ) : (
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => startShift(emp.id)} 
+                    className="h-7 px-2.5 text-xs text-green-600 hover:text-green-600 hover:bg-green-500/10"
+                  >
+                    <Play className="w-3 h-3 mr-1" />
+                    Start
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      {/* Cash Submission - Compact */}
+      <Card className="border-border/50">
+        <CardHeader className="py-2.5 px-3">
+          <CardTitle className="text-xs flex items-center gap-2 text-muted-foreground">
+            <Banknote className="w-3.5 h-3.5" />
+            Cash Handover
+            {(totalSubmittedCash > 0 || totalSubmittedGCash > 0) && (
+              <Badge className="ml-auto bg-green-500/20 text-green-500 border-0 text-[10px]">
+                ₱{(totalSubmittedCash + totalSubmittedGCash).toLocaleString()}
+              </Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 pb-3 pt-0 space-y-3">
+          {/* Already submitted - compact */}
           {cashSubmissions.length > 0 && (
-            <div className="p-3 bg-green-500/10 rounded-xl border border-green-500/20">
-              <div className="text-xs text-muted-foreground mb-2">Already submitted this shift:</div>
+            <div className="text-xs space-y-1 p-2 bg-green-500/5 rounded-lg border border-green-500/20">
               {cashSubmissions.map((sub, i) => (
-                <div key={i} className="flex justify-between text-sm py-1">
-                  <span className="flex items-center gap-2">
+                <div key={i} className="flex justify-between">
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
                     <CheckCircle2 className="w-3 h-3 text-green-500" />
                     {sub.employeeName}
                   </span>
                   <span className="font-medium">
                     {sub.cash > 0 && <span className="text-green-500">₱{sub.cash.toLocaleString()}</span>}
-                    {sub.cash > 0 && sub.gcash > 0 && ' + '}
-                    {sub.gcash > 0 && <span className="text-blue-500">GC ₱{sub.gcash.toLocaleString()}</span>}
+                    {sub.cash > 0 && sub.gcash > 0 && <span className="text-muted-foreground mx-1">+</span>}
+                    {sub.gcash > 0 && <span className="text-blue-500">₱{sub.gcash.toLocaleString()}</span>}
                   </span>
                 </div>
               ))}
-              {cashSubmissions.length > 1 && (
-                <div className="border-t border-green-500/20 mt-2 pt-2 flex justify-between font-semibold">
-                  <span>Total</span>
-                  <span>₱{(totalSubmittedCash + totalSubmittedGCash).toLocaleString()}</span>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Add new submission */}
-          <div className="space-y-3">
+          {/* Submit form - compact */}
+          <div className="space-y-2">
             <Select value={cashEmployee} onValueChange={setCashEmployee}>
-              <SelectTrigger>
+              <SelectTrigger className="h-9 text-sm">
                 <SelectValue placeholder="Select employee" />
               </SelectTrigger>
               <SelectContent>
@@ -636,166 +645,117 @@ export default function Shift() {
               </SelectContent>
             </Select>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground">Cash ₱</label>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
                 <Input
                   type="number"
                   value={cashAmount}
                   onChange={e => setCashAmount(e.target.value)}
-                  placeholder="0"
+                  placeholder="Cash"
+                  className="h-9 text-sm"
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground">GCash ₱</label>
+              <div>
                 <Input
                   type="number"
                   value={gcashAmount}
                   onChange={e => setGcashAmount(e.target.value)}
-                  placeholder="0"
+                  placeholder="GCash"
+                  className="h-9 text-sm"
                 />
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs text-muted-foreground">Change fund left ₱ (optional)</label>
-              <Input
-                type="number"
-                value={changeFundAmount}
-                onChange={e => setChangeFundAmount(e.target.value)}
-                placeholder="2000"
-              />
+              <div>
+                <Input
+                  type="number"
+                  value={changeFundAmount}
+                  onChange={e => setChangeFundAmount(e.target.value)}
+                  placeholder="Change"
+                  className="h-9 text-sm"
+                />
+              </div>
             </div>
 
             <Button 
               onClick={submitCashHandover} 
               disabled={submittingCash || !cashEmployee}
-              className="w-full gap-2"
+              className="w-full h-9 text-sm"
+              size="sm"
             >
-              <Send className="w-4 h-4" />
-              {submittingCash ? 'Submitting...' : 'Submit Cash'}
+              <Send className="w-3.5 h-3.5 mr-1.5" />
+              {submittingCash ? 'Submitting...' : 'Submit'}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Shift Expenses */}
-      <Card className="border-border/50 overflow-hidden">
-        <CardHeader className="py-3 border-b border-border/50 bg-secondary/20">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
-                <Receipt className="w-3 h-3 text-primary" />
-              </div>
-              Shift Expenses
-            </CardTitle>
-            {totalShiftExpenses > 0 && (
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="flex items-center gap-1 text-green-500">
-                    <Banknote className="w-3 h-3" />₱{cashExpenses.toLocaleString()}
-                  </span>
-                  <span className="text-muted-foreground">•</span>
-                  <span className="flex items-center gap-1 text-blue-500">
-                    <span className="text-[10px]">GC</span>₱{gcashExpenses.toLocaleString()}
-                  </span>
-                </div>
-                <Badge className="bg-primary/20 text-primary border-primary/30 font-semibold">
-                  ₱{totalShiftExpenses.toLocaleString()}
-                </Badge>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="py-3">
-          {shiftExpenses.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-3">
-                <Receipt className="w-6 h-6 text-muted-foreground/50" />
-              </div>
-              <p className="text-sm text-muted-foreground">No expenses this shift</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {shiftExpenses.map(expense => (
-                <div key={expense.id} className="flex items-center justify-between p-3 bg-secondary/30 rounded-xl border border-border/30 transition-all hover:border-border/50 group">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center",
-                      expense.payment_source === 'cash' ? "bg-green-500/20" : "bg-blue-500/20"
-                    )}>
-                      {expense.payment_source === 'cash' 
-                        ? <Banknote className="w-4 h-4 text-green-500" />
-                        : <span className="text-xs font-bold text-blue-500">GC</span>
-                      }
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold">₱{expense.amount.toLocaleString()}</span>
-                        <Badge variant="outline" className="text-[10px] px-1.5 h-5">
-                          {EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label || expense.category}
-                        </Badge>
-                      </div>
-                      {expense.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{expense.description}</p>
-                      )}
-                    </div>
-                  </div>
+      {/* Shift Expenses - Only show if there are active shifts or expenses */}
+      {(activeShifts.length > 0 || shiftExpenses.length > 0) && (
+        <Card className="border-border/50">
+          <CardHeader className="py-2.5 px-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs flex items-center gap-2 text-muted-foreground">
+                <Receipt className="w-3.5 h-3.5" />
+                Shift Expenses
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                {totalShiftExpenses > 0 && (
+                  <Badge variant="outline" className="text-[10px] h-5">
+                    ₱{totalShiftExpenses.toLocaleString()}
+                  </Badge>
+                )}
+                {activeShifts.length > 0 && (
                   <Button 
                     variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => deleteExpense(expense.id)}
+                    size="sm" 
+                    onClick={openExpenseDialog} 
+                    className="h-6 px-2 text-[10px]"
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Employees */}
-      <Card className="border-border/50 overflow-hidden">
-        <CardHeader className="py-3 border-b border-border/50 bg-secondary/20">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center">
-              <User className="w-3 h-3 text-muted-foreground" />
-            </div>
-            Employees
-            <Badge variant="secondary" className="ml-auto text-xs">{employees.length}</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="py-3 space-y-2">
-          {employees.map(emp => {
-            const activeShift = getEmployeeShift(emp.id);
-            return (
-              <div key={emp.id} className="flex items-center justify-between p-3 bg-secondary/30 rounded-xl border border-border/30 transition-all hover:border-border/50">
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center",
-                    activeShift ? "bg-green-500/20" : "bg-muted"
-                  )}>
-                    <User className={cn("w-4 h-4", activeShift ? "text-green-500" : "text-muted-foreground")} />
-                  </div>
-                  <span className="font-medium">{emp.name}</span>
-                </div>
-                {activeShift ? (
-                  <Badge className="bg-green-500/20 text-green-500 border-green-500/30">
-                    Working
-                  </Badge>
-                ) : (
-                  <Button size="sm" variant="outline" onClick={() => startShift(emp.id)} className="h-8 gap-1.5 border-border/50">
-                    <Play className="w-3 h-3" />
-                    Start
+                    <Plus className="w-3 h-3 mr-1" />
+                    Add
                   </Button>
                 )}
               </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+            </div>
+          </CardHeader>
+          <CardContent className="px-3 pb-3 pt-0">
+            {shiftExpenses.length === 0 ? (
+              <div className="text-center py-6 text-xs text-muted-foreground">
+                No expenses
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {shiftExpenses.map(expense => (
+                  <div key={expense.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg group">
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
+                        expense.payment_source === 'cash' ? "bg-green-500/15 text-green-500" : "bg-blue-500/15 text-blue-500"
+                      )}>
+                        {expense.payment_source === 'cash' ? '₱' : 'G'}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">₱{expense.amount.toLocaleString()}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label}
+                          {expense.description && ` • ${expense.description}`}
+                        </div>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive/70 hover:text-destructive"
+                      onClick={() => deleteExpense(expense.id)}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Add Expense Dialog */}
       <Dialog open={showExpenseDialog} onOpenChange={setShowExpenseDialog}>
