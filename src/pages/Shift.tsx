@@ -247,6 +247,8 @@ export default function Shift() {
 
   const loadShiftExpensesWithShifts = async (shifts: ActiveShift[]) => {
     try {
+      console.log('Loading expenses for:', { currentDate, currentShiftType });
+      
       // Load ALL shift expenses for current date and shift type
       // This includes both active and closed shifts
       const { data, error } = await supabase
@@ -256,6 +258,8 @@ export default function Shift() {
         .eq('shift', currentShiftType)
         .eq('expense_type', 'shift')
         .order('created_at', { ascending: false });
+      
+      console.log('Expenses query result:', { data, error });
       
       if (error) {
         console.error('Error loading expenses:', error);
