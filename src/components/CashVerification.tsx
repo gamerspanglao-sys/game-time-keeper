@@ -67,6 +67,7 @@ interface PendingVerification {
   expenses: PendingExpense[];
   registerId?: string;
   handoverId?: string;
+  changeFundLeaving?: number; // What they're leaving for next shift
 }
 
 const CATEGORIES = [
@@ -146,6 +147,12 @@ export function CashVerification() {
         .eq('approved', false)
         .order('shift_date', { ascending: false });
 
+      // Load ALL handovers to find previous shift's change_fund for carryover calculation
+      const { data: allHandovers } = await supabase
+        .from('cash_handovers')
+        .select('shift_date, shift_type, change_fund_amount, approved')
+        .order('shift_date', { ascending: false });
+
       // Load closed shifts for handover employees display
       const { data: closedShifts } = await supabase
         .from('shifts')
@@ -186,6 +193,27 @@ export function CashVerification() {
       // Group by date+shift from cash_handovers
       const groupedVerifications: Record<string, PendingVerification> = {};
       
+      // Helper to get previous shift info
+      const getPrevShift = (date: string, shift: string): { date: string; shift: string } => {
+        if (shift === 'day') {
+          const prevDate = new Date(date);
+          prevDate.setDate(prevDate.getDate() - 1);
+          return { date: prevDate.toISOString().split('T')[0], shift: 'night' };
+        } else {
+          return { date, shift: 'day' };
+        }
+      };
+      
+      // Helper to find previous shift's change_fund (carryover for current shift)
+      const findPreviousChangeFund = (date: string, shift: string): number => {
+        const prev = getPrevShift(date, shift);
+        const prevHandover = (allHandovers || []).find((ph: any) => {
+          const phShift = ph.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
+          return ph.shift_date === prev.date && phShift === prev.shift;
+        });
+        return prevHandover?.change_fund_amount || 0;
+      };
+      
       (handovers || []).forEach((h: any) => {
         const shiftType = h.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
         const key = `${h.shift_date}-${shiftType}`;
@@ -204,10 +232,13 @@ export function CashVerification() {
         if (!groupedVerifications[key]) {
           const register = registers?.find(r => r.date === h.shift_date && r.shift === shiftType);
           
+          // Get carryover from PREVIOUS shift's change_fund, not current
+          const carryover = findPreviousChangeFund(h.shift_date, shiftType);
+          
           groupedVerifications[key] = {
             date: h.shift_date,
             shift: shiftType,
-            carryoverCash: h.change_fund_amount || 0, // Opening cash from handover record
+            carryoverCash: carryover, // Opening cash from PREVIOUS shift
             carryoverGcash: 0,
             loyverseCash: register?.cash_expected || 0,
             loyverseGcash: register?.gcash_expected || 0,
@@ -223,15 +254,14 @@ export function CashVerification() {
             shifts: [handoverEmployee],
             expenses: [],
             registerId: register?.id,
-            handoverId: h.id
+            handoverId: h.id,
+            changeFundLeaving: h.change_fund_amount || 0 // What they're leaving for next shift
           };
         } else {
           // Add employee to existing group
           groupedVerifications[key].shifts.push(handoverEmployee);
           groupedVerifications[key].cashSubmitted += h.cash_amount || 0;
           groupedVerifications[key].gcashSubmitted += h.gcash_amount || 0;
-          // Add to carryover if multiple handovers
-          groupedVerifications[key].carryoverCash += h.change_fund_amount || 0;
         }
       });
 
