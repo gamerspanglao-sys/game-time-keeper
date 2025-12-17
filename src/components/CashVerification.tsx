@@ -262,6 +262,9 @@ export function CashVerification() {
       setShortageInputs(inputs);
 
       // Build approved history
+      console.log('Approved shifts received:', approvedShifts?.length || 0, approvedShifts);
+      console.log('Registers received:', registers?.length || 0);
+      
       const historyMap: Record<string, ApprovedHistory> = {};
       (approvedShifts || []).forEach((s: any) => {
         const shiftType = s.shift_type?.includes('Night') || s.shift_type === '12 hours' || s.type === 'night' ? 'night' : 'day';
@@ -299,6 +302,7 @@ export function CashVerification() {
 
       // Sort by date descending
       const sortedHistory = Object.values(historyMap).sort((a, b) => b.date.localeCompare(a.date));
+      console.log('Final history:', sortedHistory.length, sortedHistory);
       setApprovedHistory(sortedHistory.slice(0, 30)); // Last 30 entries
       
     } catch (e) {
