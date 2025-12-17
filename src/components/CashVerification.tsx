@@ -529,15 +529,17 @@ export function CashVerification() {
     }
   };
 
-  // Save carryover (change fund) amount
+  // Save carryover (opening balance) amount - this is what was received at shift START
   const saveCarryover = async (verification: PendingVerification, amount: number) => {
-    if (!verification.handoverId) return;
     try {
-      await supabase
-        .from('cash_handovers')
-        .update({ change_fund_amount: amount })
-        .eq('id', verification.handoverId);
-      toast.success('Change fund updated');
+      // Update change_fund_received on all shifts for this date/shift
+      for (const shift of verification.shifts) {
+        await supabase
+          .from('shifts')
+          .update({ change_fund_received: amount })
+          .eq('id', shift.id);
+      }
+      toast.success('Opening balance updated');
       setEditingCarryover(null);
       loadPendingData();
     } catch (e) {
