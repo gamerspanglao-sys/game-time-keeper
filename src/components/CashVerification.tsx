@@ -134,16 +134,16 @@ export function CashVerification() {
   const [newExpDescription, setNewExpDescription] = useState('');
   const [newExpSource, setNewExpSource] = useState<'cash' | 'gcash'>('cash');
   
-  // History expand/edit state
+  // History expand/edit state - totalCash = cash submitted + change fund
   const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set());
   const [editingHistoryKey, setEditingHistoryKey] = useState<string | null>(null);
-  const [editHistoryCashSubmitted, setEditHistoryCashSubmitted] = useState('');
-  const [editHistoryGcashSubmitted, setEditHistoryGcashSubmitted] = useState('');
+  const [editHistoryTotalCash, setEditHistoryTotalCash] = useState('');
+  const [editHistoryGcash, setEditHistoryGcash] = useState('');
   const [editHistoryChangeFund, setEditHistoryChangeFund] = useState('');
   
-  // Edit submitted amounts state (pending)
+  // Edit submitted amounts state (pending) - totalCash = cash handed over + change fund
   const [editingSubmitted, setEditingSubmitted] = useState<string | null>(null);
-  const [editCashSubmitted, setEditCashSubmitted] = useState('');
+  const [editTotalCash, setEditTotalCash] = useState(''); // Full cash in register
   const [editGcashSubmitted, setEditGcashSubmitted] = useState('');
   const [editChangeFundLeaving, setEditChangeFundLeaving] = useState('');
 
@@ -719,16 +719,20 @@ export function CashVerification() {
   const startEditSubmitted = (v: PendingVerification) => {
     const key = `${v.date}-${v.shift}`;
     setEditingSubmitted(key);
-    setEditCashSubmitted(v.cashSubmitted.toString());
+    // Total cash = cash submitted + change fund leaving
+    const totalCash = v.cashSubmitted + v.changeFundLeaving;
+    setEditTotalCash(totalCash.toString());
     setEditGcashSubmitted(v.gcashSubmitted.toString());
     setEditChangeFundLeaving(v.changeFundLeaving.toString());
   };
 
   // Save edited submitted amounts
   const saveEditedSubmitted = async (v: PendingVerification) => {
-    const cashAmount = parseInt(editCashSubmitted) || 0;
+    const totalCash = parseInt(editTotalCash) || 0;
     const gcashAmount = parseInt(editGcashSubmitted) || 0;
     const changeFund = parseInt(editChangeFundLeaving) || 0;
+    // Cash submitted = total cash - change fund
+    const cashAmount = totalCash - changeFund;
     
     try {
       // Update cash_handovers record
@@ -777,15 +781,19 @@ export function CashVerification() {
   const startEditHistory = (h: ApprovedHistory) => {
     const key = `${h.date}-${h.shift}`;
     setEditingHistoryKey(key);
-    setEditHistoryCashSubmitted(h.cashSubmitted.toString());
-    setEditHistoryGcashSubmitted(h.gcashSubmitted.toString());
+    // Total cash = cash submitted + change fund left
+    const totalCash = h.cashSubmitted + h.changeFundLeft;
+    setEditHistoryTotalCash(totalCash.toString());
+    setEditHistoryGcash(h.gcashSubmitted.toString());
     setEditHistoryChangeFund(h.changeFundLeft.toString());
   };
 
   const saveEditHistory = async (h: ApprovedHistory) => {
-    const cashSubmitted = parseInt(editHistoryCashSubmitted) || 0;
-    const gcashSubmitted = parseInt(editHistoryGcashSubmitted) || 0;
+    const totalCash = parseInt(editHistoryTotalCash) || 0;
+    const gcashSubmitted = parseInt(editHistoryGcash) || 0;
     const changeFund = parseInt(editHistoryChangeFund) || 0;
+    // Cash submitted = total cash - change fund
+    const cashSubmitted = totalCash - changeFund;
     
     const shiftType = h.shift === 'night' ? 'Night Shift' : 'Day Shift';
     
@@ -982,27 +990,17 @@ export function CashVerification() {
                       {isEditing ? (
                         <div className="bg-background/50 p-2 rounded space-y-2 text-xs">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-muted-foreground">Cash:</span>
+                            <span className="text-muted-foreground">💵 Total Cash:</span>
                             <Input
                               type="number"
                               className="h-6 text-xs w-24 text-right"
-                              value={editHistoryCashSubmitted}
-                              onChange={e => setEditHistoryCashSubmitted(e.target.value)}
+                              value={editHistoryTotalCash}
+                              onChange={e => setEditHistoryTotalCash(e.target.value)}
                               onClick={e => e.stopPropagation()}
                             />
                           </div>
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-muted-foreground">GCash:</span>
-                            <Input
-                              type="number"
-                              className="h-6 text-xs w-24 text-right"
-                              value={editHistoryGcashSubmitted}
-                              onChange={e => setEditHistoryGcashSubmitted(e.target.value)}
-                              onClick={e => e.stopPropagation()}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-muted-foreground">Change fund:</span>
+                            <span className="text-muted-foreground">− Change fund:</span>
                             <Input
                               type="number"
                               className="h-6 text-xs w-24 text-right"
@@ -1011,27 +1009,45 @@ export function CashVerification() {
                               onClick={e => e.stopPropagation()}
                             />
                           </div>
+                          <div className="flex justify-between border-t border-border/50 pt-1">
+                            <span className="text-muted-foreground">= Cash handed:</span>
+                            <span className="font-medium">₱{((parseInt(editHistoryTotalCash) || 0) - (parseInt(editHistoryChangeFund) || 0)).toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 mt-2">
+                            <span className="text-muted-foreground">📱 GCash:</span>
+                            <Input
+                              type="number"
+                              className="h-6 text-xs w-24 text-right"
+                              value={editHistoryGcash}
+                              onChange={e => setEditHistoryGcash(e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                            />
+                          </div>
                           <div className="flex justify-between border-t border-border/50 pt-1 font-bold">
-                            <span>= Total</span>
-                            <span>₱{((parseInt(editHistoryCashSubmitted) || 0) + (parseInt(editHistoryGcashSubmitted) || 0) + (parseInt(editHistoryChangeFund) || 0)).toLocaleString()}</span>
+                            <span>Total Accounted:</span>
+                            <span>₱{((parseInt(editHistoryTotalCash) || 0) + (parseInt(editHistoryGcash) || 0)).toLocaleString()}</span>
                           </div>
                         </div>
                       ) : (
                         <div className="bg-background/50 p-2 rounded space-y-1 text-xs">
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Submitted Cash</span>
+                            <span className="text-muted-foreground">Total Cash</span>
+                            <span className="font-medium">₱{(h.cashSubmitted + h.changeFundLeft).toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">− Change fund</span>
+                            <span className="text-amber-600">₱{h.changeFundLeft.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between border-t border-border/50 pt-1">
+                            <span className="text-muted-foreground">= Cash handed</span>
                             <span>₱{h.cashSubmitted.toLocaleString()}</span>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Submitted GCash</span>
+                          <div className="flex justify-between mt-2">
+                            <span className="text-muted-foreground">GCash</span>
                             <span>₱{h.gcashSubmitted.toLocaleString()}</span>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">+ Change fund left</span>
-                            <span className="text-amber-600 font-medium">₱{h.changeFundLeft.toLocaleString()}</span>
-                          </div>
                           <div className="flex justify-between border-t border-border/50 pt-1 font-bold">
-                            <span>= Total Accounted</span>
+                            <span>Total Accounted</span>
                             <span>₱{h.totalAccountedFor.toLocaleString()}</span>
                           </div>
                           <div className={cn(
@@ -1250,25 +1266,17 @@ export function CashVerification() {
                 {editingSubmitted === key ? (
                   <>
                     <div className="grid grid-cols-3 gap-1 text-xs items-center">
-                      <span className="text-muted-foreground">Submitted Cash:</span>
+                      <span className="text-muted-foreground">💵 Total Cash:</span>
                       <Input
                         type="number"
                         className="h-6 text-xs text-center col-span-2"
-                        value={editCashSubmitted}
-                        onChange={e => setEditCashSubmitted(e.target.value)}
+                        value={editTotalCash}
+                        onChange={e => setEditTotalCash(e.target.value)}
+                        placeholder="All cash in register"
                       />
                     </div>
                     <div className="grid grid-cols-3 gap-1 text-xs items-center">
-                      <span className="text-muted-foreground">Submitted GCash:</span>
-                      <Input
-                        type="number"
-                        className="h-6 text-xs text-center col-span-2"
-                        value={editGcashSubmitted}
-                        onChange={e => setEditGcashSubmitted(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid grid-cols-3 gap-1 text-xs items-center">
-                      <span className="text-muted-foreground">Change fund left:</span>
+                      <span className="text-muted-foreground">− Change fund:</span>
                       <Input
                         type="number"
                         className="h-6 text-xs text-center col-span-2"
@@ -1276,31 +1284,50 @@ export function CashVerification() {
                         onChange={e => setEditChangeFundLeaving(e.target.value)}
                       />
                     </div>
+                    <div className="grid grid-cols-3 gap-1 text-xs items-center pt-1 border-t border-border/50">
+                      <span className="text-muted-foreground">= Cash handed:</span>
+                      <span className="text-center col-span-2 font-medium">
+                        ₱{((parseInt(editTotalCash) || 0) - (parseInt(editChangeFundLeaving) || 0)).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-xs items-center mt-2">
+                      <span className="text-muted-foreground">📱 GCash:</span>
+                      <Input
+                        type="number"
+                        className="h-6 text-xs text-center col-span-2"
+                        value={editGcashSubmitted}
+                        onChange={e => setEditGcashSubmitted(e.target.value)}
+                      />
+                    </div>
                   </>
                 ) : (
                   <>
                     <div className="grid grid-cols-3 gap-1 text-xs">
-                      <span className="text-muted-foreground">Submitted:</span>
-                      <span className="text-center">
-                        <Banknote className="w-3 h-3 inline text-green-500 mr-1" />₱{v.cashSubmitted.toLocaleString()}
-                      </span>
-                      <span className="text-center">
-                        <Smartphone className="w-3 h-3 inline text-blue-500 mr-1" />₱{v.gcashSubmitted.toLocaleString()}
+                      <span className="text-muted-foreground">Total Cash:</span>
+                      <span className="text-center font-medium col-span-2">
+                        ₱{(v.cashSubmitted + v.changeFundLeaving).toLocaleString()}
                       </span>
                     </div>
                     <div className="grid grid-cols-3 gap-1 text-xs">
-                      <span className="text-muted-foreground">+ Change fund left:</span>
-                      <span className="text-center font-medium text-amber-600">₱{v.changeFundLeaving.toLocaleString()}</span>
-                      <span className="text-center text-muted-foreground">—</span>
+                      <span className="text-muted-foreground">− Change fund:</span>
+                      <span className="text-center text-amber-600 col-span-2">₱{v.changeFundLeaving.toLocaleString()}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-xs pt-1 border-t border-border/50">
+                      <span className="text-muted-foreground">= Cash handed:</span>
+                      <span className="text-center col-span-2">₱{v.cashSubmitted.toLocaleString()}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-xs mt-2">
+                      <span className="text-muted-foreground">GCash:</span>
+                      <span className="text-center col-span-2">₱{v.gcashSubmitted.toLocaleString()}</span>
                     </div>
                   </>
                 )}
                 
-                <div className="grid grid-cols-3 gap-1 text-sm pt-1 border-t border-border font-bold">
-                  <span>= Total Accounted:</span>
+                <div className="grid grid-cols-3 gap-1 text-sm pt-2 border-t border-border font-bold">
+                  <span>Total Accounted:</span>
                   <span className="text-center col-span-2">
                     ₱{editingSubmitted === key 
-                      ? ((parseInt(editCashSubmitted) || 0) + (parseInt(editGcashSubmitted) || 0) + (parseInt(editChangeFundLeaving) || 0)).toLocaleString()
+                      ? ((parseInt(editTotalCash) || 0) + (parseInt(editGcashSubmitted) || 0)).toLocaleString()
                       : v.totalAccountedFor.toLocaleString()
                     }
                   </span>
