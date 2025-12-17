@@ -169,16 +169,19 @@ export default function Shift() {
   };
 
   const loadShiftExpenses = async () => {
+    console.log('Loading expenses for:', { currentDate, currentShift });
     try {
-      const { data: register } = await supabase
+      const { data: register, error: regError } = await supabase
         .from('cash_register')
         .select('id')
         .eq('date', currentDate)
         .eq('shift', currentShift)
         .maybeSingle();
 
+      console.log('Found register:', register, 'Error:', regError);
+
       if (register) {
-        const { data: expenses } = await supabase
+        const { data: expenses, error: expError } = await supabase
           .from('cash_expenses')
           .select('*, employees:responsible_employee_id(name)')
           .eq('cash_register_id', register.id)
@@ -187,15 +190,18 @@ export default function Shift() {
           .eq('date', currentDate)
           .order('created_at', { ascending: false });
 
+        console.log('Loaded expenses:', expenses?.length, 'Error:', expError);
+
         setShiftExpenses((expenses || []).map((e: any) => ({
           ...e,
           responsible_name: e.employees?.name
         })));
       } else {
+        console.log('No register found, clearing expenses');
         setShiftExpenses([]);
       }
     } catch (e) {
-      console.error(e);
+      console.error('Error loading expenses:', e);
       setShiftExpenses([]);
     }
   };
