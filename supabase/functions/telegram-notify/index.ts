@@ -524,12 +524,25 @@ serve(async (req) => {
       const hour = manilaTime.getHours();
       const shiftType = hour >= 5 && hour < 17 ? '☀️ Day Shift' : '🌙 Night Shift';
       
+      const formatMoney = (n: number) => `₱${n?.toLocaleString() || 0}`;
+      const { previousCash, previousGcash, changeFund, previousEmployee } = body;
+      
       message = `🟢 <b>SHIFT STARTED</b>\n`;
       message += `━━━━━━━━━━━━━━━━━━\n`;
       message += `👤 Employee: <b>${employeeName || 'Unknown'}</b>\n`;
       message += `📅 Shift: ${shiftType}\n`;
       message += `⏰ Started: ${time || manilaTime.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}\n`;
-      message += `\n✅ Ready to work!`;
+      
+      // Show previous handover info if available
+      if (previousEmployee || previousCash > 0 || previousGcash > 0) {
+        message += `\n📋 <b>HANDOVER FROM ${(previousEmployee || 'Previous').toUpperCase()}</b>\n`;
+        message += `   💵 Cash: ${formatMoney(previousCash || 0)}\n`;
+        message += `   📱 GCash: ${formatMoney(previousGcash || 0)}\n`;
+        message += `   🔄 Change Fund: ${formatMoney(changeFund || 2000)}\n`;
+        message += `\n⚠️ <b>VERIFY AMOUNTS BEFORE STARTING!</b>`;
+      } else {
+        message += `\n✅ Ready to work!`;
+      }
     }
     
     if (action === 'shift_end') {
