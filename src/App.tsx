@@ -10,24 +10,29 @@ import Shift from "./pages/Shift";
 import Inventory from "./pages/Inventory";
 import NotFound from "./pages/NotFound";
 import { Layout } from "./components/Layout";
+import { AdminProvider } from "./hooks/useAdminMode";
+import { AdminGuard } from "./components/AdminGuard";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/finance" element={<Layout><Finance /></Layout>} />
-          <Route path="/activity" element={<Layout><Activity /></Layout>} />
-          <Route path="/shift" element={<Layout><Shift /></Layout>} />
-          <Route path="/inventory" element={<Layout><Inventory /></Layout>} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <AdminProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/shift" element={<Layout><Shift /></Layout>} />
+            {/* Admin-only routes */}
+            <Route path="/finance" element={<Layout><AdminGuard><Finance /></AdminGuard></Layout>} />
+            <Route path="/activity" element={<Layout><AdminGuard><Activity /></AdminGuard></Layout>} />
+            <Route path="/inventory" element={<Layout><AdminGuard><Inventory /></AdminGuard></Layout>} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </AdminProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
