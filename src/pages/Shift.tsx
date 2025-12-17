@@ -180,12 +180,6 @@ export default function Shift() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!loading) {
-      loadShiftExpenses();
-    }
-  }, [activeShifts]);
-
   const loadData = async () => {
     try {
       const [{ data: empData }, { data: shiftsData }] = await Promise.all([
@@ -198,15 +192,20 @@ export default function Shift() {
       ]);
 
       setEmployees(empData || []);
-      setActiveShifts((shiftsData || []).map((s: any) => ({
+      
+      const mappedShifts = (shiftsData || []).map((s: any) => ({
         id: s.id,
         employee_id: s.employee_id,
         employee_name: s.employees?.name || 'Unknown',
         shift_start: s.shift_start,
         type: s.type || 'day',
         status: s.status
-      })));
+      }));
+      
+      setActiveShifts(mappedShifts);
 
+      // Load expenses with the fresh shifts data
+      await loadShiftExpensesWithShifts(mappedShifts);
       await loadCurrentHandover();
     } catch (e) {
       console.error(e);
@@ -246,14 +245,14 @@ export default function Shift() {
     }
   };
 
-  const loadShiftExpenses = async () => {
+  const loadShiftExpensesWithShifts = async (shifts: ActiveShift[]) => {
     try {
-      if (activeShifts.length === 0) {
+      if (shifts.length === 0) {
         setShiftExpenses([]);
         return;
       }
 
-      const shiftIds = activeShifts.map(s => s.id);
+      const shiftIds = shifts.map(s => s.id);
       
       const { data: expenses, error } = await supabase
         .from('cash_expenses')
@@ -288,6 +287,8 @@ export default function Shift() {
       setShiftExpenses([]);
     }
   };
+
+  const loadShiftExpenses = () => loadShiftExpensesWithShifts(activeShifts);
 
   const confirmStartShift = async (employeeId: string) => {
     // Check if employee already has an open shift
