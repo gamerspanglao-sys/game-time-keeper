@@ -124,9 +124,9 @@ export default function Shift() {
   const [activeShifts, setActiveShifts] = useState<ActiveShift[]>([]);
   const [currentHandover, setCurrentHandover] = useState<CashHandover | null>(null);
 
-  // Cash handover for Close Shift
+  // Cash handover for Close Shift - totalCashAmount = cash to hand over + change fund
   const [cashEmployee, setCashEmployee] = useState<string>('');
-  const [cashAmount, setCashAmount] = useState('');
+  const [totalCashAmount, setTotalCashAmount] = useState(''); // Full cash in register
   const [gcashAmount, setGcashAmount] = useState('');
   const [changeFundAmount, setChangeFundAmount] = useState('2000');
   const [handoverComment, setHandoverComment] = useState('');
@@ -466,7 +466,7 @@ export default function Shift() {
   // Close entire shift
   const openCloseShiftDialog = () => {
     setCashEmployee('');
-    setCashAmount('');
+    setTotalCashAmount('');
     setGcashAmount('');
     setChangeFundAmount('2000');
     setHandoverComment('');
@@ -479,17 +479,24 @@ export default function Shift() {
       return;
     }
 
-    const cash = parseInt(cashAmount) || 0;
+    const totalCash = parseInt(totalCashAmount) || 0;
     const gcash = parseInt(gcashAmount) || 0;
     const changeFund = parseInt(changeFundAmount) || 0;
+    // Cash handed over = total cash in register - change fund left
+    const cash = totalCash - changeFund;
 
-    if (cash === 0 && gcash === 0) {
-      toast.error('Enter cash or GCash amount');
+    if (totalCash === 0 && gcash === 0) {
+      toast.error('Enter total cash or GCash amount');
       return;
     }
 
     if (changeFund <= 0) {
       toast.error('Change fund is required');
+      return;
+    }
+
+    if (cash < 0) {
+      toast.error('Change fund cannot be more than total cash');
       return;
     }
 
@@ -1150,18 +1157,53 @@ export default function Shift() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1">
-                <label className="text-[10px] text-muted-foreground">Cash ₱</label>
-                <Input type="number" value={cashAmount} onChange={e => setCashAmount(e.target.value)} placeholder="0" className="h-9 text-sm font-mono" />
+            <div className="space-y-3">
+              {/* Total Cash and Change Fund */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-muted-foreground">💵 Total Cash in Register ₱</label>
+                  <Input 
+                    type="number" 
+                    value={totalCashAmount} 
+                    onChange={e => setTotalCashAmount(e.target.value)} 
+                    placeholder="Count all cash" 
+                    className="h-9 text-sm font-mono" 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-amber-500">− Change Fund to Leave ₱</label>
+                  <Input 
+                    type="number" 
+                    value={changeFundAmount} 
+                    onChange={e => setChangeFundAmount(e.target.value)} 
+                    placeholder="2000" 
+                    className="h-9 text-sm font-mono border-amber-500/30" 
+                  />
+                </div>
               </div>
+              
+              {/* Calculated Cash Handed Over */}
+              {totalCashAmount && (
+                <div className="p-2 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">= Cash Handed Over:</span>
+                    <span className="font-bold text-green-600">
+                      ₱{((parseInt(totalCashAmount) || 0) - (parseInt(changeFundAmount) || 0)).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+              
+              {/* GCash */}
               <div className="space-y-1">
-                <label className="text-[10px] text-blue-500">GCash ₱</label>
-                <Input type="number" value={gcashAmount} onChange={e => setGcashAmount(e.target.value)} placeholder="0" className="h-9 text-sm font-mono" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] text-amber-500">Change Fund *</label>
-                <Input type="number" value={changeFundAmount} onChange={e => setChangeFundAmount(e.target.value)} placeholder="2000" className="h-9 text-sm font-mono border-amber-500/30" />
+                <label className="text-[10px] text-blue-500">📱 GCash ₱</label>
+                <Input 
+                  type="number" 
+                  value={gcashAmount} 
+                  onChange={e => setGcashAmount(e.target.value)} 
+                  placeholder="0" 
+                  className="h-9 text-sm font-mono" 
+                />
               </div>
             </div>
 
