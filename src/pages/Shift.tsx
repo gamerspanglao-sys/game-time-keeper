@@ -13,9 +13,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Trash2, Square, AlertTriangle, CheckCircle2, Send } from 'lucide-react';
+import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Square, AlertTriangle, CheckCircle2, Send, Lock } from 'lucide-react';
 
 type ShiftType = 'day' | 'night';
+type ShiftStatus = 'open' | 'ended' | 'closed';
 
 interface Employee {
   id: string;
@@ -28,7 +29,7 @@ interface ActiveShift {
   employee_name: string;
   shift_start: string;
   type: ShiftType;
-  status: string;
+  status: ShiftStatus;
 }
 
 interface ShiftExpense {
@@ -99,40 +100,37 @@ const getPreviousShiftInfo = (): { shiftType: ShiftType; shiftDate: string } => 
   const hour = manilaTime.getHours();
   
   if (currentType === 'day') {
-    // Current is day -> show last night handover (from yesterday or earlier)
-    const prevDate = new Date(manilaTime);
-    prevDate.setDate(prevDate.getDate() - 1);
-    return { shiftType: 'night', shiftDate: format(prevDate, 'yyyy-MM-dd') };
-  } else {
-    // Current is night -> show today's day handover
-    let shiftDate: Date;
+    // Previous was night shift - check if we're before or after 5 AM
     if (hour < 5) {
-      // After midnight, day shift was from previous calendar day
-      shiftDate = new Date(manilaTime);
-      shiftDate.setDate(shiftDate.getDate() - 1);
+      // Still in the night shift period, previous was day shift yesterday
+      const yesterday = new Date(manilaTime);
+      yesterday.setDate(yesterday.getDate() - 1);
+      return { shiftType: 'day', shiftDate: format(yesterday, 'yyyy-MM-dd') };
     } else {
-      // After 17:00, day shift was from today
-      shiftDate = new Date(manilaTime);
+      // Day shift, previous was night shift that started yesterday
+      const yesterday = new Date(manilaTime);
+      yesterday.setDate(yesterday.getDate() - 1);
+      return { shiftType: 'night', shiftDate: format(yesterday, 'yyyy-MM-dd') };
     }
-    return { shiftType: 'day', shiftDate: format(shiftDate, 'yyyy-MM-dd') };
+  } else {
+    // Night shift, previous was day shift today
+    return { shiftType: 'day', shiftDate: format(manilaTime, 'yyyy-MM-dd') };
   }
 };
 
 export default function Shift() {
+  const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeShifts, setActiveShifts] = useState<ActiveShift[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  // Current handover for this shift type/date
   const [currentHandover, setCurrentHandover] = useState<CashHandover | null>(null);
-  
-  // Cash submission section
+
+  // Cash handover for Close Shift
   const [cashEmployee, setCashEmployee] = useState<string>('');
   const [cashAmount, setCashAmount] = useState('');
   const [gcashAmount, setGcashAmount] = useState('');
   const [changeFundAmount, setChangeFundAmount] = useState('2000');
   const [handoverComment, setHandoverComment] = useState('');
-  const [submittingCash, setSubmittingCash] = useState(false);
+  const [closingShift, setClosingShift] = useState(false);
 
   // Expense tracking
   const [shiftExpenses, setShiftExpenses] = useState<ShiftExpense[]>([]);
@@ -144,10 +142,13 @@ export default function Shift() {
   const [expenseResponsible, setExpenseResponsible] = useState('');
   const [addingExpense, setAddingExpense] = useState(false);
 
-  // End shift dialog
-  const [showEndShiftDialog, setShowEndShiftDialog] = useState(false);
-  const [pendingEndShiftEmployee, setPendingEndShiftEmployee] = useState<string | null>(null);
-  const [endingShift, setEndingShift] = useState(false);
+  // End work dialog (individual)
+  const [showEndWorkDialog, setShowEndWorkDialog] = useState(false);
+  const [pendingEndWorkEmployee, setPendingEndWorkEmployee] = useState<string | null>(null);
+  const [endingWork, setEndingWork] = useState(false);
+
+  // Close shift dialog (all employees)
+  const [showCloseShiftDialog, setShowCloseShiftDialog] = useState(false);
 
   // Start shift confirmation dialog
   const [showStartShiftDialog, setShowStartShiftDialog] = useState(false);
@@ -156,8 +157,16 @@ export default function Shift() {
   const [startingShift, setStartingShift] = useState(false);
   const [cashVerified, setCashVerified] = useState(false);
 
-  const currentShiftType = getCurrentShiftType();
-  const currentDate = getShiftDate();
+  // Effective shift type based on active shifts
+  const effectiveShiftType = activeShifts.length > 0 ? activeShifts[0].type : getCurrentShiftType();
+  const currentDate = activeShifts.length > 0 
+    ? format(new Date(activeShifts[0].shift_start), 'yyyy-MM-dd')
+    : getShiftDate();
+
+  // Check if all employees have ended (but shift not closed)
+  const allEnded = activeShifts.length > 0 && activeShifts.every(s => s.status === 'ended');
+  const hasOpenShifts = activeShifts.some(s => s.status === 'open');
+  const hasEndedShifts = activeShifts.some(s => s.status === 'ended');
 
   useEffect(() => {
     loadData();
@@ -187,7 +196,7 @@ export default function Shift() {
         supabase
           .from('shifts')
           .select('id, employee_id, shift_start, type, status, employees!inner(name)')
-          .eq('status', 'open')
+          .in('status', ['open', 'ended'])
           .order('shift_start', { ascending: false })
       ]);
 
@@ -199,7 +208,7 @@ export default function Shift() {
         employee_name: s.employees?.name || 'Unknown',
         shift_start: s.shift_start,
         type: s.type || 'day',
-        status: s.status
+        status: s.status || 'open'
       }));
       
       setActiveShifts(mappedShifts);
@@ -216,11 +225,17 @@ export default function Shift() {
 
   const loadCurrentHandover = async () => {
     try {
+      // Use effective shift type from active shifts
+      const shiftType = activeShifts.length > 0 ? activeShifts[0].type : getCurrentShiftType();
+      const shiftDate = activeShifts.length > 0 
+        ? format(new Date(activeShifts[0].shift_start), 'yyyy-MM-dd')
+        : getShiftDate();
+
       const { data } = await supabase
         .from('cash_handovers')
         .select('*, employees:handed_by_employee_id(name)')
-        .eq('shift_type', currentShiftType)
-        .eq('shift_date', currentDate)
+        .eq('shift_type', shiftType)
+        .eq('shift_date', shiftDate)
         .maybeSingle();
 
       if (data) {
@@ -247,21 +262,19 @@ export default function Shift() {
 
   const loadShiftExpensesWithShifts = async (shifts: ActiveShift[]) => {
     try {
-      // If there are active shifts, use their shift type; otherwise use calculated type
-      const effectiveShiftType = shifts.length > 0 ? shifts[0].type : currentShiftType;
+      // Use effective shift type from active shifts
+      const shiftType = shifts.length > 0 ? shifts[0].type : getCurrentShiftType();
+      const shiftDate = shifts.length > 0 
+        ? format(new Date(shifts[0].shift_start), 'yyyy-MM-dd')
+        : getShiftDate();
       
-      console.log('Loading expenses for:', { currentDate, effectiveShiftType, activeShiftsCount: shifts.length });
-      
-      // Load ALL shift expenses for current date and effective shift type
       const { data, error } = await supabase
         .from('cash_expenses')
         .select('*')
-        .eq('date', currentDate)
-        .eq('shift', effectiveShiftType)
+        .eq('date', shiftDate)
+        .eq('shift', shiftType)
         .eq('expense_type', 'shift')
         .order('created_at', { ascending: false });
-      
-      console.log('Expenses query result:', { data, error });
       
       if (error) {
         console.error('Error loading expenses:', error);
@@ -273,14 +286,14 @@ export default function Shift() {
 
       // Load employee names separately
       const expensesWithNames = await Promise.all(expenses.map(async (e: any) => {
-        let responsibleName = null;
+        let responsibleName = '';
         if (e.responsible_employee_id) {
-          const { data: emp } = await supabase
+          const { data: empData } = await supabase
             .from('employees')
             .select('name')
             .eq('id', e.responsible_employee_id)
             .maybeSingle();
-          responsibleName = emp?.name;
+          responsibleName = empData?.name || '';
         }
         return { ...e, responsible_name: responsibleName };
       }));
@@ -292,10 +305,11 @@ export default function Shift() {
     }
   };
 
-  const loadShiftExpenses = () => loadShiftExpensesWithShifts(activeShifts);
+  const loadShiftExpenses = () => {
+    loadShiftExpensesWithShifts(activeShifts);
+  };
 
   const confirmStartShift = async (employeeId: string) => {
-    // Check if employee already has an open shift
     const existingShift = activeShifts.find(s => s.employee_id === employeeId);
     if (existingShift) {
       toast.error('You already have an open shift');
@@ -348,14 +362,19 @@ export default function Shift() {
     }
     
     const employeeName = employees.find(e => e.id === pendingStartEmployee)?.name || 'Unknown';
+    // Use calculated shift type for new shifts (no active shifts)
+    const newShiftType = activeShifts.length > 0 ? activeShifts[0].type : getCurrentShiftType();
+    const newShiftDate = activeShifts.length > 0 
+      ? format(new Date(activeShifts[0].shift_start), 'yyyy-MM-dd')
+      : getShiftDate();
     
     setStartingShift(true);
     try {
       const { error } = await supabase.from('shifts').insert({
         employee_id: pendingStartEmployee,
-        date: currentDate,
+        date: newShiftDate,
         shift_start: new Date().toISOString(),
-        type: currentShiftType,
+        type: newShiftType,
         status: 'open'
       });
 
@@ -391,83 +410,61 @@ export default function Shift() {
     }
   };
 
-  const confirmEndShift = (employeeId: string) => {
-    // Check if this is the last active shift and cash not submitted
-    const isLastShift = activeShifts.length === 1;
-    if (isLastShift && !currentHandover) {
-      toast.error('Submit cash handover before ending the last shift');
-      return;
-    }
-    
-    setPendingEndShiftEmployee(employeeId);
-    setShowEndShiftDialog(true);
+  // Individual: End Work (not close shift)
+  const confirmEndWork = (employeeId: string) => {
+    setPendingEndWorkEmployee(employeeId);
+    setShowEndWorkDialog(true);
   };
 
-  const handleEndShift = async () => {
-    if (!pendingEndShiftEmployee) return;
+  const handleEndWork = async () => {
+    if (!pendingEndWorkEmployee) return;
     
-    const activeShift = activeShifts.find(s => s.employee_id === pendingEndShiftEmployee);
-    const employeeName = employees.find(e => e.id === pendingEndShiftEmployee)?.name || 'Unknown';
+    const activeShift = activeShifts.find(s => s.employee_id === pendingEndWorkEmployee);
+    const employeeName = employees.find(e => e.id === pendingEndWorkEmployee)?.name || 'Unknown';
     
     if (!activeShift) return;
 
-    setEndingShift(true);
+    setEndingWork(true);
     try {
       const totalHours = calculateTotalHours(activeShift.shift_start);
       
+      // Set status to 'ended' (not 'closed')
       const { error } = await supabase
         .from('shifts')
         .update({
           shift_end: new Date().toISOString(),
           total_hours: totalHours,
-          status: 'closed'
+          status: 'ended'
         })
         .eq('id', activeShift.id);
 
       if (error) throw error;
 
-      // Send Telegram notification
-      try {
-        await supabase.functions.invoke('telegram-notify', {
-          body: {
-            action: 'shift_end',
-            employeeName,
-            totalHours: totalHours.toFixed(1),
-            baseSalary: 500
-          }
-        });
-      } catch (e) {
-        console.log('Telegram notification failed:', e);
-      }
-
-      toast.success('Shift ended');
+      toast.success(`${employeeName} finished work`);
       loadData();
     } catch (e) {
       console.error(e);
-      toast.error('Failed to end shift');
+      toast.error('Failed to end work');
     } finally {
-      setEndingShift(false);
-      setShowEndShiftDialog(false);
-      setPendingEndShiftEmployee(null);
+      setEndingWork(false);
+      setShowEndWorkDialog(false);
+      setPendingEndWorkEmployee(null);
     }
   };
 
-  const submitCashHandover = async () => {
+  // Close entire shift
+  const openCloseShiftDialog = () => {
+    setCashEmployee('');
+    setCashAmount('');
+    setGcashAmount('');
+    setChangeFundAmount('2000');
+    setHandoverComment('');
+    setShowCloseShiftDialog(true);
+  };
+
+  const handleCloseShift = async () => {
     if (!cashEmployee) {
-      toast.error('Select employee');
-      return;
-    }
-
-    // Check if employee has active shift
-    const employeeShift = activeShifts.find(s => s.employee_id === cashEmployee);
-    if (!employeeShift) {
-      toast.error('Employee must have an open shift to submit cash');
-      return;
-    }
-
-    // Check if handover already exists for current shift
-    if (currentHandover) {
-      toast.error(`Cash already submitted by ${currentHandover.employee_name}`);
+      toast.error('Select who is submitting cash');
       return;
     }
 
@@ -485,13 +482,13 @@ export default function Shift() {
       return;
     }
 
-    setSubmittingCash(true);
+    setClosingShift(true);
     try {
       const employeeName = employees.find(e => e.id === cashEmployee)?.name || 'Unknown';
       
-      // Insert into cash_handovers table
-      const { error } = await supabase.from('cash_handovers').insert({
-        shift_type: currentShiftType,
+      // 1. Create cash handover record
+      const { error: handoverError } = await supabase.from('cash_handovers').insert({
+        shift_type: effectiveShiftType,
         shift_date: currentDate,
         cash_amount: cash,
         gcash_amount: gcash,
@@ -502,10 +499,22 @@ export default function Shift() {
         approved: false
       });
 
-      if (error) throw error;
+      if (handoverError) throw handoverError;
 
-      // Send Telegram notification
+      // 2. Close all 'ended' shifts
+      const shiftIds = activeShifts.filter(s => s.status === 'ended').map(s => s.id);
+      if (shiftIds.length > 0) {
+        const { error: closeError } = await supabase
+          .from('shifts')
+          .update({ status: 'closed' })
+          .in('id', shiftIds);
+        
+        if (closeError) throw closeError;
+      }
+
+      // 3. Send Telegram notifications
       try {
+        // Cash handover notification
         await supabase.functions.invoke('telegram-notify', {
           body: {
             action: 'cash_handover',
@@ -513,29 +522,41 @@ export default function Shift() {
             cash,
             gcash,
             changeFund,
-            shiftType: currentShiftType === 'day' ? 'Day' : 'Night'
+            shiftType: effectiveShiftType === 'day' ? 'Day' : 'Night'
           }
         });
+
+        // Send shift end notifications for all employees
+        for (const shift of activeShifts) {
+          const totalHours = shift.status === 'ended' 
+            ? calculateTotalHours(shift.shift_start)
+            : 0;
+          
+          await supabase.functions.invoke('telegram-notify', {
+            body: {
+              action: 'shift_end',
+              employeeName: shift.employee_name,
+              totalHours: totalHours.toFixed(1),
+              baseSalary: 500
+            }
+          });
+        }
       } catch (e) {
         console.log('Telegram notification failed:', e);
       }
 
-      toast.success('Cash handover submitted');
-      setCashEmployee('');
-      setCashAmount('');
-      setGcashAmount('');
-      setChangeFundAmount('2000');
-      setHandoverComment('');
-      loadCurrentHandover();
+      toast.success('Shift closed successfully');
+      setShowCloseShiftDialog(false);
+      loadData();
     } catch (e: any) {
       console.error(e);
       if (e.code === '23505') {
         toast.error('Cash already submitted for this shift');
       } else {
-        toast.error('Failed to submit');
+        toast.error('Failed to close shift');
       }
     } finally {
-      setSubmittingCash(false);
+      setClosingShift(false);
     }
   };
 
@@ -569,7 +590,7 @@ export default function Shift() {
       return;
     }
 
-    // Get the responsible employee's active shift
+    // Get the responsible employee's shift (can be open or ended)
     const employeeShift = activeShifts.find(s => s.employee_id === expenseResponsible);
     if (!employeeShift) {
       toast.error('Employee has no active shift');
@@ -680,67 +701,81 @@ export default function Shift() {
         <div className="flex items-center gap-3">
           <div className={cn(
             "w-10 h-10 rounded-xl flex items-center justify-center",
-            currentShiftType === 'day' ? 'bg-amber-500/15' : 'bg-indigo-500/15'
+            effectiveShiftType === 'day' ? 'bg-amber-500/15' : 'bg-indigo-500/15'
           )}>
-            {currentShiftType === 'day' ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5 text-indigo-500" />}
+            {effectiveShiftType === 'day' ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5 text-indigo-500" />}
           </div>
           <div>
-            <h1 className="text-lg font-bold">{currentShiftType === 'day' ? 'Day Shift' : 'Night Shift'}</h1>
+            <h1 className="text-lg font-bold">{effectiveShiftType === 'day' ? 'Day Shift' : 'Night Shift'}</h1>
             <span className="text-xs text-muted-foreground">{currentDate}</span>
           </div>
         </div>
         
-        {/* Start Shift Button */}
-        <Select onValueChange={confirmStartShift}>
-          <SelectTrigger className="w-auto h-8 px-3 text-xs gap-1.5 border-green-500/30 text-green-600 hover:bg-green-500/10">
-            <Plus className="w-3.5 h-3.5" />
-            <span>Start Shift</span>
-          </SelectTrigger>
-          <SelectContent>
-            {employees.filter(emp => !getEmployeeShift(emp.id)).map(emp => (
-              <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Start Shift Button - only show if no one working or shift not in "all ended" state */}
+        {!allEnded && (
+          <Select onValueChange={confirmStartShift}>
+            <SelectTrigger className="w-auto h-8 px-3 text-xs gap-1.5 border-green-500/30 text-green-600 hover:bg-green-500/10">
+              <Plus className="w-3.5 h-3.5" />
+              <span>Start Shift</span>
+            </SelectTrigger>
+            <SelectContent>
+              {employees.filter(emp => !getEmployeeShift(emp.id)).map(emp => (
+                <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Working Staff */}
       {activeShifts.length > 0 ? (
         <div className="space-y-2">
           {activeShifts.map(shift => (
-            <Card key={shift.id} className="border-green-500/20 bg-green-500/5">
+            <Card key={shift.id} className={cn(
+              shift.status === 'open' 
+                ? "border-green-500/20 bg-green-500/5" 
+                : "border-amber-500/20 bg-amber-500/5"
+            )}>
               <CardContent className="p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-green-500/20 flex items-center justify-center text-sm font-bold text-green-500">
+                  <div className={cn(
+                    "w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold",
+                    shift.status === 'open' 
+                      ? "bg-green-500/20 text-green-500" 
+                      : "bg-amber-500/20 text-amber-500"
+                  )}>
                     {shift.employee_name.charAt(0)}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{shift.employee_name}</span>
-                      <Badge className="bg-green-500/20 text-green-600 border-0 text-[10px] px-1.5 py-0">
-                        Open
+                      <Badge className={cn(
+                        "border-0 text-[10px] px-1.5 py-0",
+                        shift.status === 'open' 
+                          ? "bg-green-500/20 text-green-600" 
+                          : "bg-amber-500/20 text-amber-600"
+                      )}>
+                        {shift.status === 'open' ? 'Working' : 'Done'}
                       </Badge>
                     </div>
-                    <div className="text-xs text-green-600 font-mono flex items-center gap-1">
+                    <div className={cn(
+                      "text-xs font-mono flex items-center gap-1",
+                      shift.status === 'open' ? "text-green-600" : "text-amber-600"
+                    )}>
                       <Clock className="w-3 h-3" />
                       {formatDuration(shift.shift_start)}
                     </div>
                   </div>
                 </div>
-                {activeShifts.length === 1 && !currentHandover ? (
-                  <div className="flex items-center gap-1.5 text-xs text-amber-500">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>Submit cash first</span>
-                  </div>
-                ) : (
+                {shift.status === 'open' && (
                   <Button 
                     size="sm" 
                     variant="ghost"
-                    onClick={() => confirmEndShift(shift.employee_id)}
-                    className="h-8 px-3 text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                    onClick={() => confirmEndWork(shift.employee_id)}
+                    className="h-8 px-3 text-xs text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
                   >
                     <Square className="w-3 h-3 mr-1.5" />
-                    End
+                    End Work
                   </Button>
                 )}
               </CardContent>
@@ -759,7 +794,18 @@ export default function Shift() {
         </Card>
       )}
 
-      {/* Expense Button - Only when staff working */}
+      {/* Close Shift Button - only show when ALL employees have ended */}
+      {allEnded && (
+        <Button 
+          onClick={openCloseShiftDialog}
+          className="w-full h-14 text-base bg-red-500 hover:bg-red-600"
+        >
+          <Lock className="w-5 h-5 mr-2" />
+          Close Shift & Submit Cash
+        </Button>
+      )}
+
+      {/* Expense Button - Only when staff working or ended (not closed) */}
       {activeShifts.length > 0 && (
         <Button 
           onClick={openExpenseDialog}
@@ -818,108 +864,36 @@ export default function Shift() {
         </Card>
       )}
 
-      {/* Cash Handover */}
-      <Card className="border-amber-500/30 bg-amber-500/5">
-        <CardHeader className="py-2.5 px-3">
-          <CardTitle className="text-xs flex items-center gap-2">
-            <Banknote className="w-3.5 h-3.5 text-amber-500" />
-            <span className="text-amber-600">Cash Handover</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-3 pb-3 pt-0 space-y-3">
-          {/* Already submitted indicator */}
-          {currentHandover ? (
-            <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                <span className="text-sm font-medium text-green-600">
-                  Cash submitted by {currentHandover.employee_name}
-                </span>
-              </div>
-              <div className="text-xs text-muted-foreground mb-2">
-                at {formatHandoverTime(currentHandover.handover_time)}
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <div className="text-lg font-bold text-green-600">₱{currentHandover.cash_amount.toLocaleString()}</div>
-                  <div className="text-[10px] text-muted-foreground">Cash</div>
-                </div>
-                <div>
-                  <div className="text-lg font-bold text-blue-500">₱{currentHandover.gcash_amount.toLocaleString()}</div>
-                  <div className="text-[10px] text-muted-foreground">GCash</div>
-                </div>
-                <div>
-                  <div className="text-lg font-bold text-amber-500">₱{currentHandover.change_fund_amount.toLocaleString()}</div>
-                  <div className="text-[10px] text-muted-foreground">Change Fund</div>
-                </div>
-              </div>
-              {currentHandover.comment && (
-                <div className="mt-2 text-xs text-muted-foreground border-t border-border/50 pt-2">
-                  Note: {currentHandover.comment}
-                </div>
-              )}
+      {/* Previous Handover Info */}
+      {currentHandover && (
+        <Card className="border-green-500/30 bg-green-500/5">
+          <CardHeader className="py-2.5 px-3">
+            <CardTitle className="text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+              <span className="text-green-600">Cash Submitted</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3 pt-0">
+            <div className="text-xs text-muted-foreground mb-2">
+              By {currentHandover.employee_name} at {formatHandoverTime(currentHandover.handover_time)}
             </div>
-          ) : activeShifts.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center py-4">
-              <AlertTriangle className="w-5 h-5 mx-auto mb-2 text-amber-500" />
-              No active shifts. Only working staff can submit cash.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <Select value={cashEmployee} onValueChange={setCashEmployee}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Who is submitting? (working only)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeShifts.map(shift => (
-                    <SelectItem key={shift.employee_id} value={shift.employee_id}>
-                      <span className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                        {shift.employee_name}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div className="space-y-1">
-                  <label className="text-[10px] text-muted-foreground">Cash ₱</label>
-                  <Input type="number" value={cashAmount} onChange={e => setCashAmount(e.target.value)} placeholder="0" className="h-9 text-sm font-mono" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-blue-500">GCash ₱</label>
-                  <Input type="number" value={gcashAmount} onChange={e => setGcashAmount(e.target.value)} placeholder="0" className="h-9 text-sm font-mono" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-amber-500">Change Fund *</label>
-                  <Input type="number" value={changeFundAmount} onChange={e => setChangeFundAmount(e.target.value)} placeholder="2000" className="h-9 text-sm font-mono border-amber-500/30" />
-                </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <div className="text-lg font-bold text-green-600">₱{currentHandover.cash_amount.toLocaleString()}</div>
+                <div className="text-[10px] text-muted-foreground">Cash</div>
               </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] text-muted-foreground">Comment (optional)</label>
-                <Textarea 
-                  value={handoverComment} 
-                  onChange={e => setHandoverComment(e.target.value)} 
-                  placeholder="Any notes about the handover..."
-                  className="text-sm min-h-[60px] resize-none"
-                />
+              <div>
+                <div className="text-lg font-bold text-blue-500">₱{currentHandover.gcash_amount.toLocaleString()}</div>
+                <div className="text-[10px] text-muted-foreground">GCash</div>
               </div>
-
-              <Button 
-                onClick={submitCashHandover} 
-                disabled={submittingCash || !cashEmployee || !changeFundAmount} 
-                className="w-full h-9 text-sm bg-amber-500 hover:bg-amber-600" 
-                size="sm"
-              >
-                <Send className="w-3.5 h-3.5 mr-1.5" />
-                {submittingCash ? 'Submitting...' : 'Submit Cash Handover'}
-              </Button>
+              <div>
+                <div className="text-lg font-bold text-amber-500">₱{currentHandover.change_fund_amount.toLocaleString()}</div>
+                <div className="text-[10px] text-muted-foreground">Change Fund</div>
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Add Expense Dialog */}
       <Dialog open={showExpenseDialog} onOpenChange={setShowExpenseDialog}>
@@ -930,7 +904,7 @@ export default function Shift() {
               Add Expense
             </DialogTitle>
             <DialogDescription>
-              Expense will be tied to employee's open shift
+              Expense will be tied to employee's shift
             </DialogDescription>
           </DialogHeader>
           
@@ -960,16 +934,19 @@ export default function Shift() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Responsible Person (Working)</label>
+              <label className="text-sm text-muted-foreground">Responsible Person</label>
               <Select value={expenseResponsible} onValueChange={setExpenseResponsible}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select working employee" />
+                  <SelectValue placeholder="Select employee" />
                 </SelectTrigger>
                 <SelectContent>
                   {activeShifts.map(shift => (
                     <SelectItem key={shift.employee_id} value={shift.employee_id}>
                       <span className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                        <span className={cn(
+                          "w-2 h-2 rounded-full",
+                          shift.status === 'open' ? "bg-green-500" : "bg-amber-500"
+                        )}></span>
                         {shift.employee_name}
                       </span>
                     </SelectItem>
@@ -1010,38 +987,120 @@ export default function Shift() {
         </DialogContent>
       </Dialog>
 
-      {/* End Shift Confirmation Dialog */}
-      <AlertDialog open={showEndShiftDialog} onOpenChange={(open) => {
+      {/* End Work Confirmation Dialog */}
+      <AlertDialog open={showEndWorkDialog} onOpenChange={(open) => {
         if (!open) {
-          setShowEndShiftDialog(false);
-          setPendingEndShiftEmployee(null);
+          setShowEndWorkDialog(false);
+          setPendingEndWorkEmployee(null);
         }
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <Square className="w-5 h-5 text-red-500" />
-              End Shift?
+              <Square className="w-5 h-5 text-amber-500" />
+              End Work?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingEndShiftEmployee && (
+              {pendingEndWorkEmployee && (
                 <>
                   <span className="font-medium text-foreground">
-                    {activeShifts.find(s => s.employee_id === pendingEndShiftEmployee)?.employee_name}
+                    {activeShifts.find(s => s.employee_id === pendingEndWorkEmployee)?.employee_name}
                   </span>
-                  {' '}— shift will be closed. Use "Cash Handover" section to submit cash (anyone working can do it once per shift).
+                  {' '}will be marked as done. When all employees finish, use "Close Shift" to submit cash and send reports.
                 </>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleEndShift} disabled={endingShift}>
-              {endingShift ? 'Ending...' : 'End Shift'}
+            <AlertDialogAction onClick={handleEndWork} disabled={endingWork} className="bg-amber-500 hover:bg-amber-600">
+              {endingWork ? 'Ending...' : 'End Work'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Close Shift Dialog */}
+      <Dialog open={showCloseShiftDialog} onOpenChange={setShowCloseShiftDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-5 h-5 text-red-500" />
+              Close Shift
+            </DialogTitle>
+            <DialogDescription>
+              Submit cash handover and close the {effectiveShiftType} shift. Reports will be sent to Telegram.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 pt-2">
+            {/* Staff summary */}
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <div className="text-xs text-muted-foreground mb-2">Staff closing:</div>
+              <div className="flex flex-wrap gap-2">
+                {activeShifts.map(shift => (
+                  <Badge key={shift.id} className="bg-amber-500/20 text-amber-600 border-0">
+                    {shift.employee_name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Who is submitting cash?</label>
+              <Select value={cashEmployee} onValueChange={setCashEmployee}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeShifts.map(shift => (
+                    <SelectItem key={shift.employee_id} value={shift.employee_id}>
+                      {shift.employee_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <label className="text-[10px] text-muted-foreground">Cash ₱</label>
+                <Input type="number" value={cashAmount} onChange={e => setCashAmount(e.target.value)} placeholder="0" className="h-9 text-sm font-mono" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-blue-500">GCash ₱</label>
+                <Input type="number" value={gcashAmount} onChange={e => setGcashAmount(e.target.value)} placeholder="0" className="h-9 text-sm font-mono" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-amber-500">Change Fund *</label>
+                <Input type="number" value={changeFundAmount} onChange={e => setChangeFundAmount(e.target.value)} placeholder="2000" className="h-9 text-sm font-mono border-amber-500/30" />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground">Comment (optional)</label>
+              <Textarea 
+                value={handoverComment} 
+                onChange={e => setHandoverComment(e.target.value)} 
+                placeholder="Any notes about the handover..."
+                className="text-sm min-h-[60px] resize-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowCloseShiftDialog(false)}>Cancel</Button>
+              <Button 
+                onClick={handleCloseShift} 
+                disabled={closingShift || !cashEmployee || !changeFundAmount}
+                className="bg-red-500 hover:bg-red-600"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                {closingShift ? 'Closing...' : 'Close Shift'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Start Shift Confirmation Dialog */}
       <Dialog open={showStartShiftDialog} onOpenChange={(open) => {
