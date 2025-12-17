@@ -87,6 +87,12 @@ interface ApprovedHistory {
   date: string;
   shift: string;
   employees: string[];
+  // Calculation breakdown
+  carryoverCash: number;
+  loyverseCash: number;
+  loyverseGcash: number;
+  expensesCash: number;
+  expensesGcash: number;
   cashExpected: number;
   gcashExpected: number;
   cashSubmitted: number;
@@ -95,6 +101,7 @@ interface ApprovedHistory {
   gcashActual: number;
   difference: number;
   shortage: number;
+  changeFundLeft: number;
 }
 
 export function CashVerification() {
@@ -304,38 +311,74 @@ export function CashVerification() {
       });
       setShortageInputs(inputs);
 
-      // Build approved history
-      console.log('Approved shifts received:', approvedShifts?.length || 0, approvedShifts);
-      console.log('Registers received:', registers?.length || 0);
+      // Build approved history from approved cash_handovers
+      const { data: approvedHandovers } = await supabase
+        .from('cash_handovers')
+        .select('*, employees:handed_by_employee_id(name)')
+        .eq('approved', true)
+        .order('shift_date', { ascending: false })
+        .limit(30);
       
       const historyMap: Record<string, ApprovedHistory> = {};
-      (approvedShifts || []).forEach((s: any) => {
-        const shiftType = s.shift_type?.includes('Night') || s.shift_type === '12 hours' || s.type === 'night' ? 'night' : 'day';
-        const key = `${s.date}-${shiftType}`;
+      
+      (approvedHandovers || []).forEach((h: any) => {
+        const shiftType = h.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
+        const key = `${h.shift_date}-${shiftType}`;
         
         if (!historyMap[key]) {
-          const register = registers?.find(r => r.date === s.date && r.shift === shiftType);
+          const register = registers?.find(r => r.date === h.shift_date && r.shift === shiftType);
+          
+          // Get carryover from previous shift
+          const carryover = findPreviousChangeFund(h.shift_date, shiftType);
+          
+          // Get expenses for this shift
+          const shiftExpenses = (allExpenses || []).filter(e => e.date === h.shift_date && e.shift === shiftType);
+          const expensesCash = shiftExpenses
+            .filter(e => e.payment_source === 'cash')
+            .reduce((sum, e) => sum + e.amount, 0);
+          const expensesGcash = shiftExpenses
+            .filter(e => e.payment_source === 'gcash')
+            .reduce((sum, e) => sum + e.amount, 0);
+          
+          const loyverseCash = register?.cash_expected || 0;
+          const loyverseGcash = register?.gcash_expected || 0;
+          
           historyMap[key] = {
-            date: s.date,
+            date: h.shift_date,
             shift: shiftType,
-            employees: [],
-            cashExpected: register?.cash_expected || 0,
-            gcashExpected: register?.gcash_expected || 0,
-            cashSubmitted: 0,
-            gcashSubmitted: 0,
+            employees: [h.employees?.name || 'Unknown'],
+            carryoverCash: carryover,
+            loyverseCash,
+            loyverseGcash,
+            expensesCash,
+            expensesGcash,
+            cashExpected: carryover + loyverseCash - expensesCash,
+            gcashExpected: loyverseGcash - expensesGcash,
+            cashSubmitted: h.cash_amount || 0,
+            gcashSubmitted: h.gcash_amount || 0,
             cashActual: register?.cash_actual || 0,
             gcashActual: register?.gcash_actual || 0,
             difference: 0,
-            shortage: 0
+            shortage: 0,
+            changeFundLeft: h.change_fund_amount || 0
           };
+        } else {
+          // Add employee to existing group
+          if (h.employees?.name && !historyMap[key].employees.includes(h.employees.name)) {
+            historyMap[key].employees.push(h.employees.name);
+          }
+          historyMap[key].cashSubmitted += h.cash_amount || 0;
+          historyMap[key].gcashSubmitted += h.gcash_amount || 0;
         }
-        
-        if (s.employees?.name && !historyMap[key].employees.includes(s.employees.name)) {
-          historyMap[key].employees.push(s.employees.name);
+      });
+
+      // Add shortage from shifts table
+      (approvedShifts || []).forEach((s: any) => {
+        const shiftType = s.shift_type?.includes('Night') || s.shift_type === '12 hours' || s.type === 'night' ? 'night' : 'day';
+        const key = `${s.date}-${shiftType}`;
+        if (historyMap[key]) {
+          historyMap[key].shortage += s.cash_shortage || 0;
         }
-        historyMap[key].cashSubmitted += s.cash_handed_over || 0;
-        historyMap[key].gcashSubmitted += s.gcash_handed_over || 0;
-        historyMap[key].shortage += s.cash_shortage || 0;
       });
 
       // Calculate differences
@@ -345,8 +388,7 @@ export function CashVerification() {
 
       // Sort by date descending
       const sortedHistory = Object.values(historyMap).sort((a, b) => b.date.localeCompare(a.date));
-      console.log('Final history:', sortedHistory.length, sortedHistory);
-      setApprovedHistory(sortedHistory.slice(0, 30)); // Last 30 entries
+      setApprovedHistory(sortedHistory.slice(0, 30));
       
     } catch (e) {
       console.error('Error loading pending data:', e);
@@ -1061,7 +1103,9 @@ export function CashVerification() {
               {approvedHistory.map(h => {
                 const totalSubmitted = h.cashSubmitted + h.gcashSubmitted;
                 const totalActual = h.cashActual + h.gcashActual;
+                const totalExpected = h.cashExpected + h.gcashExpected;
                 const adminDiff = totalActual - totalSubmitted;
+                const expectedDiff = totalSubmitted - totalExpected;
                 
                 return (
                   <div key={`${h.date}-${h.shift}`} className="p-3 rounded-lg bg-muted/30 text-sm space-y-2">
@@ -1076,9 +1120,11 @@ export function CashVerification() {
                             Shortage: ₱{h.shortage.toLocaleString()}
                           </Badge>
                         )}
-                        <Badge variant="outline" className="text-green-500 border-green-500/30">
-                          <Check className="w-3 h-3 mr-1" />
-                          Confirmed
+                        <Badge variant="outline" className={cn(
+                          "text-xs",
+                          expectedDiff >= 0 ? "text-green-500 border-green-500/30" : "text-red-500 border-red-500/30"
+                        )}>
+                          {expectedDiff >= 0 ? '+' : ''}₱{expectedDiff.toLocaleString()}
                         </Badge>
                       </div>
                     </div>
@@ -1087,34 +1133,56 @@ export function CashVerification() {
                       {h.employees.join(', ')}
                     </p>
                     
-                    <div className="grid grid-cols-3 gap-2 text-xs">
+                    {/* Calculation Breakdown */}
+                    <div className="p-2 rounded bg-background/60 text-xs space-y-1">
+                      <div className="grid grid-cols-3 gap-1 text-[10px] text-muted-foreground">
+                        <span></span>
+                        <span className="text-center"><Banknote className="w-2.5 h-2.5 inline" /> Cash</span>
+                        <span className="text-center"><Smartphone className="w-2.5 h-2.5 inline" /> GCash</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1">
+                        <span className="text-muted-foreground">Carryover:</span>
+                        <span className="text-center">₱{h.carryoverCash.toLocaleString()}</span>
+                        <span className="text-center">₱0</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1">
+                        <span className="text-muted-foreground">+ Sales:</span>
+                        <span className="text-center text-green-600">₱{h.loyverseCash.toLocaleString()}</span>
+                        <span className="text-center text-green-600">₱{h.loyverseGcash.toLocaleString()}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1">
+                        <span className="text-muted-foreground">− Expenses:</span>
+                        <span className="text-center text-red-500">₱{h.expensesCash.toLocaleString()}</span>
+                        <span className="text-center text-red-500">₱{h.expensesGcash.toLocaleString()}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1 pt-1 border-t border-border font-medium">
+                        <span>= Expected:</span>
+                        <span className="text-center">₱{h.cashExpected.toLocaleString()}</span>
+                        <span className="text-center">₱{h.gcashExpected.toLocaleString()}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-2 text-xs pt-1">
                       <div>
-                        <p className="text-muted-foreground">Staff Submitted</p>
+                        <p className="text-muted-foreground">Submitted</p>
                         <p className="font-medium">₱{totalSubmitted.toLocaleString()}</p>
                         <p className="text-[10px] text-muted-foreground">
-                          <Banknote className="w-3 h-3 inline text-green-500" /> ₱{h.cashSubmitted.toLocaleString()}
-                          {' '}
-                          <Smartphone className="w-3 h-3 inline text-blue-500" /> ₱{h.gcashSubmitted.toLocaleString()}
+                          Left: ₱{h.changeFundLeft.toLocaleString()}
                         </p>
                       </div>
                       <div>
-                        <p className="text-muted-foreground">Admin Confirmed</p>
+                        <p className="text-muted-foreground">Admin Actual</p>
                         <p className="font-medium">₱{totalActual.toLocaleString()}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          <Banknote className="w-3 h-3 inline text-green-500" /> ₱{h.cashActual.toLocaleString()}
-                          {' '}
-                          <Smartphone className="w-3 h-3 inline text-blue-500" /> ₱{h.gcashActual.toLocaleString()}
-                        </p>
                       </div>
                       <div>
-                        <p className="text-muted-foreground">Difference</p>
+                        <p className="text-muted-foreground">vs Expected</p>
                         <p className={cn(
                           "font-medium",
-                          adminDiff > 0 && "text-green-500",
-                          adminDiff < 0 && "text-red-500",
-                          adminDiff === 0 && "text-muted-foreground"
+                          expectedDiff > 0 && "text-green-500",
+                          expectedDiff < 0 && "text-red-500",
+                          expectedDiff === 0 && "text-muted-foreground"
                         )}>
-                          {adminDiff === 0 ? 'Match' : `${adminDiff > 0 ? '+' : ''}₱${adminDiff.toLocaleString()}`}
+                          {expectedDiff === 0 ? 'Match' : `${expectedDiff > 0 ? '+' : ''}₱${expectedDiff.toLocaleString()}`}
                         </p>
                       </div>
                     </div>
