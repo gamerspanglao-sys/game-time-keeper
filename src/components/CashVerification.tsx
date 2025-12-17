@@ -689,6 +689,46 @@ export function CashVerification() {
     !pendingVerifications.some(v => v.expenses.some(ve => ve.id === e.id))
   );
 
+  // State for expanded history items
+  const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set());
+  const [editingHistory, setEditingHistory] = useState<string | null>(null);
+  const [editHistoryCash, setEditHistoryCash] = useState('');
+  const [editHistoryGcash, setEditHistoryGcash] = useState('');
+
+  const toggleHistoryExpand = (key: string) => {
+    const newExpanded = new Set(expandedHistory);
+    if (newExpanded.has(key)) {
+      newExpanded.delete(key);
+    } else {
+      newExpanded.add(key);
+    }
+    setExpandedHistory(newExpanded);
+  };
+
+  const startEditHistory = (h: ApprovedHistory) => {
+    const key = `${h.date}-${h.shift}`;
+    setEditingHistory(key);
+    setEditHistoryCash(h.cashActual.toString());
+    setEditHistoryGcash(h.gcashActual.toString());
+  };
+
+  const saveEditHistory = async (h: ApprovedHistory) => {
+    const cashActual = parseInt(editHistoryCash) || 0;
+    const gcashActual = parseInt(editHistoryGcash) || 0;
+    try {
+      await supabase
+        .from('cash_register')
+        .update({ cash_actual: cashActual, gcash_actual: gcashActual })
+        .eq('date', h.date)
+        .eq('shift', h.shift);
+      toast.success('Updated');
+      setEditingHistory(null);
+      loadPendingData();
+    } catch (e) {
+      toast.error('Failed to update');
+    }
+  };
+
   // Render history section component
   const renderHistorySection = () => (
     <Card>
@@ -707,51 +747,211 @@ export function CashVerification() {
             <p className="text-sm text-muted-foreground text-center py-4">No approved shifts yet</p>
           )}
           {approvedHistory.map(h => {
+            const key = `${h.date}-${h.shift}`;
+            const isExpanded = expandedHistory.has(key);
+            const isEditing = editingHistory === key;
             const totalSubmitted = h.cashSubmitted + h.gcashSubmitted;
             const totalActual = h.cashActual + h.gcashActual;
             const totalExpected = h.cashExpected + h.gcashExpected;
-            const adminDiff = totalActual - totalSubmitted;
             const expectedDiff = totalSubmitted - totalExpected;
             
             return (
-              <div key={`${h.date}-${h.shift}`} className="p-3 rounded-lg bg-muted/30 text-sm space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium flex items-center gap-2">
-                    <Clock className="w-3 h-3 text-muted-foreground" />
-                    {h.date} • {h.shift === 'day' ? '☀️ Day' : '🌙 Night'}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {h.shortage > 0 && (
-                      <Badge variant="outline" className="text-red-500 border-red-500/30 text-xs">
-                        Shortage: ₱{h.shortage.toLocaleString()}
+              <div key={key} className="rounded-lg bg-muted/30 text-sm overflow-hidden">
+                {/* Header row - clickable to expand */}
+                <div 
+                  className="p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => toggleHistoryExpand(key)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium flex items-center gap-2">
+                      {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      <Clock className="w-3 h-3 text-muted-foreground" />
+                      {h.date} • {h.shift === 'day' ? '☀️ Day' : '🌙 Night'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {h.shortage > 0 && (
+                        <Badge variant="outline" className="text-red-500 border-red-500/30 text-xs">
+                          Short: ₱{h.shortage.toLocaleString()}
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className={cn(
+                        "text-xs",
+                        expectedDiff >= 0 ? "text-green-500 border-green-500/30" : "text-red-500 border-red-500/30"
+                      )}>
+                        {expectedDiff >= 0 ? '+' : ''}₱{expectedDiff.toLocaleString()}
                       </Badge>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground mt-2">
+                    <div>
+                      <p className="opacity-70">Expected</p>
+                      <p>₱{totalExpected.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="opacity-70">Submitted</p>
+                      <p>₱{totalSubmitted.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="opacity-70">Received</p>
+                      <p>₱{totalActual.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Expanded content */}
+                {isExpanded && (
+                  <div className="px-3 pb-3 pt-1 border-t border-border/30 space-y-3">
+                    {/* Calculation breakdown */}
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground">Calculation Breakdown</p>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="space-y-1 bg-background/50 p-2 rounded">
+                          <p className="font-medium flex items-center gap-1">
+                            <Banknote className="w-3 h-3" /> Cash
+                          </p>
+                          <div className="space-y-0.5 text-muted-foreground">
+                            <div className="flex justify-between">
+                              <span>Carryover (from prev)</span>
+                              <span className="text-foreground">₱{h.carryoverCash.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>+ Loyverse sales</span>
+                              <span className="text-foreground">₱{h.loyverseCash.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>− Expenses</span>
+                              <span className="text-foreground">₱{h.expensesCash.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between border-t border-border/50 pt-1 font-medium">
+                              <span>= Expected</span>
+                              <span className="text-foreground">₱{h.cashExpected.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-1 bg-background/50 p-2 rounded">
+                          <p className="font-medium flex items-center gap-1">
+                            <Smartphone className="w-3 h-3" /> GCash
+                          </p>
+                          <div className="space-y-0.5 text-muted-foreground">
+                            <div className="flex justify-between">
+                              <span>Loyverse sales</span>
+                              <span className="text-foreground">₱{h.loyverseGcash.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>− Expenses</span>
+                              <span className="text-foreground">₱{h.expensesGcash.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between border-t border-border/50 pt-1 font-medium">
+                              <span>= Expected</span>
+                              <span className="text-foreground">₱{h.gcashExpected.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Submitted vs Received */}
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground">Submitted vs Received</p>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="bg-background/50 p-2 rounded space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Submitted Cash</span>
+                            <span>₱{h.cashSubmitted.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Submitted GCash</span>
+                            <span>₱{h.gcashSubmitted.toLocaleString()}</span>
+                          </div>
+                        </div>
+                        <div className="bg-background/50 p-2 rounded space-y-1">
+                          {isEditing ? (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground text-xs">Cash:</span>
+                                <Input 
+                                  value={editHistoryCash}
+                                  onChange={e => setEditHistoryCash(e.target.value)}
+                                  className="h-6 text-xs w-20"
+                                  type="number"
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground text-xs">GCash:</span>
+                                <Input 
+                                  value={editHistoryGcash}
+                                  onChange={e => setEditHistoryGcash(e.target.value)}
+                                  className="h-6 text-xs w-20"
+                                  type="number"
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Received Cash</span>
+                                <span>₱{h.cashActual.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Received GCash</span>
+                                <span>₱{h.gcashActual.toLocaleString()}</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Change fund left */}
+                    {h.changeFundLeft > 0 && (
+                      <div className="text-xs flex items-center gap-2 text-muted-foreground">
+                        <span>Change fund left for next shift:</span>
+                        <span className="font-medium text-foreground">₱{h.changeFundLeft.toLocaleString()}</span>
+                      </div>
                     )}
-                    <Badge variant="outline" className={cn(
-                      "text-xs",
-                      expectedDiff >= 0 ? "text-green-500 border-green-500/30" : "text-red-500 border-red-500/30"
-                    )}>
-                      {expectedDiff >= 0 ? '+' : ''}₱{expectedDiff.toLocaleString()}
-                    </Badge>
+                    
+                    {/* Staff */}
+                    <div className="text-xs text-muted-foreground flex items-center gap-2">
+                      <Users className="w-3 h-3" />
+                      <span>{h.employees.join(', ')}</span>
+                    </div>
+                    
+                    {/* Edit button */}
+                    <div className="flex gap-2 pt-1">
+                      {isEditing ? (
+                        <>
+                          <Button 
+                            size="sm" 
+                            variant="default"
+                            className="h-7 text-xs"
+                            onClick={() => saveEditHistory(h)}
+                          >
+                            <Check className="w-3 h-3 mr-1" />
+                            Save
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            className="h-7 text-xs"
+                            onClick={() => setEditingHistory(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={(e) => { e.stopPropagation(); startEditHistory(h); }}
+                        >
+                          <Pencil className="w-3 h-3 mr-1" />
+                          Edit Received
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-                  <div>
-                    <p className="opacity-70">Expected</p>
-                    <p>₱{totalExpected.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="opacity-70">Submitted</p>
-                    <p>₱{totalSubmitted.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="opacity-70">Received</p>
-                    <p>₱{totalActual.toLocaleString()}</p>
-                  </div>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  <span className="opacity-70">Staff: </span>
-                  {h.employees.join(', ')}
-                </div>
+                )}
               </div>
             );
           })}
