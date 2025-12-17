@@ -255,17 +255,34 @@ export default function Shift() {
 
       const shiftIds = activeShifts.map(s => s.id);
       
-      const { data: expenses } = await (supabase
+      const { data: expenses, error } = await supabase
         .from('cash_expenses')
-        .select('*, employees:responsible_employee_id(name)') as any)
+        .select('*')
         .in('shift_id', shiftIds)
         .eq('expense_type', 'shift')
         .order('created_at', { ascending: false });
 
-      setShiftExpenses((expenses || []).map((e: any) => ({
-        ...e,
-        responsible_name: e.employees?.name
-      })));
+      if (error) {
+        console.error('Error loading expenses:', error);
+        setShiftExpenses([]);
+        return;
+      }
+
+      // Load employee names separately
+      const expensesWithNames = await Promise.all((expenses || []).map(async (e: any) => {
+        let responsibleName = null;
+        if (e.responsible_employee_id) {
+          const { data: emp } = await supabase
+            .from('employees')
+            .select('name')
+            .eq('id', e.responsible_employee_id)
+            .maybeSingle();
+          responsibleName = emp?.name;
+        }
+        return { ...e, responsible_name: responsibleName };
+      }));
+
+      setShiftExpenses(expensesWithNames);
     } catch (e) {
       console.error(e);
       setShiftExpenses([]);
