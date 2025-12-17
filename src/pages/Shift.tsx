@@ -370,6 +370,13 @@ export default function Shift() {
   };
 
   const confirmEndShift = (employeeId: string) => {
+    // Check if this is the last active shift and cash not submitted
+    const isLastShift = activeShifts.length === 1;
+    if (isLastShift && !currentHandover) {
+      toast.error('Submit cash handover before ending the last shift');
+      return;
+    }
+    
     setPendingEndShiftEmployee(employeeId);
     setShowEndShiftDialog(true);
   };
@@ -696,15 +703,22 @@ export default function Shift() {
                     </div>
                   </div>
                 </div>
-                <Button 
-                  size="sm" 
-                  variant="ghost"
-                  onClick={() => confirmEndShift(shift.employee_id)}
-                  className="h-8 px-3 text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                >
-                  <Square className="w-3 h-3 mr-1.5" />
-                  End
-                </Button>
+                {activeShifts.length === 1 && !currentHandover ? (
+                  <div className="flex items-center gap-1.5 text-xs text-amber-500">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>Submit cash first</span>
+                  </div>
+                ) : (
+                  <Button 
+                    size="sm" 
+                    variant="ghost"
+                    onClick={() => confirmEndShift(shift.employee_id)}
+                    className="h-8 px-3 text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                  >
+                    <Square className="w-3 h-3 mr-1.5" />
+                    End
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))}
