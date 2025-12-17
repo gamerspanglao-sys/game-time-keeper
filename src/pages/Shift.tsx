@@ -104,8 +104,6 @@ export default function Shift() {
   // End shift dialog
   const [showEndShiftDialog, setShowEndShiftDialog] = useState(false);
   const [pendingEndShiftEmployee, setPendingEndShiftEmployee] = useState<string | null>(null);
-  const [endShiftCash, setEndShiftCash] = useState('');
-  const [endShiftGcash, setEndShiftGcash] = useState('');
   const [endingShift, setEndingShift] = useState(false);
 
   const currentShift = getCurrentShift();
@@ -260,21 +258,16 @@ export default function Shift() {
 
   const confirmEndShift = (employeeId: string) => {
     setPendingEndShiftEmployee(employeeId);
-    setEndShiftCash('');
-    setEndShiftGcash('');
     setShowEndShiftDialog(true);
   };
 
-  const handleEndShiftWithCash = async (withCash: boolean) => {
+  const handleEndShift = async () => {
     if (!pendingEndShiftEmployee) return;
     
     const activeShift = activeShifts.find(s => s.employee_id === pendingEndShiftEmployee);
     const employeeName = employees.find(e => e.id === pendingEndShiftEmployee)?.name || 'Unknown';
     
     if (!activeShift) return;
-
-    const cash = withCash ? (parseInt(endShiftCash) || 0) : 0;
-    const gcash = withCash ? (parseInt(endShiftGcash) || 0) : 0;
 
     setEndingShift(true);
     try {
@@ -285,8 +278,6 @@ export default function Shift() {
         .update({
           shift_end: new Date().toISOString(),
           total_hours: totalHours,
-          cash_handed_over: cash,
-          gcash_handed_over: gcash,
           status: 'closed'
         })
         .eq('id', activeShift.id);
@@ -299,8 +290,6 @@ export default function Shift() {
             action: 'shift_end',
             employeeName,
             totalHours: totalHours.toFixed(1),
-            cashHandedOver: cash,
-            gcashHandedOver: gcash,
             baseSalary: 500
           }
         });
@@ -308,7 +297,7 @@ export default function Shift() {
         console.log('Telegram notification failed:', e);
       }
 
-      toast.success(withCash ? 'Shift ended, cash submitted' : 'Shift ended');
+      toast.success('Shift ended');
       loadData();
     } catch (e) {
       console.error(e);
@@ -708,12 +697,12 @@ export default function Shift() {
         </Card>
       )}
 
-      {/* Cash Handover - Compact */}
-      <Card className="border-border/50">
+      {/* Cash Handover */}
+      <Card className="border-amber-500/30 bg-amber-500/5">
         <CardHeader className="py-2.5 px-3">
-          <CardTitle className="text-xs flex items-center gap-2 text-muted-foreground">
-            <Banknote className="w-3.5 h-3.5" />
-            Cash Handover
+          <CardTitle className="text-xs flex items-center gap-2">
+            <Banknote className="w-3.5 h-3.5 text-amber-500" />
+            <span className="text-amber-600">Cash Handover</span>
             {(totalSubmittedCash > 0 || totalSubmittedGCash > 0) && (
               <Badge className="ml-auto bg-green-500/20 text-green-500 border-0 text-[10px]">
                 ₱{(totalSubmittedCash + totalSubmittedGCash).toLocaleString()}
@@ -734,7 +723,7 @@ export default function Shift() {
                   <span className="font-medium">
                     {sub.cash > 0 && <span className="text-green-500">₱{sub.cash.toLocaleString()}</span>}
                     {sub.cash > 0 && sub.gcash > 0 && <span className="text-muted-foreground mx-1">+</span>}
-                    {sub.gcash > 0 && <span className="text-blue-500">₱{sub.gcash.toLocaleString()}</span>}
+                    {sub.gcash > 0 && <span className="text-blue-500">G₱{sub.gcash.toLocaleString()}</span>}
                   </span>
                 </div>
               ))}
@@ -745,7 +734,7 @@ export default function Shift() {
           <div className="space-y-2">
             <Select value={cashEmployee} onValueChange={setCashEmployee}>
               <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Select employee" />
+                <SelectValue placeholder="Who is submitting?" />
               </SelectTrigger>
               <SelectContent>
                 {employees.map(emp => (
@@ -755,14 +744,23 @@ export default function Shift() {
             </Select>
 
             <div className="grid grid-cols-3 gap-2">
-              <Input type="number" value={cashAmount} onChange={e => setCashAmount(e.target.value)} placeholder="Cash" className="h-9 text-sm" />
-              <Input type="number" value={gcashAmount} onChange={e => setGcashAmount(e.target.value)} placeholder="GCash" className="h-9 text-sm" />
-              <Input type="number" value={changeFundAmount} onChange={e => setChangeFundAmount(e.target.value)} placeholder="Change" className="h-9 text-sm" />
+              <div className="space-y-1">
+                <label className="text-[10px] text-muted-foreground">Cash ₱</label>
+                <Input type="number" value={cashAmount} onChange={e => setCashAmount(e.target.value)} placeholder="0" className="h-9 text-sm font-mono" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-blue-500">GCash ₱</label>
+                <Input type="number" value={gcashAmount} onChange={e => setGcashAmount(e.target.value)} placeholder="0" className="h-9 text-sm font-mono" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-amber-500">Change Fund *</label>
+                <Input type="number" value={changeFundAmount} onChange={e => setChangeFundAmount(e.target.value)} placeholder="2000" className="h-9 text-sm font-mono border-amber-500/30" />
+              </div>
             </div>
 
-            <Button onClick={submitCashHandover} disabled={submittingCash || !cashEmployee} className="w-full h-9 text-sm" size="sm">
+            <Button onClick={submitCashHandover} disabled={submittingCash || !cashEmployee || !changeFundAmount} className="w-full h-9 text-sm bg-amber-500 hover:bg-amber-600" size="sm">
               <Send className="w-3.5 h-3.5 mr-1.5" />
-              {submittingCash ? 'Submitting...' : 'Submit'}
+              {submittingCash ? 'Submitting...' : 'Submit Cash'}
             </Button>
           </div>
         </CardContent>
@@ -857,79 +855,38 @@ export default function Shift() {
         </DialogContent>
       </Dialog>
 
-      {/* End Shift Dialog with Cash Submission */}
-      <Dialog open={showEndShiftDialog} onOpenChange={(open) => {
+      {/* End Shift Confirmation Dialog */}
+      <AlertDialog open={showEndShiftDialog} onOpenChange={(open) => {
         if (!open) {
           setShowEndShiftDialog(false);
           setPendingEndShiftEmployee(null);
         }
       }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
               <Square className="w-5 h-5 text-red-500" />
-              End Shift
-            </DialogTitle>
-            <DialogDescription>
+              End Shift?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
               {pendingEndShiftEmployee && (
-                <span className="font-medium text-foreground">
-                  {activeShifts.find(s => s.employee_id === pendingEndShiftEmployee)?.employee_name}
-                </span>
-              )} — Enter cash amounts to hand over
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 pt-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground flex items-center gap-1.5">
-                  <Banknote className="w-3.5 h-3.5" />
-                  Cash
-                </label>
-                <Input
-                  type="number"
-                  value={endShiftCash}
-                  onChange={e => setEndShiftCash(e.target.value)}
-                  placeholder="0"
-                  className="text-lg font-mono"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded bg-blue-500 text-[8px] text-white flex items-center justify-center font-bold">G</span>
-                  GCash
-                </label>
-                <Input
-                  type="number"
-                  value={endShiftGcash}
-                  onChange={e => setEndShiftGcash(e.target.value)}
-                  placeholder="0"
-                  className="text-lg font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 pt-2">
-              <Button 
-                onClick={() => handleEndShiftWithCash(true)} 
-                disabled={endingShift}
-                className="w-full"
-              >
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-                {endingShift ? 'Ending...' : 'End & Submit Cash'}
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => handleEndShiftWithCash(false)}
-                disabled={endingShift}
-                className="w-full text-muted-foreground"
-              >
-                End without cash
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+                <>
+                  <span className="font-medium text-foreground">
+                    {activeShifts.find(s => s.employee_id === pendingEndShiftEmployee)?.employee_name}
+                  </span>
+                  {' '}— shift will be closed. Use "Cash Handover" separately to submit cash.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleEndShift} disabled={endingShift}>
+              {endingShift ? 'Ending...' : 'End Shift'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
