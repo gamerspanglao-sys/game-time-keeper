@@ -290,7 +290,11 @@ export default function Shift() {
               timeZone: 'Asia/Manila',
               hour: '2-digit', 
               minute: '2-digit' 
-            })
+            }),
+            previousCash: lastCashHandover?.cash || 0,
+            previousGcash: lastCashHandover?.gcash || 0,
+            changeFund: lastCashHandover?.changeFund || 2000,
+            previousEmployee: lastCashHandover?.employeeName || null
           }
         });
       } catch (e) {
