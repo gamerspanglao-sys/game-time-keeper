@@ -131,6 +131,12 @@ export function CashVerification() {
   const [newExpCategory, setNewExpCategory] = useState('purchases');
   const [newExpDescription, setNewExpDescription] = useState('');
   const [newExpSource, setNewExpSource] = useState<'cash' | 'gcash'>('cash');
+  
+  // History expand/edit state
+  const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set());
+  const [editingHistory, setEditingHistory] = useState<string | null>(null);
+  const [editHistoryCash, setEditHistoryCash] = useState('');
+  const [editHistoryGcash, setEditHistoryGcash] = useState('');
 
   // Helper to get previous shift date/type
   const getPreviousShift = (date: string, shift: string): { date: string; shift: string } => {
@@ -689,11 +695,6 @@ export function CashVerification() {
     !pendingVerifications.some(v => v.expenses.some(ve => ve.id === e.id))
   );
 
-  // State for expanded history items
-  const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set());
-  const [editingHistory, setEditingHistory] = useState<string | null>(null);
-  const [editHistoryCash, setEditHistoryCash] = useState('');
-  const [editHistoryGcash, setEditHistoryGcash] = useState('');
 
   const toggleHistoryExpand = (key: string) => {
     const newExpanded = new Set(expandedHistory);
