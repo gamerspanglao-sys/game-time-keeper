@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
-  Loader2, Package, Download, RefreshCw, Plus, Check, X, Search, Truck, Edit2, Send, ShoppingCart
+  Loader2, Package, Download, RefreshCw, Plus, Check, X, Search, Truck, Edit2, Send, ShoppingCart, AlertTriangle
 } from 'lucide-react';
 
 interface InventoryItem {
@@ -331,6 +331,28 @@ export default function Inventory() {
     'Others': { emoji: '📦', color: 'text-muted-foreground', bg: 'bg-muted/30' }
   };
 
+  // Check if item is critically low (stock covers less than 1 day)
+  const isCriticallyLow = (item: SalesItem) => {
+    if (item.avgPerDay <= 0) return false;
+    const daysOfStock = item.inStock / item.avgPerDay;
+    return daysOfStock < 1;
+  };
+
+  // Check if item is low (stock covers less than 2 days)
+  const isLowStock = (item: SalesItem) => {
+    if (item.avgPerDay <= 0) return false;
+    const daysOfStock = item.inStock / item.avgPerDay;
+    return daysOfStock < 2 && daysOfStock >= 1;
+  };
+
+  // Get critical items
+  const getCriticalItems = () => {
+    if (!purchaseData?.recommendations) return [];
+    return purchaseData.recommendations
+      .filter(item => !excludedItems.has(item.name) && isCriticallyLow(item))
+      .sort((a, b) => (a.inStock / a.avgPerDay) - (b.inStock / b.avgPerDay));
+  };
+
   return (
     <div className="space-y-4 p-4 max-w-4xl mx-auto pb-24">
       {/* Header */}
@@ -509,6 +531,41 @@ export default function Inventory() {
             </Card>
           )}
 
+          {/* Critical Low Stock Alert */}
+          {purchaseData && getCriticalItems().length > 0 && (
+            <Card className="border-red-500/50 bg-red-500/10 animate-pulse">
+              <CardHeader className="py-2 pb-1">
+                <CardTitle className="text-sm flex items-center gap-2 text-red-500">
+                  <AlertTriangle className="w-4 h-4" />
+                  Critical Low Stock
+                  <Badge className="ml-auto bg-red-500 text-white">{getCriticalItems().length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="py-2">
+                <div className="space-y-1.5">
+                  {getCriticalItems().slice(0, 5).map(item => {
+                    const daysLeft = item.avgPerDay > 0 ? (item.inStock / item.avgPerDay).toFixed(1) : '∞';
+                    return (
+                      <div key={item.name} className="flex items-center justify-between p-2 bg-red-500/10 rounded-lg border border-red-500/30">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate text-red-600">{item.name}</p>
+                          <div className="flex items-center gap-2 text-[10px] text-red-500/80">
+                            <span>Only {item.inStock} left</span>
+                            <span>•</span>
+                            <span>~{daysLeft} days</span>
+                          </div>
+                        </div>
+                        <Badge className="bg-red-500 text-white text-xs">
+                          Need +{item.toOrder}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Purchase Items by Supplier */}
           {purchaseData ? (
             <div className="space-y-4">
@@ -525,38 +582,64 @@ export default function Inventory() {
                     </CardHeader>
                     <CardContent className="py-2">
                       <div className="space-y-1.5">
-                        {items.map(item => (
-                          <div key={item.name} className="flex items-center justify-between p-2 bg-background/50 rounded-lg">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{item.name}</p>
-                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                <span>Stock: {item.inStock}</span>
-                                <span>•</span>
-                                <span>Avg: {item.avgPerDay.toFixed(1)}/day</span>
+                        {items.map(item => {
+                          const critical = isCriticallyLow(item);
+                          const low = isLowStock(item);
+                          const daysLeft = item.avgPerDay > 0 ? (item.inStock / item.avgPerDay).toFixed(1) : '∞';
+                          
+                          return (
+                            <div 
+                              key={item.name} 
+                              className={cn(
+                                "flex items-center justify-between p-2 rounded-lg",
+                                critical ? "bg-red-500/20 border border-red-500/40" :
+                                low ? "bg-amber-500/10 border border-amber-500/30" :
+                                "bg-background/50"
+                              )}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className={cn(
+                                    "text-sm font-medium truncate",
+                                    critical && "text-red-600",
+                                    low && "text-amber-600"
+                                  )}>{item.name}</p>
+                                  {critical && <AlertTriangle className="w-3 h-3 text-red-500 shrink-0" />}
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                  <span className={cn(critical && "text-red-500", low && "text-amber-500")}>
+                                    Stock: {item.inStock} (~{daysLeft}d)
+                                  </span>
+                                  <span>•</span>
+                                  <span>Avg: {item.avgPerDay.toFixed(1)}/day</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {item.toOrder > 0 ? (
+                                  <div className="text-right">
+                                    <p className={cn(
+                                      "text-sm font-bold",
+                                      critical ? "text-red-500" : low ? "text-amber-500" : style.color
+                                    )}>+{item.toOrder}</p>
+                                    {item.casesToOrder > 0 && (
+                                      <p className="text-[10px] text-muted-foreground">{item.casesToOrder} cases × {item.caseSize}</p>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] text-green-500 border-green-500/30">OK</Badge>
+                                )}
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-6 w-6 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => setExcludedItems(prev => new Set([...prev, item.name]))}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {item.toOrder > 0 ? (
-                                <div className="text-right">
-                                  <p className={cn("text-sm font-bold", style.color)}>+{item.toOrder}</p>
-                                  {item.casesToOrder > 0 && (
-                                    <p className="text-[10px] text-muted-foreground">{item.casesToOrder} cases × {item.caseSize}</p>
-                                  )}
-                                </div>
-                              ) : (
-                                <Badge variant="outline" className="text-[10px] text-green-500 border-green-500/30">OK</Badge>
-                              )}
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => setExcludedItems(prev => new Set([...prev, item.name]))}
-                              >
-                                <X className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </CardContent>
                   </Card>
