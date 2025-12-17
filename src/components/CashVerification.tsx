@@ -4,11 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
   Check, X, AlertTriangle, TrendingUp, TrendingDown, 
-  Banknote, Smartphone, Loader2, Clock, Users
+  Banknote, Smartphone, Loader2, Clock, Users, Pencil, Trash2, Plus
 } from 'lucide-react';
 
 interface PendingShift {
@@ -31,6 +33,7 @@ interface PendingExpense {
   description: string | null;
   payment_source: string;
   approved: boolean;
+  cash_register_id?: string;
 }
 
 interface CashRegisterRecord {
@@ -53,19 +56,20 @@ interface PendingVerification {
   difference: number;
   shifts: PendingShift[];
   expenses: PendingExpense[];
+  registerId?: string;
 }
 
+const CATEGORIES = [
+  { value: 'purchases', label: 'Purchases' },
+  { value: 'employee_food', label: 'Employee Food' },
+  { value: 'food_hunters', label: 'Food Hunters' },
+  { value: 'equipment', label: 'Equipment' },
+  { value: 'inventory', label: 'Inventory' },
+  { value: 'other', label: 'Other' }
+];
+
 const getCategoryLabel = (v: string) => {
-  const labels: Record<string, string> = {
-    'purchases': 'Purchases',
-    'employee_food': 'Employee Food',
-    'food_hunters': 'Food Hunters',
-    'equipment': 'Equipment',
-    'inventory': 'Inventory',
-    'salaries': 'Salaries',
-    'other': 'Other'
-  };
-  return labels[v] || v;
+  return CATEGORIES.find(c => c.value === v)?.label || v;
 };
 
 export function CashVerification() {
@@ -74,6 +78,18 @@ export function CashVerification() {
   const [pendingExpenses, setPendingExpenses] = useState<PendingExpense[]>([]);
   const [shortageInputs, setShortageInputs] = useState<Record<string, Record<string, string>>>({});
   const [processing, setProcessing] = useState<string | null>(null);
+  
+  // Edit expense state
+  const [editingExpense, setEditingExpense] = useState<PendingExpense | null>(null);
+  const [editAmount, setEditAmount] = useState('');
+  
+  // Add expense dialog state
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [addContext, setAddContext] = useState<{ date: string; shift: string; registerId?: string } | null>(null);
+  const [newExpAmount, setNewExpAmount] = useState('');
+  const [newExpCategory, setNewExpCategory] = useState('purchases');
+  const [newExpDescription, setNewExpDescription] = useState('');
+  const [newExpSource, setNewExpSource] = useState<'cash' | 'gcash'>('cash');
 
   const loadPendingData = async () => {
     try {
@@ -121,7 +137,8 @@ export function CashVerification() {
             totalSubmitted: 0,
             difference: 0,
             shifts: [],
-            expenses: []
+            expenses: [],
+            registerId: register?.id
           };
         }
         
@@ -295,6 +312,92 @@ export function CashVerification() {
     setShortageInputs(newInputs);
   };
 
+  // Edit expense amount
+  const startEditExpense = (expense: PendingExpense) => {
+    setEditingExpense(expense);
+    setEditAmount(expense.amount.toString());
+  };
+
+  const saveEditExpense = async () => {
+    if (!editingExpense) return;
+    const amount = parseInt(editAmount);
+    if (!amount || amount <= 0) {
+      toast.error('Enter valid amount');
+      return;
+    }
+    try {
+      await supabase
+        .from('cash_expenses')
+        .update({ amount })
+        .eq('id', editingExpense.id);
+      toast.success('Amount updated');
+      setEditingExpense(null);
+      loadPendingData();
+    } catch (e) {
+      toast.error('Failed to update');
+    }
+  };
+
+  // Delete expense
+  const deleteExpense = async (id: string) => {
+    try {
+      await supabase.from('cash_expenses').delete().eq('id', id);
+      toast.success('Expense removed');
+      loadPendingData();
+    } catch (e) {
+      toast.error('Failed to delete');
+    }
+  };
+
+  // Open add expense dialog
+  const openAddExpense = (date: string, shift: string, registerId?: string) => {
+    setAddContext({ date, shift, registerId });
+    setNewExpAmount('');
+    setNewExpCategory('purchases');
+    setNewExpDescription('');
+    setNewExpSource('cash');
+    setShowAddDialog(true);
+  };
+
+  // Add new expense
+  const addNewExpense = async () => {
+    if (!addContext) return;
+    const amount = parseInt(newExpAmount);
+    if (!amount || amount <= 0) {
+      toast.error('Enter valid amount');
+      return;
+    }
+    try {
+      let registerId = addContext.registerId;
+      if (!registerId) {
+        const { data: newReg } = await supabase
+          .from('cash_register')
+          .insert({ date: addContext.date, shift: addContext.shift })
+          .select('id')
+          .single();
+        registerId = newReg?.id;
+      }
+      
+      await supabase.from('cash_expenses').insert({
+        cash_register_id: registerId,
+        amount,
+        category: newExpCategory,
+        description: newExpDescription || null,
+        payment_source: newExpSource,
+        expense_type: 'shift',
+        shift: addContext.shift,
+        date: addContext.date,
+        approved: false
+      });
+      
+      toast.success('Expense added');
+      setShowAddDialog(false);
+      loadPendingData();
+    } catch (e) {
+      toast.error('Failed to add');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-32">
@@ -422,20 +525,50 @@ export function CashVerification() {
               </div>
 
               {/* Related expenses */}
-              {v.expenses.length > 0 && (
-                <div className="space-y-2">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
                   <p className="text-xs text-muted-foreground">Related Expenses ({v.expenses.length})</p>
-                  {v.expenses.map(exp => (
-                    <div key={exp.id} className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10 text-sm">
-                      <Badge variant="outline" className="text-xs">
-                        {exp.payment_source === 'gcash' ? '📱' : '💵'}
-                      </Badge>
-                      <span className="flex-1">{getCategoryLabel(exp.category)}</span>
-                      <span className="font-medium">₱{exp.amount.toLocaleString()}</span>
-                    </div>
-                  ))}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 text-xs text-amber-600 hover:bg-amber-500/10"
+                    onClick={() => openAddExpense(v.date, v.shift, v.registerId)}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />Add
+                  </Button>
                 </div>
-              )}
+                {v.expenses.map(exp => (
+                  <div key={exp.id} className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10 text-sm group">
+                    <Badge variant="outline" className="text-xs shrink-0">
+                      {exp.payment_source === 'gcash' ? '📱' : '💵'}
+                    </Badge>
+                    <span className="flex-1 truncate">{getCategoryLabel(exp.category)}</span>
+                    {exp.description && (
+                      <span className="text-xs text-muted-foreground truncate max-w-20">{exp.description}</span>
+                    )}
+                    <span className="font-medium shrink-0">₱{exp.amount.toLocaleString()}</span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 text-blue-500 hover:bg-blue-500/10"
+                      onClick={() => startEditExpense(exp)}
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 text-red-500 hover:bg-red-500/10"
+                      onClick={() => deleteExpense(exp.id)}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+                {v.expenses.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-2">No expenses</p>
+                )}
+              </div>
 
               {/* Actions */}
               <div className="flex gap-2 pt-2">
@@ -498,6 +631,14 @@ export function CashVerification() {
                 <Button
                   size="icon"
                   variant="ghost"
+                  className="h-7 w-7 opacity-0 group-hover:opacity-100 text-blue-500 hover:bg-blue-500/10"
+                  onClick={() => startEditExpense(exp)}
+                >
+                  <Pencil className="w-3 h-3" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
                   className="h-7 w-7 text-green-500 hover:bg-green-500/10"
                   onClick={() => approveExpense(exp.id)}
                 >
@@ -507,15 +648,116 @@ export function CashVerification() {
                   size="icon"
                   variant="ghost"
                   className="h-7 w-7 text-red-500 hover:bg-red-500/10"
-                  onClick={() => rejectExpense(exp.id)}
+                  onClick={() => deleteExpense(exp.id)}
                 >
-                  <X className="w-3 h-3" />
+                  <Trash2 className="w-3 h-3" />
                 </Button>
               </div>
             ))}
           </CardContent>
         </Card>
       )}
+
+      {/* Edit Expense Dialog */}
+      <Dialog open={!!editingExpense} onOpenChange={(open) => !open && setEditingExpense(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4" />
+              Edit Amount
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">
+                {editingExpense && getCategoryLabel(editingExpense.category)}
+                {editingExpense?.description && ` • ${editingExpense.description}`}
+              </p>
+              <Input
+                type="number"
+                placeholder="Amount"
+                value={editAmount}
+                onChange={e => setEditAmount(e.target.value)}
+                className="text-lg"
+                autoFocus
+              />
+            </div>
+            <Button className="w-full" onClick={saveEditExpense}>
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Expense Dialog */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              Add Expense
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Amount</label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={newExpAmount}
+                onChange={e => setNewExpAmount(e.target.value)}
+                className="text-lg"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Category</label>
+              <Select value={newExpCategory} onValueChange={setNewExpCategory}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map(c => (
+                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Payment Source</label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={newExpSource === 'cash' ? 'default' : 'outline'}
+                  className="flex-1"
+                  onClick={() => setNewExpSource('cash')}
+                >
+                  <Banknote className="w-4 h-4 mr-2" />Cash
+                </Button>
+                <Button
+                  type="button"
+                  variant={newExpSource === 'gcash' ? 'default' : 'outline'}
+                  className="flex-1"
+                  onClick={() => setNewExpSource('gcash')}
+                >
+                  <Smartphone className="w-4 h-4 mr-2" />GCash
+                </Button>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Description (optional)</label>
+              <Input
+                placeholder="What was it for?"
+                value={newExpDescription}
+                onChange={e => setNewExpDescription(e.target.value)}
+              />
+            </div>
+            <Button className="w-full" onClick={addNewExpense}>
+              <Plus className="w-4 h-4 mr-2" />Add Expense
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
