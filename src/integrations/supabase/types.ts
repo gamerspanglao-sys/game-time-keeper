@@ -105,6 +105,7 @@ export type Database = {
           payment_source: string
           responsible_employee_id: string | null
           shift: string
+          shift_id: string | null
         }
         Insert: {
           amount: number
@@ -118,6 +119,7 @@ export type Database = {
           payment_source?: string
           responsible_employee_id?: string | null
           shift?: string
+          shift_id?: string | null
         }
         Update: {
           amount?: number
@@ -131,6 +133,7 @@ export type Database = {
           payment_source?: string
           responsible_employee_id?: string | null
           shift?: string
+          shift_id?: string | null
         }
         Relationships: [
           {
@@ -143,6 +146,60 @@ export type Database = {
           {
             foreignKeyName: "cash_expenses_responsible_employee_id_fkey"
             columns: ["responsible_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_expenses_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_handovers: {
+        Row: {
+          cash_amount: number
+          change_fund_amount: number
+          comment: string | null
+          created_at: string
+          gcash_amount: number
+          handed_by_employee_id: string
+          handover_time: string
+          id: string
+          shift_date: string
+          shift_type: string
+        }
+        Insert: {
+          cash_amount?: number
+          change_fund_amount?: number
+          comment?: string | null
+          created_at?: string
+          gcash_amount?: number
+          handed_by_employee_id: string
+          handover_time?: string
+          id?: string
+          shift_date: string
+          shift_type: string
+        }
+        Update: {
+          cash_amount?: number
+          change_fund_amount?: number
+          comment?: string | null
+          created_at?: string
+          gcash_amount?: number
+          handed_by_employee_id?: string
+          handover_time?: string
+          id?: string
+          shift_date?: string
+          shift_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_handovers_handed_by_employee_id_fkey"
+            columns: ["handed_by_employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
             referencedColumns: ["id"]
@@ -383,6 +440,7 @@ export type Database = {
           shift_type: string | null
           status: string | null
           total_hours: number | null
+          type: string | null
         }
         Insert: {
           base_salary?: number | null
@@ -404,6 +462,7 @@ export type Database = {
           shift_type?: string | null
           status?: string | null
           total_hours?: number | null
+          type?: string | null
         }
         Update: {
           base_salary?: number | null
@@ -425,6 +484,7 @@ export type Database = {
           shift_type?: string | null
           status?: string | null
           total_hours?: number | null
+          type?: string | null
         }
         Relationships: [
           {
