@@ -62,9 +62,15 @@ const getShiftDate = (): string => {
   const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
   const manilaTime = new Date(utcTime + (manilaOffset * 60000));
   const hour = manilaTime.getHours();
-  if (hour < 5) {
-    manilaTime.setDate(manilaTime.getDate() - 1);
+  
+  // Night shift (5PM-5AM) maps to the NEXT calendar day
+  if (hour >= 17) {
+    // Evening part of night shift (5PM - midnight): add 1 day
+    manilaTime.setDate(manilaTime.getDate() + 1);
   }
+  // Morning part (midnight - 5AM): date is already the next day
+  // Day shift (5AM - 5PM): use current date
+  
   return format(manilaTime, 'yyyy-MM-dd');
 };
 
@@ -169,19 +175,16 @@ export default function Shift() {
   };
 
   const loadShiftExpenses = async () => {
-    console.log('Loading expenses for:', { currentDate, currentShift });
     try {
-      const { data: register, error: regError } = await supabase
+      const { data: register } = await supabase
         .from('cash_register')
         .select('id')
         .eq('date', currentDate)
         .eq('shift', currentShift)
         .maybeSingle();
 
-      console.log('Found register:', register, 'Error:', regError);
-
       if (register) {
-        const { data: expenses, error: expError } = await supabase
+        const { data: expenses } = await supabase
           .from('cash_expenses')
           .select('*, employees:responsible_employee_id(name)')
           .eq('cash_register_id', register.id)
@@ -190,18 +193,15 @@ export default function Shift() {
           .eq('date', currentDate)
           .order('created_at', { ascending: false });
 
-        console.log('Loaded expenses:', expenses?.length, 'Error:', expError);
-
         setShiftExpenses((expenses || []).map((e: any) => ({
           ...e,
           responsible_name: e.employees?.name
         })));
       } else {
-        console.log('No register found, clearing expenses');
         setShiftExpenses([]);
       }
     } catch (e) {
-      console.error('Error loading expenses:', e);
+      console.error(e);
       setShiftExpenses([]);
     }
   };
