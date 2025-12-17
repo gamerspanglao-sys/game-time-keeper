@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Trash2, Square, AlertTriangle, CheckCircle2, Send } from 'lucide-react';
@@ -25,7 +27,7 @@ interface ActiveShift {
   employee_id: string;
   employee_name: string;
   shift_start: string;
-  shift_type: string;
+  type: ShiftType;
   status: string;
 }
 
@@ -36,9 +38,22 @@ interface ShiftExpense {
   description: string | null;
   created_at: string;
   payment_source: string;
-  date: string | null;
+  shift_id: string | null;
   responsible_employee_id: string | null;
   responsible_name?: string;
+}
+
+interface CashHandover {
+  id: string;
+  shift_type: ShiftType;
+  shift_date: string;
+  cash_amount: number;
+  gcash_amount: number;
+  change_fund_amount: number;
+  handed_by_employee_id: string;
+  employee_name?: string;
+  handover_time: string;
+  comment: string | null;
 }
 
 const EXPENSE_CATEGORIES = [
@@ -48,47 +63,75 @@ const EXPENSE_CATEGORIES = [
   { value: 'other', label: 'Other' }
 ];
 
-const getCurrentShift = (): ShiftType => {
+// Get Manila time
+const getManilaTime = (): Date => {
   const now = new Date();
   const manilaOffset = 8 * 60;
   const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const manilaTime = new Date(utcTime + (manilaOffset * 60000));
+  return new Date(utcTime + (manilaOffset * 60000));
+};
+
+// Determine shift type based on Manila hour
+// Day: 05:00 - 16:59, Night: 17:00 - 04:59
+const getCurrentShiftType = (): ShiftType => {
+  const manilaTime = getManilaTime();
   const hour = manilaTime.getHours();
   return hour >= 5 && hour < 17 ? 'day' : 'night';
 };
 
+// Get shift date (for night shift after midnight, use previous day)
 const getShiftDate = (): string => {
-  const now = new Date();
-  const manilaOffset = 8 * 60;
-  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const manilaTime = new Date(utcTime + (manilaOffset * 60000));
+  const manilaTime = getManilaTime();
   const hour = manilaTime.getHours();
   
   // Night shift maps to the day it STARTED
-  // So at 2 AM Dec 18, we're still in the Dec 17 night shift
+  // At 2 AM Dec 18, we're still in the Dec 17 night shift
   if (hour < 5) {
     manilaTime.setDate(manilaTime.getDate() - 1);
   }
   return format(manilaTime, 'yyyy-MM-dd');
 };
 
-interface CashSubmission {
-  employeeName: string;
-  cash: number;
-  gcash: number;
-}
+// Get previous shift type and date for handover lookup
+const getPreviousShiftInfo = (): { shiftType: ShiftType; shiftDate: string } => {
+  const currentType = getCurrentShiftType();
+  const manilaTime = getManilaTime();
+  const hour = manilaTime.getHours();
+  
+  if (currentType === 'day') {
+    // Current is day -> show last night handover (from yesterday or earlier)
+    const prevDate = new Date(manilaTime);
+    prevDate.setDate(prevDate.getDate() - 1);
+    return { shiftType: 'night', shiftDate: format(prevDate, 'yyyy-MM-dd') };
+  } else {
+    // Current is night -> show today's day handover
+    let shiftDate: Date;
+    if (hour < 5) {
+      // After midnight, day shift was from previous calendar day
+      shiftDate = new Date(manilaTime);
+      shiftDate.setDate(shiftDate.getDate() - 1);
+    } else {
+      // After 17:00, day shift was from today
+      shiftDate = new Date(manilaTime);
+    }
+    return { shiftType: 'day', shiftDate: format(shiftDate, 'yyyy-MM-dd') };
+  }
+};
 
 export default function Shift() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeShifts, setActiveShifts] = useState<ActiveShift[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // Current handover for this shift type/date
+  const [currentHandover, setCurrentHandover] = useState<CashHandover | null>(null);
+  
   // Cash submission section
-  const [cashSubmissions, setCashSubmissions] = useState<CashSubmission[]>([]);
   const [cashEmployee, setCashEmployee] = useState<string>('');
   const [cashAmount, setCashAmount] = useState('');
   const [gcashAmount, setGcashAmount] = useState('');
-  const [changeFundAmount, setChangeFundAmount] = useState('');
+  const [changeFundAmount, setChangeFundAmount] = useState('2000');
+  const [handoverComment, setHandoverComment] = useState('');
   const [submittingCash, setSubmittingCash] = useState(false);
 
   // Expense tracking
@@ -109,10 +152,11 @@ export default function Shift() {
   // Start shift confirmation dialog
   const [showStartShiftDialog, setShowStartShiftDialog] = useState(false);
   const [pendingStartEmployee, setPendingStartEmployee] = useState<string | null>(null);
-  const [lastCashHandover, setLastCashHandover] = useState<{ cash: number; gcash: number; changeFund: number; employeeName: string } | null>(null);
+  const [previousHandover, setPreviousHandover] = useState<CashHandover | null>(null);
   const [startingShift, setStartingShift] = useState(false);
+  const [cashVerified, setCashVerified] = useState(false);
 
-  const currentShift = getCurrentShift();
+  const currentShiftType = getCurrentShiftType();
   const currentDate = getShiftDate();
 
   useEffect(() => {
@@ -126,6 +170,9 @@ export default function Shift() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, () => {
         loadShiftExpenses();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_handovers' }, () => {
+        loadCurrentHandover();
+      })
       .subscribe();
 
     return () => {
@@ -133,7 +180,6 @@ export default function Shift() {
     };
   }, []);
 
-  // Reload expenses when active shifts change
   useEffect(() => {
     if (!loading) {
       loadShiftExpenses();
@@ -142,19 +188,13 @@ export default function Shift() {
 
   const loadData = async () => {
     try {
-      const [{ data: empData }, { data: shiftsData }, { data: closedShifts }] = await Promise.all([
+      const [{ data: empData }, { data: shiftsData }] = await Promise.all([
         supabase.from('employees').select('id, name').eq('active', true).order('name'),
         supabase
           .from('shifts')
-          .select('id, employee_id, shift_start, shift_type, status, employees!inner(name)')
+          .select('id, employee_id, shift_start, type, status, employees!inner(name)')
           .eq('status', 'open')
-          .order('shift_start', { ascending: false }),
-        supabase
-          .from('shifts')
-          .select('id, employee_id, cash_handed_over, gcash_handed_over, shift_type, employees!inner(name)')
-          .eq('date', currentDate)
-          .eq('status', 'closed')
-          .or('cash_handed_over.gt.0,gcash_handed_over.gt.0')
+          .order('shift_start', { ascending: false })
       ]);
 
       setEmployees(empData || []);
@@ -163,20 +203,11 @@ export default function Shift() {
         employee_id: s.employee_id,
         employee_name: s.employees?.name || 'Unknown',
         shift_start: s.shift_start,
-        shift_type: s.shift_type,
+        type: s.type || 'day',
         status: s.status
       })));
 
-      const currentShiftType = currentShift === 'day' ? 'Day (5AM-5PM)' : 'Night (5PM-5AM)';
-      const shiftSubmissions = (closedShifts || [])
-        .filter((s: any) => s.shift_type === currentShiftType)
-        .map((s: any) => ({
-          employeeName: s.employees?.name || 'Unknown',
-          cash: s.cash_handed_over || 0,
-          gcash: s.gcash_handed_over || 0
-        }));
-      
-      setCashSubmissions(shiftSubmissions);
+      await loadCurrentHandover();
     } catch (e) {
       console.error(e);
     } finally {
@@ -184,33 +215,51 @@ export default function Shift() {
     }
   };
 
+  const loadCurrentHandover = async () => {
+    try {
+      const { data } = await supabase
+        .from('cash_handovers')
+        .select('*, employees:handed_by_employee_id(name)')
+        .eq('shift_type', currentShiftType)
+        .eq('shift_date', currentDate)
+        .maybeSingle();
+
+      if (data) {
+        setCurrentHandover({
+          id: data.id,
+          shift_type: data.shift_type as ShiftType,
+          shift_date: data.shift_date,
+          cash_amount: data.cash_amount,
+          gcash_amount: data.gcash_amount,
+          change_fund_amount: data.change_fund_amount,
+          handed_by_employee_id: data.handed_by_employee_id,
+          handover_time: data.handover_time,
+          comment: data.comment,
+          employee_name: (data.employees as any)?.name
+        });
+      } else {
+        setCurrentHandover(null);
+      }
+    } catch (e) {
+      console.error(e);
+      setCurrentHandover(null);
+    }
+  };
+
   const loadShiftExpenses = async () => {
     try {
-      // Load expenses for all currently active employees
       if (activeShifts.length === 0) {
         setShiftExpenses([]);
         return;
       }
 
-      const employeeIds = activeShifts.map(s => s.employee_id);
+      const shiftIds = activeShifts.map(s => s.id);
       
-      // Get today's start time (5 AM Manila) for filtering
-      const now = new Date();
-      const manilaOffset = 8 * 60;
-      const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-      const manilaTime = new Date(utcTime + (manilaOffset * 60000));
-      manilaTime.setHours(5, 0, 0, 0);
-      if (now.getHours() < 5) {
-        manilaTime.setDate(manilaTime.getDate() - 1);
-      }
-      const todayStart = manilaTime.toISOString();
-
-      const { data: expenses } = await supabase
+      const { data: expenses } = await (supabase
         .from('cash_expenses')
-        .select('*, employees:responsible_employee_id(name)')
-        .in('responsible_employee_id', employeeIds)
+        .select('*, employees:responsible_employee_id(name)') as any)
+        .in('shift_id', shiftIds)
         .eq('expense_type', 'shift')
-        .gte('created_at', todayStart)
         .order('created_at', { ascending: false });
 
       setShiftExpenses((expenses || []).map((e: any) => ({
@@ -224,40 +273,46 @@ export default function Shift() {
   };
 
   const confirmStartShift = async (employeeId: string) => {
+    // Check if employee already has an open shift
+    const existingShift = activeShifts.find(s => s.employee_id === employeeId);
+    if (existingShift) {
+      toast.error('You already have an open shift');
+      return;
+    }
+
     setPendingStartEmployee(employeeId);
+    setCashVerified(false);
     
-    // Get last cash handover for this shift type
+    // Get previous shift's handover
     try {
-      const { data: lastShift } = await supabase
-        .from('shifts')
-        .select('cash_handed_over, gcash_handed_over, employees!inner(name)')
-        .eq('status', 'closed')
-        .or('cash_handed_over.gt.0,gcash_handed_over.gt.0')
-        .order('shift_end', { ascending: false })
-        .limit(1)
+      const prevInfo = getPreviousShiftInfo();
+      
+      const { data: prevHandover } = await supabase
+        .from('cash_handovers')
+        .select('*, employees:handed_by_employee_id(name)')
+        .eq('shift_type', prevInfo.shiftType)
+        .eq('shift_date', prevInfo.shiftDate)
         .maybeSingle();
 
-      // Get last change fund from cash_register
-      const { data: lastRegister } = await supabase
-        .from('cash_register')
-        .select('opening_balance')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (lastShift) {
-        setLastCashHandover({
-          cash: lastShift.cash_handed_over || 0,
-          gcash: lastShift.gcash_handed_over || 0,
-          changeFund: lastRegister?.opening_balance || 2000,
-          employeeName: (lastShift.employees as any)?.name || 'Unknown'
+      if (prevHandover) {
+        setPreviousHandover({
+          id: prevHandover.id,
+          shift_type: prevHandover.shift_type as ShiftType,
+          shift_date: prevHandover.shift_date,
+          cash_amount: prevHandover.cash_amount,
+          gcash_amount: prevHandover.gcash_amount,
+          change_fund_amount: prevHandover.change_fund_amount,
+          handed_by_employee_id: prevHandover.handed_by_employee_id,
+          handover_time: prevHandover.handover_time,
+          comment: prevHandover.comment,
+          employee_name: (prevHandover.employees as any)?.name
         });
       } else {
-        setLastCashHandover(null);
+        setPreviousHandover(null);
       }
     } catch (e) {
       console.error(e);
-      setLastCashHandover(null);
+      setPreviousHandover(null);
     }
     
     setShowStartShiftDialog(true);
@@ -265,8 +320,11 @@ export default function Shift() {
 
   const handleStartShift = async () => {
     if (!pendingStartEmployee) return;
+    if (!cashVerified) {
+      toast.error('Please verify cash amounts first');
+      return;
+    }
     
-    const shiftType = currentShift === 'day' ? 'Day (5AM-5PM)' : 'Night (5PM-5AM)';
     const employeeName = employees.find(e => e.id === pendingStartEmployee)?.name || 'Unknown';
     
     setStartingShift(true);
@@ -275,26 +333,23 @@ export default function Shift() {
         employee_id: pendingStartEmployee,
         date: currentDate,
         shift_start: new Date().toISOString(),
-        shift_type: shiftType,
+        type: currentShiftType,
         status: 'open'
       });
 
       if (error) throw error;
 
+      // Send Telegram notification
       try {
         await supabase.functions.invoke('telegram-notify', {
           body: {
             action: 'shift_start',
             employeeName,
-            time: new Date().toLocaleTimeString('en-PH', { 
-              timeZone: 'Asia/Manila',
-              hour: '2-digit', 
-              minute: '2-digit' 
-            }),
-            previousCash: lastCashHandover?.cash || 0,
-            previousGcash: lastCashHandover?.gcash || 0,
-            changeFund: lastCashHandover?.changeFund || 2000,
-            previousEmployee: lastCashHandover?.employeeName || null
+            time: getManilaTime().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }),
+            previousCash: previousHandover?.cash_amount || 0,
+            previousGcash: previousHandover?.gcash_amount || 0,
+            changeFund: previousHandover?.change_fund_amount || 2000,
+            previousEmployee: previousHandover?.employee_name || null
           }
         });
       } catch (e) {
@@ -310,6 +365,7 @@ export default function Shift() {
       setStartingShift(false);
       setShowStartShiftDialog(false);
       setPendingStartEmployee(null);
+      setCashVerified(false);
     }
   };
 
@@ -341,6 +397,7 @@ export default function Shift() {
 
       if (error) throw error;
 
+      // Send Telegram notification
       try {
         await supabase.functions.invoke('telegram-notify', {
           body: {
@@ -372,6 +429,19 @@ export default function Shift() {
       return;
     }
 
+    // Check if employee has active shift
+    const employeeShift = activeShifts.find(s => s.employee_id === cashEmployee);
+    if (!employeeShift) {
+      toast.error('Employee must have an open shift to submit cash');
+      return;
+    }
+
+    // Check if handover already exists for current shift
+    if (currentHandover) {
+      toast.error(`Cash already submitted by ${currentHandover.employee_name}`);
+      return;
+    }
+
     const cash = parseInt(cashAmount) || 0;
     const gcash = parseInt(gcashAmount) || 0;
     const changeFund = parseInt(changeFundAmount) || 0;
@@ -381,71 +451,28 @@ export default function Shift() {
       return;
     }
 
+    if (changeFund <= 0) {
+      toast.error('Change fund is required');
+      return;
+    }
+
     setSubmittingCash(true);
     try {
       const employeeName = employees.find(e => e.id === cashEmployee)?.name || 'Unknown';
-      const shiftType = currentShift === 'day' ? 'Day (5AM-5PM)' : 'Night (5PM-5AM)';
       
-      // Check if employee has an active shift
-      const activeShift = activeShifts.find(s => s.employee_id === cashEmployee);
-      
-      if (activeShift) {
-        const totalHours = calculateTotalHours(activeShift.shift_start);
-        
-        const { error } = await supabase
-          .from('shifts')
-          .update({
-            cash_handed_over: cash,
-            gcash_handed_over: gcash,
-            shift_end: new Date().toISOString(),
-            total_hours: totalHours,
-            status: 'closed'
-          })
-          .eq('id', activeShift.id);
+      // Insert into cash_handovers table
+      const { error } = await supabase.from('cash_handovers').insert({
+        shift_type: currentShiftType,
+        shift_date: currentDate,
+        cash_amount: cash,
+        gcash_amount: gcash,
+        change_fund_amount: changeFund,
+        handed_by_employee_id: cashEmployee,
+        handover_time: new Date().toISOString(),
+        comment: handoverComment || null
+      });
 
-        if (error) throw error;
-      } else {
-        // Create a new closed shift for cash submission only
-        const { error } = await supabase.from('shifts').insert({
-          employee_id: cashEmployee,
-          date: currentDate,
-          shift_start: new Date().toISOString(),
-          shift_end: new Date().toISOString(),
-          shift_type: shiftType,
-          cash_handed_over: cash,
-          gcash_handed_over: gcash,
-          total_hours: 0,
-          status: 'closed'
-        });
-
-        if (error) throw error;
-      }
-
-      // Save change fund if entered
-      if (changeFund > 0) {
-        let { data: register } = await supabase
-          .from('cash_register')
-          .select('id')
-          .eq('date', currentDate)
-          .eq('shift', currentShift)
-          .single();
-
-        if (!register) {
-          const { data: newRegister, error: createError } = await supabase
-            .from('cash_register')
-            .insert({ date: currentDate, shift: currentShift })
-            .select('id')
-            .single();
-          
-          if (createError) throw createError;
-          register = newRegister;
-        }
-
-        await supabase
-          .from('cash_register')
-          .update({ opening_balance: changeFund })
-          .eq('id', register!.id);
-      }
+      if (error) throw error;
 
       // Send Telegram notification
       try {
@@ -456,22 +483,27 @@ export default function Shift() {
             cash,
             gcash,
             changeFund,
-            shiftType: currentShift === 'day' ? 'Day' : 'Night'
+            shiftType: currentShiftType === 'day' ? 'Day' : 'Night'
           }
         });
       } catch (e) {
         console.log('Telegram notification failed:', e);
       }
 
-      toast.success('Cash submitted');
+      toast.success('Cash handover submitted');
       setCashEmployee('');
       setCashAmount('');
       setGcashAmount('');
-      setChangeFundAmount('');
-      loadData();
-    } catch (e) {
+      setChangeFundAmount('2000');
+      setHandoverComment('');
+      loadCurrentHandover();
+    } catch (e: any) {
       console.error(e);
-      toast.error('Failed to submit');
+      if (e.code === '23505') {
+        toast.error('Cash already submitted for this shift');
+      } else {
+        toast.error('Failed to submit');
+      }
     } finally {
       setSubmittingCash(false);
     }
@@ -518,7 +550,7 @@ export default function Shift() {
     try {
       // Use shift date from when employee started their shift
       const shiftStartDate = format(new Date(employeeShift.shift_start), 'yyyy-MM-dd');
-      const shiftType = employeeShift.shift_type.includes('Day') ? 'day' : 'night';
+      const shiftType = employeeShift.type;
 
       // Get or create cash register for that shift date/type
       let { data: register } = await supabase
@@ -541,6 +573,7 @@ export default function Shift() {
 
       const { error } = await supabase.from('cash_expenses').insert({
         cash_register_id: register!.id,
+        shift_id: employeeShift.id,
         amount,
         category: expenseCategory,
         description: expenseDescription || null,
@@ -589,12 +622,17 @@ export default function Shift() {
     return `${hours}h ${mins}m`;
   };
 
+  const formatHandoverTime = (time: string) => {
+    return new Date(time).toLocaleTimeString('en-PH', { 
+      timeZone: 'Asia/Manila',
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  };
+
   const totalShiftExpenses = shiftExpenses.reduce((sum, e) => sum + e.amount, 0);
   const cashExpenses = shiftExpenses.filter(e => e.payment_source === 'cash').reduce((sum, e) => sum + e.amount, 0);
   const gcashExpenses = shiftExpenses.filter(e => e.payment_source === 'gcash').reduce((sum, e) => sum + e.amount, 0);
-
-  const totalSubmittedCash = cashSubmissions.reduce((sum, s) => sum + s.cash, 0);
-  const totalSubmittedGCash = cashSubmissions.reduce((sum, s) => sum + s.gcash, 0);
 
   if (loading) {
     return (
@@ -611,17 +649,17 @@ export default function Shift() {
         <div className="flex items-center gap-3">
           <div className={cn(
             "w-10 h-10 rounded-xl flex items-center justify-center",
-            currentShift === 'day' ? 'bg-amber-500/15' : 'bg-indigo-500/15'
+            currentShiftType === 'day' ? 'bg-amber-500/15' : 'bg-indigo-500/15'
           )}>
-            {currentShift === 'day' ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5 text-indigo-500" />}
+            {currentShiftType === 'day' ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5 text-indigo-500" />}
           </div>
           <div>
-            <h1 className="text-lg font-bold">{currentShift === 'day' ? 'Day Shift' : 'Night Shift'}</h1>
+            <h1 className="text-lg font-bold">{currentShiftType === 'day' ? 'Day Shift' : 'Night Shift'}</h1>
             <span className="text-xs text-muted-foreground">{currentDate}</span>
           </div>
         </div>
         
-        {/* Add Employee Button */}
+        {/* Start Shift Button */}
         <Select onValueChange={confirmStartShift}>
           <SelectTrigger className="w-auto h-8 px-3 text-xs gap-1.5 border-green-500/30 text-green-600 hover:bg-green-500/10">
             <Plus className="w-3.5 h-3.5" />
@@ -724,12 +762,8 @@ export default function Shift() {
                       </span>
                     </div>
                     <div className="text-[10px] text-muted-foreground/70 flex items-center gap-1.5">
-                      <span>{expense.date || format(new Date(expense.created_at), 'dd.MM')}</span>
                       {expense.responsible_name && (
-                        <>
-                          <span>•</span>
-                          <span className="truncate">{expense.responsible_name}</span>
-                        </>
+                        <span className="truncate">{expense.responsible_name}</span>
                       )}
                       {expense.description && (
                         <>
@@ -760,75 +794,100 @@ export default function Shift() {
           <CardTitle className="text-xs flex items-center gap-2">
             <Banknote className="w-3.5 h-3.5 text-amber-500" />
             <span className="text-amber-600">Cash Handover</span>
-            {(totalSubmittedCash > 0 || totalSubmittedGCash > 0) && (
-              <Badge className="ml-auto bg-green-500/20 text-green-500 border-0 text-[10px]">
-                ₱{(totalSubmittedCash + totalSubmittedGCash).toLocaleString()}
-              </Badge>
-            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="px-3 pb-3 pt-0 space-y-3">
-          {/* Already submitted */}
-          {cashSubmissions.length > 0 && (
-            <div className="text-xs space-y-1 p-2 bg-green-500/5 rounded-lg border border-green-500/20">
-              {cashSubmissions.map((sub, i) => (
-                <div key={i} className="flex justify-between">
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <CheckCircle2 className="w-3 h-3 text-green-500" />
-                    {sub.employeeName}
-                  </span>
-                  <span className="font-medium">
-                    {sub.cash > 0 && <span className="text-green-500">₱{sub.cash.toLocaleString()}</span>}
-                    {sub.cash > 0 && sub.gcash > 0 && <span className="text-muted-foreground mx-1">+</span>}
-                    {sub.gcash > 0 && <span className="text-blue-500">G₱{sub.gcash.toLocaleString()}</span>}
-                  </span>
+          {/* Already submitted indicator */}
+          {currentHandover ? (
+            <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                <span className="text-sm font-medium text-green-600">
+                  Cash submitted by {currentHandover.employee_name}
+                </span>
+              </div>
+              <div className="text-xs text-muted-foreground mb-2">
+                at {formatHandoverTime(currentHandover.handover_time)}
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <div className="text-lg font-bold text-green-600">₱{currentHandover.cash_amount.toLocaleString()}</div>
+                  <div className="text-[10px] text-muted-foreground">Cash</div>
                 </div>
-              ))}
+                <div>
+                  <div className="text-lg font-bold text-blue-500">₱{currentHandover.gcash_amount.toLocaleString()}</div>
+                  <div className="text-[10px] text-muted-foreground">GCash</div>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-amber-500">₱{currentHandover.change_fund_amount.toLocaleString()}</div>
+                  <div className="text-[10px] text-muted-foreground">Change Fund</div>
+                </div>
+              </div>
+              {currentHandover.comment && (
+                <div className="mt-2 text-xs text-muted-foreground border-t border-border/50 pt-2">
+                  Note: {currentHandover.comment}
+                </div>
+              )}
             </div>
-          )}
-
-          {/* Submit form */}
-          <div className="space-y-2">
-            <Select value={cashEmployee} onValueChange={setCashEmployee}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Who is submitting? (working only)" />
-              </SelectTrigger>
-              <SelectContent>
-                {activeShifts.length === 0 ? (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">No one working</div>
-                ) : (
-                  activeShifts.map(shift => (
+          ) : activeShifts.length === 0 ? (
+            <div className="text-sm text-muted-foreground text-center py-4">
+              <AlertTriangle className="w-5 h-5 mx-auto mb-2 text-amber-500" />
+              No active shifts. Only working staff can submit cash.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Select value={cashEmployee} onValueChange={setCashEmployee}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="Who is submitting? (working only)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeShifts.map(shift => (
                     <SelectItem key={shift.employee_id} value={shift.employee_id}>
                       <span className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-green-500"></span>
                         {shift.employee_name}
                       </span>
                     </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1">
-                <label className="text-[10px] text-muted-foreground">Cash ₱</label>
-                <Input type="number" value={cashAmount} onChange={e => setCashAmount(e.target.value)} placeholder="0" className="h-9 text-sm font-mono" />
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-muted-foreground">Cash ₱</label>
+                  <Input type="number" value={cashAmount} onChange={e => setCashAmount(e.target.value)} placeholder="0" className="h-9 text-sm font-mono" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-blue-500">GCash ₱</label>
+                  <Input type="number" value={gcashAmount} onChange={e => setGcashAmount(e.target.value)} placeholder="0" className="h-9 text-sm font-mono" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-amber-500">Change Fund *</label>
+                  <Input type="number" value={changeFundAmount} onChange={e => setChangeFundAmount(e.target.value)} placeholder="2000" className="h-9 text-sm font-mono border-amber-500/30" />
+                </div>
               </div>
+
               <div className="space-y-1">
-                <label className="text-[10px] text-blue-500">GCash ₱</label>
-                <Input type="number" value={gcashAmount} onChange={e => setGcashAmount(e.target.value)} placeholder="0" className="h-9 text-sm font-mono" />
+                <label className="text-[10px] text-muted-foreground">Comment (optional)</label>
+                <Textarea 
+                  value={handoverComment} 
+                  onChange={e => setHandoverComment(e.target.value)} 
+                  placeholder="Any notes about the handover..."
+                  className="text-sm min-h-[60px] resize-none"
+                />
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] text-amber-500">Change Fund *</label>
-                <Input type="number" value={changeFundAmount} onChange={e => setChangeFundAmount(e.target.value)} placeholder="2000" className="h-9 text-sm font-mono border-amber-500/30" />
-              </div>
+
+              <Button 
+                onClick={submitCashHandover} 
+                disabled={submittingCash || !cashEmployee || !changeFundAmount} 
+                className="w-full h-9 text-sm bg-amber-500 hover:bg-amber-600" 
+                size="sm"
+              >
+                <Send className="w-3.5 h-3.5 mr-1.5" />
+                {submittingCash ? 'Submitting...' : 'Submit Cash Handover'}
+              </Button>
             </div>
-
-            <Button onClick={submitCashHandover} disabled={submittingCash || !cashEmployee || !changeFundAmount} className="w-full h-9 text-sm bg-amber-500 hover:bg-amber-600" size="sm">
-              <Send className="w-3.5 h-3.5 mr-1.5" />
-              {submittingCash ? 'Submitting...' : 'Submit Cash'}
-            </Button>
-          </div>
+          )}
         </CardContent>
       </Card>
 
@@ -841,7 +900,7 @@ export default function Shift() {
               Add Expense
             </DialogTitle>
             <DialogDescription>
-              Add expense for current shift (deducted from shift cash)
+              Expense will be tied to employee's open shift
             </DialogDescription>
           </DialogHeader>
           
@@ -940,7 +999,7 @@ export default function Shift() {
                   <span className="font-medium text-foreground">
                     {activeShifts.find(s => s.employee_id === pendingEndShiftEmployee)?.employee_name}
                   </span>
-                  {' '}— shift will be closed. Use "Cash Handover" separately to submit cash.
+                  {' '}— shift will be closed. Use "Cash Handover" section to submit cash (anyone working can do it once per shift).
                 </>
               )}
             </AlertDialogDescription>
@@ -959,6 +1018,7 @@ export default function Shift() {
         if (!open) {
           setShowStartShiftDialog(false);
           setPendingStartEmployee(null);
+          setCashVerified(false);
         }
       }}>
         <DialogContent className="max-w-sm">
@@ -972,49 +1032,79 @@ export default function Shift() {
                 <span className="font-medium text-foreground">
                   {employees.find(e => e.id === pendingStartEmployee)?.name}
                 </span>
-              )} — verify cash and open shift
+              )} — verify cash before starting
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 pt-2">
-            {lastCashHandover ? (
-              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-2">
-                <div className="text-xs text-amber-600 font-medium">Previous Handover from {lastCashHandover.employeeName}</div>
+            {previousHandover ? (
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-3">
+                <div className="text-xs text-amber-600 font-medium">
+                  Previous Handover ({previousHandover.shift_type === 'day' ? 'Day' : 'Night'} shift, {previousHandover.shift_date})
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  By: <span className="font-medium text-foreground">{previousHandover.employee_name}</span>
+                  <span className="text-xs ml-2">at {formatHandoverTime(previousHandover.handover_time)}</span>
+                </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <div className="text-lg font-bold text-green-600">₱{lastCashHandover.cash.toLocaleString()}</div>
+                    <div className="text-lg font-bold text-green-600">₱{previousHandover.cash_amount.toLocaleString()}</div>
                     <div className="text-[10px] text-muted-foreground">Cash</div>
                   </div>
                   <div>
-                    <div className="text-lg font-bold text-blue-500">₱{lastCashHandover.gcash.toLocaleString()}</div>
+                    <div className="text-lg font-bold text-blue-500">₱{previousHandover.gcash_amount.toLocaleString()}</div>
                     <div className="text-[10px] text-muted-foreground">GCash</div>
                   </div>
                   <div>
-                    <div className="text-lg font-bold text-amber-500">₱{lastCashHandover.changeFund.toLocaleString()}</div>
+                    <div className="text-lg font-bold text-amber-500">₱{previousHandover.change_fund_amount.toLocaleString()}</div>
                     <div className="text-[10px] text-muted-foreground">Change Fund</div>
                   </div>
                 </div>
+                {previousHandover.comment && (
+                  <div className="text-xs text-muted-foreground border-t border-amber-500/20 pt-2">
+                    Note: {previousHandover.comment}
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="p-3 rounded-lg bg-muted/50 text-center">
-                <div className="text-sm text-muted-foreground">No previous handover data</div>
+              <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/30">
+                <div className="flex items-center gap-2 text-orange-600">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="text-sm font-medium">No previous handover found</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Cash was not submitted for the previous shift. Verify manually before starting.
+                </p>
               </div>
             )}
+
+            <div className="flex items-start space-x-3 p-3 bg-muted/50 rounded-lg">
+              <Checkbox 
+                id="verify-cash" 
+                checked={cashVerified}
+                onCheckedChange={(checked) => setCashVerified(checked === true)}
+                className="mt-0.5"
+              />
+              <label htmlFor="verify-cash" className="text-sm leading-tight cursor-pointer">
+                I have verified the cash amounts are correct
+              </label>
+            </div>
 
             <div className="flex flex-col gap-2">
               <Button 
                 onClick={handleStartShift} 
-                disabled={startingShift}
+                disabled={startingShift || !cashVerified}
                 className="w-full bg-green-500 hover:bg-green-600"
               >
                 <CheckCircle2 className="w-4 h-4 mr-2" />
-                {startingShift ? 'Starting...' : 'Verified, Start Shift'}
+                {startingShift ? 'Starting...' : 'Start Shift'}
               </Button>
               <Button 
                 variant="outline" 
                 onClick={() => {
                   setShowStartShiftDialog(false);
                   setPendingStartEmployee(null);
+                  setCashVerified(false);
                 }}
                 className="w-full text-muted-foreground"
               >
