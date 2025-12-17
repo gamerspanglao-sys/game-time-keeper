@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; // Fixed
+import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -63,14 +63,11 @@ const getShiftDate = (): string => {
   const manilaTime = new Date(utcTime + (manilaOffset * 60000));
   const hour = manilaTime.getHours();
   
-  // Night shift (5PM-5AM) maps to the NEXT calendar day
-  if (hour >= 17) {
-    // Evening part of night shift (5PM - midnight): add 1 day
-    manilaTime.setDate(manilaTime.getDate() + 1);
+  // Night shift maps to the day it STARTED
+  // So at 2 AM Dec 18, we're still in the Dec 17 night shift
+  if (hour < 5) {
+    manilaTime.setDate(manilaTime.getDate() - 1);
   }
-  // Morning part (midnight - 5AM): date is already the next day
-  // Day shift (5AM - 5PM): use current date
-  
   return format(manilaTime, 'yyyy-MM-dd');
 };
 
