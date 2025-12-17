@@ -180,14 +180,19 @@ export function CashVerification() {
         const shiftType = h.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
         const key = `${h.shift_date}-${shiftType}`;
         
+        const handoverEmployee = {
+          id: h.id,
+          date: h.shift_date,
+          shift_type: h.shift_type,
+          employee_id: h.handed_by_employee_id,
+          employee_name: h.employees?.name || 'Unknown',
+          cash_handed_over: h.cash_amount,
+          gcash_handed_over: h.gcash_amount,
+          cash_approved: false
+        };
+        
         if (!groupedVerifications[key]) {
           const register = registers?.find(r => r.date === h.shift_date && r.shift === shiftType);
-          
-          // Find all closed shifts for this date/shift to get employees
-          const relatedShifts = (closedShifts || []).filter((s: any) => {
-            const sType = s.type === 'night' || s.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
-            return s.date === h.shift_date && sType === shiftType;
-          });
           
           groupedVerifications[key] = {
             date: h.shift_date,
@@ -205,22 +210,14 @@ export function CashVerification() {
             totalExpected: 0,
             totalSubmitted: 0,
             difference: 0,
-            shifts: relatedShifts.map((s: any) => ({
-              id: s.id,
-              date: s.date,
-              shift_type: s.shift_type,
-              employee_id: s.employee_id,
-              employee_name: s.employees?.name || 'Unknown',
-              cash_handed_over: null,
-              gcash_handed_over: null,
-              cash_approved: s.cash_approved
-            })),
+            shifts: [handoverEmployee],
             expenses: [],
             registerId: register?.id,
             handoverId: h.id
           };
         } else {
-          // Add to existing - in case multiple handovers for same shift
+          // Add employee to existing group
+          groupedVerifications[key].shifts.push(handoverEmployee);
           groupedVerifications[key].cashSubmitted += h.cash_amount || 0;
           groupedVerifications[key].gcashSubmitted += h.gcash_amount || 0;
         }
