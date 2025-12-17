@@ -91,6 +91,11 @@ export function CashVerification() {
   const [editingExpense, setEditingExpense] = useState<PendingExpense | null>(null);
   const [editAmount, setEditAmount] = useState('');
   
+  // Edit shift cash state
+  const [editingShift, setEditingShift] = useState<PendingShift | null>(null);
+  const [editShiftCash, setEditShiftCash] = useState('');
+  const [editShiftGcash, setEditShiftGcash] = useState('');
+  
   // Add expense dialog state
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [addContext, setAddContext] = useState<{ date: string; shift: string; registerId?: string } | null>(null);
@@ -396,6 +401,55 @@ export function CashVerification() {
     }
   };
 
+  // Edit shift cash amounts
+  const startEditShift = (shift: PendingShift) => {
+    setEditingShift(shift);
+    setEditShiftCash((shift.cash_handed_over || 0).toString());
+    setEditShiftGcash((shift.gcash_handed_over || 0).toString());
+  };
+
+  const saveEditShift = async () => {
+    if (!editingShift) return;
+    const cash = parseInt(editShiftCash) || 0;
+    const gcash = parseInt(editShiftGcash) || 0;
+    try {
+      await supabase
+        .from('shifts')
+        .update({ cash_handed_over: cash, gcash_handed_over: gcash })
+        .eq('id', editingShift.id);
+      toast.success('Cash amounts updated');
+      setEditingShift(null);
+      loadPendingData();
+    } catch (e) {
+      toast.error('Failed to update');
+    }
+  };
+
+  // Detect пересортица (mis-categorization between Cash and GCash)
+  const detectMiscategorization = (v: PendingVerification): { detected: boolean; message: string } => {
+    const cashDiff = v.cashSubmitted - v.cashExpected;
+    const gcashDiff = v.gcashSubmitted - v.gcashExpected;
+    const threshold = 50; // minimum threshold
+    
+    // If one is positive and other is negative with similar absolute values
+    if ((cashDiff > threshold && gcashDiff < -threshold) || 
+        (cashDiff < -threshold && gcashDiff > threshold)) {
+      const swapAmount = Math.min(Math.abs(cashDiff), Math.abs(gcashDiff));
+      if (cashDiff > 0) {
+        return {
+          detected: true,
+          message: `Possible mis-categorization: ~₱${swapAmount.toLocaleString()} may have been recorded as Cash in Loyverse but was actually GCash`
+        };
+      } else {
+        return {
+          detected: true,
+          message: `Possible mis-categorization: ~₱${swapAmount.toLocaleString()} may have been recorded as GCash in Loyverse but was actually Cash`
+        };
+      }
+    }
+    return { detected: false, message: '' };
+  };
+
   // Delete expense
   const deleteExpense = async (id: string) => {
     try {
@@ -597,12 +651,31 @@ export function CashVerification() {
                 </div>
               )}
 
+              {/* Mis-categorization warning */}
+              {(() => {
+                const miscat = detectMiscategorization(v);
+                return miscat.detected && (
+                  <div className="p-3 rounded-lg border-2 border-amber-500/50 bg-amber-500/10">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-amber-600 text-sm">Possible Пересортица</p>
+                        <p className="text-xs text-muted-foreground mt-1">{miscat.message}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          💡 If this is the case, the totals may still be correct - just misallocated between Cash and GCash.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <Users className="w-3 h-3" /> Employee Submissions ({v.shifts.length})
                 </p>
                 {v.shifts.map(s => (
-                  <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg bg-background/60 text-sm">
+                  <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg bg-background/60 text-sm group">
                     <span className="flex-1 font-medium">{s.employee_name}</span>
                     <Badge variant="outline" className="text-green-600 border-green-500/30">
                       <Banknote className="w-3 h-3 mr-1" />
@@ -628,6 +701,14 @@ export function CashVerification() {
                         />
                       </div>
                     )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 opacity-0 group-hover:opacity-100 text-blue-500 hover:bg-blue-500/10"
+                      onClick={() => startEditShift(s)}
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
                     <Button
                       size="icon"
                       variant="ghost"
@@ -870,6 +951,51 @@ export function CashVerification() {
             </div>
             <Button className="w-full" onClick={addNewExpense}>
               <Plus className="w-4 h-4 mr-2" />Add Expense
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Shift Cash Dialog */}
+      <Dialog open={!!editingShift} onOpenChange={(open) => !open && setEditingShift(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4" />
+              Edit Cash Handover
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {editingShift?.employee_name}
+            </p>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1">
+                <Banknote className="w-3 h-3 text-green-500" /> Cash
+              </label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editShiftCash}
+                onChange={e => setEditShiftCash(e.target.value)}
+                className="text-lg"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1">
+                <Smartphone className="w-3 h-3 text-blue-500" /> GCash
+              </label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={editShiftGcash}
+                onChange={e => setEditShiftGcash(e.target.value)}
+                className="text-lg"
+              />
+            </div>
+            <Button className="w-full" onClick={saveEditShift}>
+              Save
             </Button>
           </div>
         </DialogContent>
