@@ -312,12 +312,14 @@ export function CashVerification() {
       setShortageInputs(inputs);
 
       // Build approved history from approved cash_handovers
-      const { data: approvedHandovers } = await supabase
+      const { data: approvedHandovers, error: handoverError } = await supabase
         .from('cash_handovers')
         .select('*, employees:handed_by_employee_id(name)')
         .eq('approved', true)
         .order('shift_date', { ascending: false })
         .limit(30);
+      
+      console.log('Approved handovers loaded:', approvedHandovers?.length || 0, approvedHandovers, 'Error:', handoverError);
       
       const historyMap: Record<string, ApprovedHistory> = {};
       
