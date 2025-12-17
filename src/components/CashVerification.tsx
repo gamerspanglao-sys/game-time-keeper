@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
   Check, X, AlertTriangle, TrendingUp, TrendingDown, 
-  Banknote, Smartphone, Loader2, Clock, Users, Pencil, Trash2, Plus
+  Banknote, Smartphone, Loader2, Clock, Users, Pencil, Trash2, Plus, RefreshCw
 } from 'lucide-react';
 
 interface PendingShift {
@@ -252,6 +252,16 @@ export function CashVerification() {
   };
 
   useEffect(() => { loadPendingData(); }, []);
+
+  // Realtime subscription
+  useEffect(() => {
+    const channel = supabase.channel('cash-verification')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, loadPendingData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, loadPendingData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_register' }, loadPendingData)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const rejectShift = async (shiftId: string) => {
     try {
@@ -514,6 +524,15 @@ export function CashVerification() {
         <CardContent className="py-8 text-center text-muted-foreground">
           <Check className="w-8 h-8 mx-auto mb-2 text-green-500" />
           <p>No pending approvals</p>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => { setLoading(true); loadPendingData(); }}
+            className="mt-3"
+          >
+            <RefreshCw className="w-4 h-4 mr-1" />
+            Refresh
+          </Button>
         </CardContent>
       </Card>
     );
@@ -521,6 +540,23 @@ export function CashVerification() {
 
   return (
     <div className="space-y-4">
+      {/* Header with refresh */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {pendingVerifications.length} pending verification{pendingVerifications.length !== 1 ? 's' : ''}
+        </p>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => { setLoading(true); loadPendingData(); }}
+          disabled={loading}
+          className="h-8"
+        >
+          <RefreshCw className={cn("w-4 h-4 mr-1", loading && "animate-spin")} />
+          Refresh
+        </Button>
+      </div>
+      
       {/* Cash Handover Verifications */}
       {pendingVerifications.map(v => {
         const key = `${v.date}-${v.shift}`;
