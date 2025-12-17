@@ -139,6 +139,12 @@ export function CashVerification() {
   const [editingHistory, setEditingHistory] = useState<string | null>(null);
   const [editHistoryCash, setEditHistoryCash] = useState('');
   const [editHistoryGcash, setEditHistoryGcash] = useState('');
+  
+  // Edit submitted amounts state
+  const [editingSubmitted, setEditingSubmitted] = useState<string | null>(null);
+  const [editCashSubmitted, setEditCashSubmitted] = useState('');
+  const [editGcashSubmitted, setEditGcashSubmitted] = useState('');
+  const [editChangeFundLeaving, setEditChangeFundLeaving] = useState('');
 
   // Helper to get previous shift date/type
   const getPreviousShift = (date: string, shift: string): { date: string; shift: string } => {
@@ -708,6 +714,42 @@ export function CashVerification() {
     }
   };
 
+  // Start editing submitted amounts
+  const startEditSubmitted = (v: PendingVerification) => {
+    const key = `${v.date}-${v.shift}`;
+    setEditingSubmitted(key);
+    setEditCashSubmitted(v.cashSubmitted.toString());
+    setEditGcashSubmitted(v.gcashSubmitted.toString());
+    setEditChangeFundLeaving(v.changeFundLeaving.toString());
+  };
+
+  // Save edited submitted amounts
+  const saveEditedSubmitted = async (v: PendingVerification) => {
+    const cashAmount = parseInt(editCashSubmitted) || 0;
+    const gcashAmount = parseInt(editGcashSubmitted) || 0;
+    const changeFund = parseInt(editChangeFundLeaving) || 0;
+    
+    try {
+      // Update cash_handovers record
+      if (v.handoverId) {
+        await supabase
+          .from('cash_handovers')
+          .update({
+            cash_amount: cashAmount,
+            gcash_amount: gcashAmount,
+            change_fund_amount: changeFund
+          })
+          .eq('id', v.handoverId);
+      }
+      
+      toast.success('Amounts updated');
+      setEditingSubmitted(null);
+      loadPendingData();
+    } catch (e) {
+      toast.error('Failed to update');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-32">
@@ -1089,24 +1131,96 @@ export function CashVerification() {
 
               {/* Staff Submitted + Change Fund Left */}
               <div className="p-2 rounded-lg bg-background/80 space-y-2">
-                <p className="text-[10px] text-muted-foreground mb-1">Staff Accounted For</p>
-                <div className="grid grid-cols-3 gap-1 text-xs">
-                  <span className="text-muted-foreground">Submitted:</span>
-                  <span className="text-center">
-                    <Banknote className="w-3 h-3 inline text-green-500 mr-1" />₱{v.cashSubmitted.toLocaleString()}
-                  </span>
-                  <span className="text-center">
-                    <Smartphone className="w-3 h-3 inline text-blue-500 mr-1" />₱{v.gcashSubmitted.toLocaleString()}
-                  </span>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-muted-foreground">Staff Accounted For</p>
+                  {editingSubmitted !== key ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5"
+                      onClick={() => startEditSubmitted(v)}
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                  ) : (
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-green-500"
+                        onClick={() => saveEditedSubmitted(v)}
+                      >
+                        <Check className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-red-500"
+                        onClick={() => setEditingSubmitted(null)}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                <div className="grid grid-cols-3 gap-1 text-xs">
-                  <span className="text-muted-foreground">+ Change fund left:</span>
-                  <span className="text-center font-medium text-amber-600">₱{v.changeFundLeaving.toLocaleString()}</span>
-                  <span className="text-center text-muted-foreground">—</span>
-                </div>
+                
+                {editingSubmitted === key ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-1 text-xs items-center">
+                      <span className="text-muted-foreground">Submitted Cash:</span>
+                      <Input
+                        type="number"
+                        className="h-6 text-xs text-center col-span-2"
+                        value={editCashSubmitted}
+                        onChange={e => setEditCashSubmitted(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-xs items-center">
+                      <span className="text-muted-foreground">Submitted GCash:</span>
+                      <Input
+                        type="number"
+                        className="h-6 text-xs text-center col-span-2"
+                        value={editGcashSubmitted}
+                        onChange={e => setEditGcashSubmitted(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-xs items-center">
+                      <span className="text-muted-foreground">Change fund left:</span>
+                      <Input
+                        type="number"
+                        className="h-6 text-xs text-center col-span-2"
+                        value={editChangeFundLeaving}
+                        onChange={e => setEditChangeFundLeaving(e.target.value)}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-1 text-xs">
+                      <span className="text-muted-foreground">Submitted:</span>
+                      <span className="text-center">
+                        <Banknote className="w-3 h-3 inline text-green-500 mr-1" />₱{v.cashSubmitted.toLocaleString()}
+                      </span>
+                      <span className="text-center">
+                        <Smartphone className="w-3 h-3 inline text-blue-500 mr-1" />₱{v.gcashSubmitted.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-xs">
+                      <span className="text-muted-foreground">+ Change fund left:</span>
+                      <span className="text-center font-medium text-amber-600">₱{v.changeFundLeaving.toLocaleString()}</span>
+                      <span className="text-center text-muted-foreground">—</span>
+                    </div>
+                  </>
+                )}
+                
                 <div className="grid grid-cols-3 gap-1 text-sm pt-1 border-t border-border font-bold">
                   <span>= Total Accounted:</span>
-                  <span className="text-center col-span-2">₱{v.totalAccountedFor.toLocaleString()}</span>
+                  <span className="text-center col-span-2">
+                    ₱{editingSubmitted === key 
+                      ? ((parseInt(editCashSubmitted) || 0) + (parseInt(editGcashSubmitted) || 0) + (parseInt(editChangeFundLeaving) || 0)).toLocaleString()
+                      : v.totalAccountedFor.toLocaleString()
+                    }
+                  </span>
                 </div>
               </div>
 
