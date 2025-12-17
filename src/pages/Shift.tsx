@@ -247,15 +247,17 @@ export default function Shift() {
 
   const loadShiftExpensesWithShifts = async (shifts: ActiveShift[]) => {
     try {
-      console.log('Loading expenses for:', { currentDate, currentShiftType });
+      // If there are active shifts, use their shift type; otherwise use calculated type
+      const effectiveShiftType = shifts.length > 0 ? shifts[0].type : currentShiftType;
       
-      // Load ALL shift expenses for current date and shift type
-      // This includes both active and closed shifts
+      console.log('Loading expenses for:', { currentDate, effectiveShiftType, activeShiftsCount: shifts.length });
+      
+      // Load ALL shift expenses for current date and effective shift type
       const { data, error } = await supabase
         .from('cash_expenses')
         .select('*')
         .eq('date', currentDate)
-        .eq('shift', currentShiftType)
+        .eq('shift', effectiveShiftType)
         .eq('expense_type', 'shift')
         .order('created_at', { ascending: false });
       
