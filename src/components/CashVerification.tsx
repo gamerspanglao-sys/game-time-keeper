@@ -924,20 +924,22 @@ export function CashVerification() {
         </Card>
       )}
 
-      {/* Approved History */}
-      {approvedHistory.length > 0 && (
-        <Card>
-          <CardHeader className="py-3 pb-2 cursor-pointer" onClick={() => setShowHistory(!showHistory)}>
-            <CardTitle className="text-sm flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <History className="w-4 h-4 text-muted-foreground" />
-                Confirmation History ({approvedHistory.length})
-              </span>
-              {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </CardTitle>
-          </CardHeader>
-          {showHistory && (
-            <CardContent className="space-y-2 pt-0">
+      {/* Approved History - Always show */}
+      <Card>
+        <CardHeader className="py-3 pb-2 cursor-pointer" onClick={() => setShowHistory(!showHistory)}>
+          <CardTitle className="text-sm flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <History className="w-4 h-4 text-muted-foreground" />
+              Confirmation History ({approvedHistory.length})
+            </span>
+            {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </CardTitle>
+        </CardHeader>
+        {showHistory && (
+          <CardContent className="space-y-2 pt-0">
+            {approvedHistory.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No approved shifts yet</p>
+            )}
               {approvedHistory.map(h => {
                 const totalSubmitted = h.cashSubmitted + h.gcashSubmitted;
                 const totalActual = h.cashActual + h.gcashActual;
@@ -1004,7 +1006,6 @@ export function CashVerification() {
             </CardContent>
           )}
         </Card>
-      )}
 
       <Dialog open={!!editingExpense} onOpenChange={(open) => !open && setEditingExpense(null)}>
         <DialogContent className="max-w-xs">
