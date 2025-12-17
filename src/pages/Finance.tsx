@@ -175,11 +175,18 @@ export default function Finance() {
   const shiftGcashExp = currentExpenses.filter(e => e.expense_type === 'shift' && e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
   const totalShiftExpenses = shiftCashExp + shiftGcashExp;
   
+  // Current shift balance expenses (for display)
   const balanceCashExp = currentExpenses.filter(e => e.expense_type === 'balance' && e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
   const balanceGcashExp = currentExpenses.filter(e => e.expense_type === 'balance' && e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
   
-  const storageCash = (currentRecord?.cash_actual || 0) - balanceCashExp;
-  const storageGcash = (currentRecord?.gcash_actual || 0) - balanceGcashExp;
+  // CUMULATIVE Storage: ALL received cash - ALL balance expenses (persists across shifts)
+  const totalCashReceived = records.reduce((sum, r) => sum + (r.cash_actual || 0), 0);
+  const totalGcashReceived = records.reduce((sum, r) => sum + (r.gcash_actual || 0), 0);
+  const totalBalanceCashExp = expenses.filter(e => e.expense_type === 'balance' && e.payment_source === 'cash').reduce((s, e) => s + e.amount, 0);
+  const totalBalanceGcashExp = expenses.filter(e => e.expense_type === 'balance' && e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
+  
+  const storageCash = totalCashReceived - totalBalanceCashExp;
+  const storageGcash = totalGcashReceived - totalBalanceGcashExp;
   
   const cashDiscrepancy = (currentRecord?.cash_actual || 0) - employeeCashSubmitted;
   const gcashDiscrepancy = (currentRecord?.gcash_actual || 0) - employeeGcashSubmitted;
@@ -562,15 +569,18 @@ export default function Finance() {
             <Card className="border-green-500/20 bg-green-500/5">
               <CardContent className="p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2"><Banknote className="w-4 h-4 text-green-500" /><span className="text-xs text-muted-foreground">Storage</span></div>
+                  <div className="flex items-center gap-2"><Banknote className="w-4 h-4 text-green-500" /><span className="text-xs text-muted-foreground">Cash Storage</span></div>
                   <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-green-500/20" onClick={() => openExpenseDialog('cash', 'balance')}><ArrowDownCircle className="w-4 h-4 text-green-500" /></Button>
                 </div>
                 <p className="text-xl font-bold text-green-500">₱{storageCash.toLocaleString()}</p>
                 <div className="text-[10px] text-muted-foreground space-y-0.5 mt-1">
-                  <div className="flex justify-between"><span>Staff:</span><span>₱{employeeCashSubmitted.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Received:</span><span>₱{(currentRecord?.cash_actual || 0).toLocaleString()}</span></div>
-                  {cashDiscrepancy !== 0 && <div className={cn("flex justify-between font-medium", cashDiscrepancy > 0 ? "text-green-600" : "text-red-500")}><span>Diff:</span><span>{cashDiscrepancy > 0 ? '+' : ''}₱{cashDiscrepancy.toLocaleString()}</span></div>}
-                  {balanceCashExp > 0 && <div className="flex justify-between text-orange-500"><span>Expenses:</span><span>-₱{balanceCashExp.toLocaleString()}</span></div>}
+                  <div className="flex justify-between"><span>Total received:</span><span>₱{totalCashReceived.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-orange-500"><span>Total expenses:</span><span>-₱{totalBalanceCashExp.toLocaleString()}</span></div>
+                  {(currentRecord?.cash_actual || 0) > 0 && (
+                    <div className="flex justify-between border-t border-border/30 pt-0.5 mt-0.5">
+                      <span>This shift:</span><span>+₱{(currentRecord?.cash_actual || 0).toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -578,15 +588,18 @@ export default function Finance() {
             <Card className="border-blue-500/20 bg-blue-500/5">
               <CardContent className="p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2"><Smartphone className="w-4 h-4 text-blue-500" /><span className="text-xs text-muted-foreground">GCash</span></div>
+                  <div className="flex items-center gap-2"><Smartphone className="w-4 h-4 text-blue-500" /><span className="text-xs text-muted-foreground">GCash Storage</span></div>
                   <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-blue-500/20" onClick={() => openExpenseDialog('gcash', 'balance')}><ArrowDownCircle className="w-4 h-4 text-blue-500" /></Button>
                 </div>
                 <p className="text-xl font-bold text-blue-500">₱{storageGcash.toLocaleString()}</p>
                 <div className="text-[10px] text-muted-foreground space-y-0.5 mt-1">
-                  <div className="flex justify-between"><span>Staff:</span><span>₱{employeeGcashSubmitted.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Received:</span><span>₱{(currentRecord?.gcash_actual || 0).toLocaleString()}</span></div>
-                  {gcashDiscrepancy !== 0 && <div className={cn("flex justify-between font-medium", gcashDiscrepancy > 0 ? "text-green-600" : "text-red-500")}><span>Diff:</span><span>{gcashDiscrepancy > 0 ? '+' : ''}₱{gcashDiscrepancy.toLocaleString()}</span></div>}
-                  {balanceGcashExp > 0 && <div className="flex justify-between text-orange-500"><span>Expenses:</span><span>-₱{balanceGcashExp.toLocaleString()}</span></div>}
+                  <div className="flex justify-between"><span>Total received:</span><span>₱{totalGcashReceived.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-orange-500"><span>Total expenses:</span><span>-₱{totalBalanceGcashExp.toLocaleString()}</span></div>
+                  {(currentRecord?.gcash_actual || 0) > 0 && (
+                    <div className="flex justify-between border-t border-border/30 pt-0.5 mt-0.5">
+                      <span>This shift:</span><span>+₱{(currentRecord?.gcash_actual || 0).toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
