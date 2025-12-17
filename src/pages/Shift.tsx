@@ -156,6 +156,7 @@ export default function Shift() {
   const [previousHandover, setPreviousHandover] = useState<CashHandover | null>(null);
   const [startingShift, setStartingShift] = useState(false);
   const [cashVerified, setCashVerified] = useState(false);
+  const [changeFundReceived, setChangeFundReceived] = useState('');
 
   // Effective shift type based on active shifts
   const effectiveShiftType = activeShifts.length > 0 ? activeShifts[0].type : getCurrentShiftType();
@@ -342,12 +343,16 @@ export default function Shift() {
           comment: prevHandover.comment,
           employee_name: (prevHandover.employees as any)?.name
         });
+        // Pre-fill with expected amount
+        setChangeFundReceived(prevHandover.change_fund_amount?.toString() || '2000');
       } else {
         setPreviousHandover(null);
+        setChangeFundReceived('2000'); // Default
       }
     } catch (e) {
       console.error(e);
       setPreviousHandover(null);
+      setChangeFundReceived('2000');
     }
     
     setShowStartShiftDialog(true);
@@ -357,6 +362,12 @@ export default function Shift() {
     if (!pendingStartEmployee) return;
     if (!cashVerified) {
       toast.error('Please verify cash amounts first');
+      return;
+    }
+    
+    const receivedAmount = parseInt(changeFundReceived) || 0;
+    if (receivedAmount <= 0) {
+      toast.error('Enter valid change fund received amount');
       return;
     }
     
@@ -374,7 +385,8 @@ export default function Shift() {
         date: newShiftDate,
         shift_start: new Date().toISOString(),
         type: newShiftType,
-        status: 'open'
+        status: 'open',
+        change_fund_received: receivedAmount
       });
 
       if (error) throw error;
@@ -1243,6 +1255,23 @@ export default function Shift() {
               </div>
             )}
 
+            {/* Change Fund Received Input */}
+            <div className="p-3 rounded-lg bg-primary/10 border border-primary/30 space-y-2">
+              <label className="text-xs font-semibold text-primary flex items-center gap-2">
+                💰 Change Fund Received (Размен получен)
+              </label>
+              <Input
+                type="number"
+                value={changeFundReceived}
+                onChange={e => setChangeFundReceived(e.target.value)}
+                placeholder="Enter amount received"
+                className="text-lg font-bold h-12"
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter the actual change fund you received from the previous shift
+              </p>
+            </div>
+
             <div className="flex items-start space-x-3 p-3 bg-muted/50 rounded-lg">
               <Checkbox 
                 id="verify-cash" 
@@ -1258,7 +1287,7 @@ export default function Shift() {
             <div className="flex flex-col gap-2">
               <Button 
                 onClick={handleStartShift} 
-                disabled={startingShift || !cashVerified}
+                disabled={startingShift || !cashVerified || !changeFundReceived}
                 className="w-full bg-green-500 hover:bg-green-600"
               >
                 <CheckCircle2 className="w-4 h-4 mr-2" />
@@ -1270,6 +1299,7 @@ export default function Shift() {
                   setShowStartShiftDialog(false);
                   setPendingStartEmployee(null);
                   setCashVerified(false);
+                  setChangeFundReceived('');
                 }}
                 className="w-full text-muted-foreground"
               >

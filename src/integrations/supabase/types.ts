@@ -433,6 +433,7 @@ export type Database = {
           cash_difference: number | null
           cash_handed_over: number | null
           cash_shortage: number | null
+          change_fund_received: number | null
           created_at: string
           date: string
           employee_id: string
@@ -456,6 +457,7 @@ export type Database = {
           cash_difference?: number | null
           cash_handed_over?: number | null
           cash_shortage?: number | null
+          change_fund_received?: number | null
           created_at?: string
           date?: string
           employee_id: string
@@ -479,6 +481,7 @@ export type Database = {
           cash_difference?: number | null
           cash_handed_over?: number | null
           cash_shortage?: number | null
+          change_fund_received?: number | null
           created_at?: string
           date?: string
           employee_id?: string
