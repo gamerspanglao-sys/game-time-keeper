@@ -62,12 +62,13 @@ interface PendingVerification {
   gcashSubmitted: number;
   totalExpected: number;
   totalSubmitted: number;
+  totalAccountedFor: number; // Submitted + ChangeFundLeaving
   difference: number;
   shifts: PendingShift[];
   expenses: PendingExpense[];
   registerId?: string;
   handoverId?: string;
-  changeFundLeaving?: number; // What they're leaving for next shift
+  changeFundLeaving: number; // What they're leaving for next shift
 }
 
 const CATEGORIES = [
@@ -99,6 +100,7 @@ interface ApprovedHistory {
   gcashSubmitted: number;
   cashActual: number;
   gcashActual: number;
+  totalAccountedFor: number; // Submitted + ChangeFundLeft
   difference: number;
   shortage: number;
   changeFundLeft: number;
@@ -278,6 +280,7 @@ export function CashVerification() {
             gcashSubmitted: h.gcash_amount || 0,
             totalExpected: 0,
             totalSubmitted: 0,
+            totalAccountedFor: 0,
             difference: 0,
             shifts: [handoverEmployee],
             expenses: [],
@@ -313,7 +316,10 @@ export function CashVerification() {
         v.gcashExpected = v.carryoverGcash + v.loyverseGcash - v.expensesGcash;
         v.totalExpected = v.cashExpected + v.gcashExpected;
         v.totalSubmitted = v.cashSubmitted + v.gcashSubmitted;
-        v.difference = v.totalSubmitted - v.totalExpected;
+        // Total accounted = cash submitted + gcash submitted + change fund left for next shift
+        v.totalAccountedFor = v.cashSubmitted + v.gcashSubmitted + v.changeFundLeaving;
+        // Difference = what was accounted for minus what was expected
+        v.difference = v.totalAccountedFor - v.totalExpected;
       });
 
       setPendingVerifications(Object.values(groupedVerifications));
@@ -379,6 +385,7 @@ export function CashVerification() {
             gcashSubmitted: h.gcash_amount || 0,
             cashActual: register?.cash_actual || 0,
             gcashActual: register?.gcash_actual || 0,
+            totalAccountedFor: 0, // Will be calculated below
             difference: 0,
             shortage: 0,
             changeFundLeft: h.change_fund_amount || 0
@@ -402,9 +409,12 @@ export function CashVerification() {
         }
       });
 
-      // Calculate differences
+      // Calculate totalAccountedFor and differences
       Object.values(historyMap).forEach(h => {
-        h.difference = (h.cashActual + h.gcashActual) - (h.cashSubmitted + h.gcashSubmitted);
+        // Total accounted = submitted + change fund left for next shift
+        h.totalAccountedFor = h.cashSubmitted + h.gcashSubmitted + h.changeFundLeft;
+        // Difference = accounted vs expected
+        h.difference = h.totalAccountedFor - (h.cashExpected + h.gcashExpected);
       });
 
       // Sort by date descending
@@ -766,10 +776,7 @@ export function CashVerification() {
             const key = `${h.date}-${h.shift}`;
             const isExpanded = expandedHistory.has(key);
             const isEditing = editingHistory === key;
-            const totalSubmitted = h.cashSubmitted + h.gcashSubmitted;
-            const totalActual = h.cashActual + h.gcashActual;
             const totalExpected = h.cashExpected + h.gcashExpected;
-            const expectedDiff = totalSubmitted - totalExpected;
             
             return (
               <div key={key} className="rounded-lg bg-muted/30 text-sm overflow-hidden">
@@ -792,9 +799,9 @@ export function CashVerification() {
                       )}
                       <Badge variant="outline" className={cn(
                         "text-xs",
-                        expectedDiff >= 0 ? "text-green-500 border-green-500/30" : "text-red-500 border-red-500/30"
+                        h.difference >= 0 ? "text-green-500 border-green-500/30" : "text-red-500 border-red-500/30"
                       )}>
-                        {expectedDiff >= 0 ? '+' : ''}₱{expectedDiff.toLocaleString()}
+                        {h.difference >= 0 ? '+' : ''}₱{h.difference.toLocaleString()}
                       </Badge>
                     </div>
                   </div>
@@ -804,12 +811,12 @@ export function CashVerification() {
                       <p>₱{totalExpected.toLocaleString()}</p>
                     </div>
                     <div>
-                      <p className="opacity-70">Submitted</p>
-                      <p>₱{totalSubmitted.toLocaleString()}</p>
+                      <p className="opacity-70">Accounted</p>
+                      <p>₱{h.totalAccountedFor.toLocaleString()}</p>
                     </div>
                     <div>
-                      <p className="opacity-70">Received</p>
-                      <p>₱{totalActual.toLocaleString()}</p>
+                      <p className="opacity-70">Change Left</p>
+                      <p>₱{h.changeFundLeft.toLocaleString()}</p>
                     </div>
                   </div>
                 </div>
@@ -883,58 +890,32 @@ export function CashVerification() {
                       </div>
                     </div>
                     
-                    {/* Submitted vs Received */}
+                    {/* Submitted + Change Fund = Accounted */}
                     <div className="space-y-1.5">
-                      <p className="text-xs font-medium text-muted-foreground">Submitted vs Received</p>
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div className="bg-background/50 p-2 rounded space-y-1">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Submitted Cash</span>
-                            <span>₱{h.cashSubmitted.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Submitted GCash</span>
-                            <span>₱{h.gcashSubmitted.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between border-t border-border/50 pt-1">
-                            <span className="text-muted-foreground">Change fund left</span>
-                            <span>₱{h.changeFundLeft.toLocaleString()}</span>
-                          </div>
+                      <p className="text-xs font-medium text-muted-foreground">Total Accounted For</p>
+                      <div className="bg-background/50 p-2 rounded space-y-1 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Submitted Cash</span>
+                          <span>₱{h.cashSubmitted.toLocaleString()}</span>
                         </div>
-                        <div className="bg-background/50 p-2 rounded space-y-1">
-                          {isEditing ? (
-                            <>
-                              <div className="flex items-center gap-2">
-                                <span className="text-muted-foreground text-xs">Cash:</span>
-                                <Input 
-                                  value={editHistoryCash}
-                                  onChange={e => setEditHistoryCash(e.target.value)}
-                                  className="h-6 text-xs w-20"
-                                  type="number"
-                                />
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-muted-foreground text-xs">GCash:</span>
-                                <Input 
-                                  value={editHistoryGcash}
-                                  onChange={e => setEditHistoryGcash(e.target.value)}
-                                  className="h-6 text-xs w-20"
-                                  type="number"
-                                />
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Received Cash</span>
-                                <span>₱{h.cashActual.toLocaleString()}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">Received GCash</span>
-                                <span>₱{h.gcashActual.toLocaleString()}</span>
-                              </div>
-                            </>
-                          )}
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Submitted GCash</span>
+                          <span>₱{h.gcashSubmitted.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">+ Change fund left</span>
+                          <span className="text-amber-600 font-medium">₱{h.changeFundLeft.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-border/50 pt-1 font-bold">
+                          <span>= Total Accounted</span>
+                          <span>₱{h.totalAccountedFor.toLocaleString()}</span>
+                        </div>
+                        <div className={cn(
+                          "flex justify-between pt-1 font-bold",
+                          h.difference >= 0 ? "text-green-500" : "text-red-500"
+                        )}>
+                          <span>vs Expected ₱{(h.cashExpected + h.gcashExpected).toLocaleString()}</span>
+                          <span>{h.difference >= 0 ? '+' : ''}₱{h.difference.toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
@@ -943,41 +924,6 @@ export function CashVerification() {
                     <div className="text-xs text-muted-foreground flex items-center gap-2">
                       <Users className="w-3 h-3" />
                       <span>{h.employees.join(', ')}</span>
-                    </div>
-                    
-                    {/* Edit button */}
-                    <div className="flex gap-2 pt-1">
-                      {isEditing ? (
-                        <>
-                          <Button 
-                            size="sm" 
-                            variant="default"
-                            className="h-7 text-xs"
-                            onClick={() => saveEditHistory(h)}
-                          >
-                            <Check className="w-3 h-3 mr-1" />
-                            Save
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="ghost"
-                            className="h-7 text-xs"
-                            onClick={() => setEditingHistory(null)}
-                          >
-                            Cancel
-                          </Button>
-                        </>
-                      ) : (
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          className="h-7 text-xs"
-                          onClick={(e) => { e.stopPropagation(); startEditHistory(h); }}
-                        >
-                          <Pencil className="w-3 h-3 mr-1" />
-                          Edit Received
-                        </Button>
-                      )}
                     </div>
                   </div>
                 )}
@@ -1141,16 +1087,27 @@ export function CashVerification() {
                 <p className="font-bold text-right pt-1">Total Expected: ₱{v.totalExpected.toLocaleString()}</p>
               </div>
 
-              {/* Staff Submitted */}
-              <div className="p-2 rounded-lg bg-background/80">
-                <p className="text-[10px] text-muted-foreground mb-1">Staff Submitted</p>
-                <div className="flex items-center gap-2 text-sm">
-                  <Banknote className="w-3 h-3 text-green-500" />
-                  <span>₱{v.cashSubmitted.toLocaleString()}</span>
-                  <Smartphone className="w-3 h-3 text-blue-500 ml-2" />
-                  <span>₱{v.gcashSubmitted.toLocaleString()}</span>
+              {/* Staff Submitted + Change Fund Left */}
+              <div className="p-2 rounded-lg bg-background/80 space-y-2">
+                <p className="text-[10px] text-muted-foreground mb-1">Staff Accounted For</p>
+                <div className="grid grid-cols-3 gap-1 text-xs">
+                  <span className="text-muted-foreground">Submitted:</span>
+                  <span className="text-center">
+                    <Banknote className="w-3 h-3 inline text-green-500 mr-1" />₱{v.cashSubmitted.toLocaleString()}
+                  </span>
+                  <span className="text-center">
+                    <Smartphone className="w-3 h-3 inline text-blue-500 mr-1" />₱{v.gcashSubmitted.toLocaleString()}
+                  </span>
                 </div>
-                <p className="font-bold mt-1 text-sm">Total: ₱{v.totalSubmitted.toLocaleString()}</p>
+                <div className="grid grid-cols-3 gap-1 text-xs">
+                  <span className="text-muted-foreground">+ Change fund left:</span>
+                  <span className="text-center font-medium text-amber-600">₱{v.changeFundLeaving.toLocaleString()}</span>
+                  <span className="text-center text-muted-foreground">—</span>
+                </div>
+                <div className="grid grid-cols-3 gap-1 text-sm pt-1 border-t border-border font-bold">
+                  <span>= Total Accounted:</span>
+                  <span className="text-center col-span-2">₱{v.totalAccountedFor.toLocaleString()}</span>
+                </div>
               </div>
 
               {/* Discrepancy */}
