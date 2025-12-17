@@ -802,9 +802,26 @@ export function CashVerification() {
                 {/* Expanded content */}
                 {isExpanded && (
                   <div className="px-3 pb-3 pt-1 border-t border-border/30 space-y-3">
+                    {/* Change Fund Summary - PROMINENT */}
+                    <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 space-y-2">
+                      <p className="text-xs font-semibold text-primary">💰 Change Fund (Размен)</p>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Received at start</p>
+                          <p className="font-bold text-lg">₱{h.carryoverCash.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">(from previous shift)</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Left at end</p>
+                          <p className="font-bold text-lg">₱{h.changeFundLeft.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">(for next shift)</p>
+                        </div>
+                      </div>
+                    </div>
+                    
                     {/* Calculation breakdown */}
                     <div className="space-y-1.5">
-                      <p className="text-xs font-medium text-muted-foreground">Calculation Breakdown</p>
+                      <p className="text-xs font-medium text-muted-foreground">Cash Calculation</p>
                       <div className="grid grid-cols-2 gap-3 text-xs">
                         <div className="space-y-1 bg-background/50 p-2 rounded">
                           <p className="font-medium flex items-center gap-1">
@@ -812,7 +829,7 @@ export function CashVerification() {
                           </p>
                           <div className="space-y-0.5 text-muted-foreground">
                             <div className="flex justify-between">
-                              <span>Carryover (from prev)</span>
+                              <span>Change fund received</span>
                               <span className="text-foreground">₱{h.carryoverCash.toLocaleString()}</span>
                             </div>
                             <div className="flex justify-between">
@@ -824,7 +841,7 @@ export function CashVerification() {
                               <span className="text-foreground">₱{h.expensesCash.toLocaleString()}</span>
                             </div>
                             <div className="flex justify-between border-t border-border/50 pt-1 font-medium">
-                              <span>= Expected</span>
+                              <span>= Expected total</span>
                               <span className="text-foreground">₱{h.cashExpected.toLocaleString()}</span>
                             </div>
                           </div>
@@ -864,6 +881,10 @@ export function CashVerification() {
                             <span className="text-muted-foreground">Submitted GCash</span>
                             <span>₱{h.gcashSubmitted.toLocaleString()}</span>
                           </div>
+                          <div className="flex justify-between border-t border-border/50 pt-1">
+                            <span className="text-muted-foreground">Change fund left</span>
+                            <span>₱{h.changeFundLeft.toLocaleString()}</span>
+                          </div>
                         </div>
                         <div className="bg-background/50 p-2 rounded space-y-1">
                           {isEditing ? (
@@ -902,14 +923,6 @@ export function CashVerification() {
                         </div>
                       </div>
                     </div>
-                    
-                    {/* Change fund left */}
-                    {h.changeFundLeft > 0 && (
-                      <div className="text-xs flex items-center gap-2 text-muted-foreground">
-                        <span>Change fund left for next shift:</span>
-                        <span className="font-medium text-foreground">₱{h.changeFundLeft.toLocaleString()}</span>
-                      </div>
-                    )}
                     
                     {/* Staff */}
                     <div className="text-xs text-muted-foreground flex items-center gap-2">
