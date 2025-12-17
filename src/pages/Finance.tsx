@@ -577,8 +577,8 @@ export default function Finance() {
                 </div>
                 <p className="text-2xl font-bold text-green-500 mb-2">₱{storageCash.toLocaleString()}</p>
                 <div className="text-[10px] text-muted-foreground space-y-1">
-                  <div className="flex justify-between"><span>Получено:</span><span className="text-green-500">+₱{totalCashReceived.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Потрачено:</span><span className="text-orange-500">-₱{totalBalanceCashExp.toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>Received:</span><span className="text-green-500">+₱{totalCashReceived.toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>Spent:</span><span className="text-orange-500">-₱{totalBalanceCashExp.toLocaleString()}</span></div>
                 </div>
                 <Button 
                   size="sm" 
@@ -587,7 +587,7 @@ export default function Finance() {
                   onClick={() => openExpenseDialog('cash', 'balance')}
                 >
                   <Minus className="w-3 h-3 mr-1" />
-                  Списать
+                  Deduct
                 </Button>
               </CardContent>
             </Card>
@@ -602,8 +602,8 @@ export default function Finance() {
                 </div>
                 <p className="text-2xl font-bold text-blue-500 mb-2">₱{storageGcash.toLocaleString()}</p>
                 <div className="text-[10px] text-muted-foreground space-y-1">
-                  <div className="flex justify-between"><span>Получено:</span><span className="text-blue-500">+₱{totalGcashReceived.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Потрачено:</span><span className="text-orange-500">-₱{totalBalanceGcashExp.toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>Received:</span><span className="text-blue-500">+₱{totalGcashReceived.toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>Spent:</span><span className="text-orange-500">-₱{totalBalanceGcashExp.toLocaleString()}</span></div>
                 </div>
                 <Button 
                   size="sm" 
@@ -612,7 +612,7 @@ export default function Finance() {
                   onClick={() => openExpenseDialog('gcash', 'balance')}
                 >
                   <Minus className="w-3 h-3 mr-1" />
-                  Списать
+                  Deduct
                 </Button>
               </CardContent>
             </Card>
@@ -620,52 +620,54 @@ export default function Finance() {
 
           {/* Storage Expenses History */}
           {expenses.filter(e => e.expense_type === 'balance').length > 0 && (
-            <Card className="border-border/50">
-              <CardHeader className="py-2 px-3">
-                <CardTitle className="text-xs flex items-center justify-between">
+            <Card className="border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-transparent">
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-sm flex items-center justify-between">
                   <span className="flex items-center gap-2">
-                    <ShoppingCart className="w-3.5 h-3.5 text-orange-500" />
-                    <span className="text-muted-foreground">Закупки и зарплаты</span>
+                    <div className="w-7 h-7 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                      <ShoppingCart className="w-4 h-4 text-orange-500" />
+                    </div>
+                    <span>Purchases & Salaries</span>
                   </span>
-                  <Badge className="bg-orange-500/20 text-orange-500 border-0 text-[10px]">
+                  <Badge className="bg-orange-500/20 text-orange-500 border-0 font-semibold">
                     -₱{(totalBalanceCashExp + totalBalanceGcashExp).toLocaleString()}
                   </Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="px-3 py-2">
-                <div className="space-y-1.5 max-h-36 overflow-y-auto">
+              <CardContent className="px-4 py-2">
+                <div className="space-y-2 max-h-44 overflow-y-auto">
                   {expenses
                     .filter(e => e.expense_type === 'balance')
                     .slice(0, 15)
                     .map(exp => (
-                      <div key={exp.id} className="flex items-center gap-2 text-xs p-2 bg-muted/40 rounded-lg group hover:bg-muted/60 transition-colors">
+                      <div key={exp.id} className="flex items-center gap-3 text-xs p-2.5 bg-background/60 rounded-xl border border-border/40 group hover:border-orange-500/30 transition-all">
                         <div className={cn(
-                          "w-6 h-6 rounded-md flex items-center justify-center shrink-0",
-                          exp.payment_source === 'gcash' ? "bg-blue-500/20" : "bg-green-500/20"
+                          "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                          exp.payment_source === 'gcash' ? "bg-blue-500/15" : "bg-green-500/15"
                         )}>
                           {exp.payment_source === 'gcash' 
-                            ? <Smartphone className="w-3 h-3 text-blue-500" /> 
-                            : <Banknote className="w-3 h-3 text-green-500" />}
+                            ? <Smartphone className="w-4 h-4 text-blue-500" /> 
+                            : <Banknote className="w-4 h-4 text-green-500" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{getCategoryLabel(exp.category)}</div>
-                          <div className="text-muted-foreground/70 text-[10px] truncate">
+                          <div className="font-semibold truncate">{getCategoryLabel(exp.category)}</div>
+                          <div className="text-muted-foreground text-[10px] truncate">
                             {exp.date} {exp.description && `• ${exp.description}`}
                           </div>
                         </div>
-                        <span className={cn(
-                          "font-semibold shrink-0",
-                          exp.payment_source === 'gcash' ? "text-blue-500" : "text-green-500"
+                        <Badge variant="outline" className={cn(
+                          "shrink-0 font-bold border-0",
+                          exp.payment_source === 'gcash' ? "bg-blue-500/15 text-blue-500" : "bg-green-500/15 text-green-500"
                         )}>
                           -₱{exp.amount.toLocaleString()}
-                        </span>
+                        </Badge>
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-destructive/70 hover:text-destructive shrink-0"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive/70 hover:text-destructive hover:bg-destructive/10 shrink-0"
                           onClick={() => deleteExpense(exp.id)}
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     ))}
@@ -681,7 +683,7 @@ export default function Finance() {
                 <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center">
                   <Receipt className="w-4 h-4 text-primary" />
                 </div>
-                <span>Текущая касса</span>
+                <span>Current Register</span>
                 <Badge variant="secondary" className="ml-auto">₱{currentRegisterTotal.toLocaleString()}</Badge>
               </CardTitle>
             </CardHeader>
@@ -702,7 +704,7 @@ export default function Finance() {
                     className="w-full mt-2 h-7 text-[10px] hover:bg-green-500/20 text-green-600"
                     onClick={() => openExpenseDialog('cash', 'shift')}
                   >
-                    <Minus className="w-3 h-3 mr-1" />Расход
+                    <Minus className="w-3 h-3 mr-1" />Expense
                   </Button>
                 </div>
                 <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
@@ -720,51 +722,53 @@ export default function Finance() {
                     className="w-full mt-2 h-7 text-[10px] hover:bg-blue-500/20 text-blue-600"
                     onClick={() => openExpenseDialog('gcash', 'shift')}
                   >
-                    <Minus className="w-3 h-3 mr-1" />Расход
+                    <Minus className="w-3 h-3 mr-1" />Expense
                   </Button>
                 </div>
               </div>
               
               {/* Register Expenses */}
               {currentExpenses.filter(e => e.expense_type === 'shift').length > 0 && (
-                <div className="border-t border-border/30 pt-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <Receipt className="w-3 h-3" />
-                      Расходы из кассы
+                <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-medium flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-amber-500/20 flex items-center justify-center">
+                        <Receipt className="w-3.5 h-3.5 text-amber-500" />
+                      </div>
+                      Shift Expenses
                     </span>
-                    <Badge className="bg-orange-500/20 text-orange-500 border-0 text-[10px]">
+                    <Badge className="bg-amber-500/20 text-amber-600 border-0 font-semibold">
                       -₱{totalShiftExpenses.toLocaleString()}
                     </Badge>
                   </div>
-                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                  <div className="space-y-2 max-h-36 overflow-y-auto">
                     {currentExpenses.filter(e => e.expense_type === 'shift').map(exp => (
-                      <div key={exp.id} className="flex items-center gap-2 text-xs p-2 bg-muted/40 rounded-lg group hover:bg-muted/60 transition-colors">
+                      <div key={exp.id} className="flex items-center gap-3 text-xs p-2.5 bg-background/60 rounded-xl border border-border/40 group hover:border-amber-500/30 transition-all">
                         <div className={cn(
-                          "w-6 h-6 rounded-md flex items-center justify-center shrink-0",
-                          exp.payment_source === 'gcash' ? "bg-blue-500/20" : "bg-green-500/20"
+                          "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
+                          exp.payment_source === 'gcash' ? "bg-blue-500/15" : "bg-green-500/15"
                         )}>
                           {exp.payment_source === 'gcash' 
-                            ? <Smartphone className="w-3 h-3 text-blue-500" /> 
-                            : <Banknote className="w-3 h-3 text-green-500" />}
+                            ? <Smartphone className="w-3.5 h-3.5 text-blue-500" /> 
+                            : <Banknote className="w-3.5 h-3.5 text-green-500" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <span className="font-medium">{getCategoryLabel(exp.category)}</span>
-                          {exp.description && <span className="text-muted-foreground/60 ml-1">• {exp.description}</span>}
+                          <span className="font-semibold">{getCategoryLabel(exp.category)}</span>
+                          {exp.description && <span className="text-muted-foreground ml-1.5">• {exp.description}</span>}
                         </div>
-                        <span className={cn(
-                          "font-semibold shrink-0",
-                          exp.payment_source === 'gcash' ? "text-blue-500" : "text-green-500"
+                        <Badge variant="outline" className={cn(
+                          "shrink-0 font-bold border-0",
+                          exp.payment_source === 'gcash' ? "bg-blue-500/15 text-blue-500" : "bg-green-500/15 text-green-500"
                         )}>
                           -₱{exp.amount.toLocaleString()}
-                        </span>
+                        </Badge>
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-destructive/70 hover:text-destructive shrink-0"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive/70 hover:text-destructive hover:bg-destructive/10 shrink-0"
                           onClick={() => deleteExpense(exp.id)}
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     ))}
