@@ -10,7 +10,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
   Check, X, AlertTriangle, TrendingUp, TrendingDown, 
-  Banknote, Smartphone, Loader2, Clock, Users, Pencil, Trash2, Plus, RefreshCw
+  Banknote, Smartphone, Loader2, Clock, Users, Pencil, Trash2, Plus, RefreshCw,
+  History, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 interface PendingShift {
@@ -80,12 +81,28 @@ const getCategoryLabel = (v: string) => {
   return CATEGORIES.find(c => c.value === v)?.label || v;
 };
 
+interface ApprovedHistory {
+  date: string;
+  shift: string;
+  employees: string[];
+  cashExpected: number;
+  gcashExpected: number;
+  cashSubmitted: number;
+  gcashSubmitted: number;
+  cashActual: number;
+  gcashActual: number;
+  difference: number;
+  shortage: number;
+}
+
 export function CashVerification() {
   const [loading, setLoading] = useState(true);
   const [pendingVerifications, setPendingVerifications] = useState<PendingVerification[]>([]);
   const [pendingExpenses, setPendingExpenses] = useState<PendingExpense[]>([]);
+  const [approvedHistory, setApprovedHistory] = useState<ApprovedHistory[]>([]);
   const [shortageInputs, setShortageInputs] = useState<Record<string, Record<string, string>>>({});
   const [processing, setProcessing] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   
   // Confirmation dialog state - admin enters actual received amounts
   const [confirmingVerification, setConfirmingVerification] = useState<PendingVerification | null>(null);
@@ -135,16 +152,16 @@ export function CashVerification() {
         .eq('approved', false)
         .order('date', { ascending: false });
 
-      // Load cash register records for expected values
+      // Load cash register records for expected and actual values
       const { data: registers } = await supabase
         .from('cash_register')
-        .select('id, date, shift, cash_expected, gcash_expected')
+        .select('id, date, shift, cash_expected, gcash_expected, cash_actual, gcash_actual')
         .order('date', { ascending: false });
 
-      // Load approved shifts for carryover calculation
+      // Load approved shifts for carryover calculation and history
       const { data: approvedShifts } = await supabase
         .from('shifts')
-        .select('date, type, cash_handed_over, gcash_handed_over')
+        .select('date, type, shift_type, cash_handed_over, gcash_handed_over, cash_shortage, employees(name)')
         .eq('cash_approved', true)
         .order('date', { ascending: false });
 
@@ -243,6 +260,46 @@ export function CashVerification() {
         }
       });
       setShortageInputs(inputs);
+
+      // Build approved history
+      const historyMap: Record<string, ApprovedHistory> = {};
+      (approvedShifts || []).forEach((s: any) => {
+        const shiftType = s.shift_type?.includes('Night') || s.shift_type === '12 hours' || s.type === 'night' ? 'night' : 'day';
+        const key = `${s.date}-${shiftType}`;
+        
+        if (!historyMap[key]) {
+          const register = registers?.find(r => r.date === s.date && r.shift === shiftType);
+          historyMap[key] = {
+            date: s.date,
+            shift: shiftType,
+            employees: [],
+            cashExpected: register?.cash_expected || 0,
+            gcashExpected: register?.gcash_expected || 0,
+            cashSubmitted: 0,
+            gcashSubmitted: 0,
+            cashActual: register?.cash_actual || 0,
+            gcashActual: register?.gcash_actual || 0,
+            difference: 0,
+            shortage: 0
+          };
+        }
+        
+        if (s.employees?.name && !historyMap[key].employees.includes(s.employees.name)) {
+          historyMap[key].employees.push(s.employees.name);
+        }
+        historyMap[key].cashSubmitted += s.cash_handed_over || 0;
+        historyMap[key].gcashSubmitted += s.gcash_handed_over || 0;
+        historyMap[key].shortage += s.cash_shortage || 0;
+      });
+
+      // Calculate differences
+      Object.values(historyMap).forEach(h => {
+        h.difference = (h.cashActual + h.gcashActual) - (h.cashSubmitted + h.gcashSubmitted);
+      });
+
+      // Sort by date descending
+      const sortedHistory = Object.values(historyMap).sort((a, b) => b.date.localeCompare(a.date));
+      setApprovedHistory(sortedHistory.slice(0, 30)); // Last 30 entries
       
     } catch (e) {
       console.error('Error loading pending data:', e);
@@ -867,7 +924,88 @@ export function CashVerification() {
         </Card>
       )}
 
-      {/* Edit Expense Dialog */}
+      {/* Approved History */}
+      {approvedHistory.length > 0 && (
+        <Card>
+          <CardHeader className="py-3 pb-2 cursor-pointer" onClick={() => setShowHistory(!showHistory)}>
+            <CardTitle className="text-sm flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <History className="w-4 h-4 text-muted-foreground" />
+                Confirmation History ({approvedHistory.length})
+              </span>
+              {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </CardTitle>
+          </CardHeader>
+          {showHistory && (
+            <CardContent className="space-y-2 pt-0">
+              {approvedHistory.map(h => {
+                const totalSubmitted = h.cashSubmitted + h.gcashSubmitted;
+                const totalActual = h.cashActual + h.gcashActual;
+                const adminDiff = totalActual - totalSubmitted;
+                
+                return (
+                  <div key={`${h.date}-${h.shift}`} className="p-3 rounded-lg bg-muted/30 text-sm space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium flex items-center gap-2">
+                        <Clock className="w-3 h-3 text-muted-foreground" />
+                        {h.date} • {h.shift === 'day' ? '☀️ Day' : '🌙 Night'}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {h.shortage > 0 && (
+                          <Badge variant="outline" className="text-red-500 border-red-500/30 text-xs">
+                            Shortage: ₱{h.shortage.toLocaleString()}
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-green-500 border-green-500/30">
+                          <Check className="w-3 h-3 mr-1" />
+                          Confirmed
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    <p className="text-xs text-muted-foreground">
+                      {h.employees.join(', ')}
+                    </p>
+                    
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <p className="text-muted-foreground">Staff Submitted</p>
+                        <p className="font-medium">₱{totalSubmitted.toLocaleString()}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          <Banknote className="w-3 h-3 inline text-green-500" /> ₱{h.cashSubmitted.toLocaleString()}
+                          {' '}
+                          <Smartphone className="w-3 h-3 inline text-blue-500" /> ₱{h.gcashSubmitted.toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Admin Confirmed</p>
+                        <p className="font-medium">₱{totalActual.toLocaleString()}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          <Banknote className="w-3 h-3 inline text-green-500" /> ₱{h.cashActual.toLocaleString()}
+                          {' '}
+                          <Smartphone className="w-3 h-3 inline text-blue-500" /> ₱{h.gcashActual.toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Difference</p>
+                        <p className={cn(
+                          "font-medium",
+                          adminDiff > 0 && "text-green-500",
+                          adminDiff < 0 && "text-red-500",
+                          adminDiff === 0 && "text-muted-foreground"
+                        )}>
+                          {adminDiff === 0 ? 'Match' : `${adminDiff > 0 ? '+' : ''}₱${adminDiff.toLocaleString()}`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          )}
+        </Card>
+      )}
+
       <Dialog open={!!editingExpense} onOpenChange={(open) => !open && setEditingExpense(null)}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
