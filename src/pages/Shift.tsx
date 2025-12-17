@@ -253,7 +253,14 @@ export default function Shift() {
         return;
       }
 
-      const shiftIds = activeShifts.map(s => s.id);
+      // Only load expenses from shifts that match current shift type
+      const currentTypeShifts = activeShifts.filter(s => s.type === currentShiftType);
+      if (currentTypeShifts.length === 0) {
+        setShiftExpenses([]);
+        return;
+      }
+
+      const shiftIds = currentTypeShifts.map(s => s.id);
       
       const { data: expenses } = await (supabase
         .from('cash_expenses')
