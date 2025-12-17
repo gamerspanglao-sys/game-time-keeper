@@ -175,7 +175,7 @@ export default function Shift() {
         .select('id')
         .eq('date', currentDate)
         .eq('shift', currentShift)
-        .single();
+        .maybeSingle();
 
       if (register) {
         const { data: expenses } = await supabase
@@ -183,6 +183,8 @@ export default function Shift() {
           .select('*, employees:responsible_employee_id(name)')
           .eq('cash_register_id', register.id)
           .eq('expense_type', 'shift')
+          .eq('shift', currentShift)
+          .eq('date', currentDate)
           .order('created_at', { ascending: false });
 
         setShiftExpenses((expenses || []).map((e: any) => ({
