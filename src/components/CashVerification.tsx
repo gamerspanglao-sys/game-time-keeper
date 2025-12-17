@@ -102,7 +102,7 @@ export function CashVerification() {
   const [approvedHistory, setApprovedHistory] = useState<ApprovedHistory[]>([]);
   const [shortageInputs, setShortageInputs] = useState<Record<string, Record<string, string>>>({});
   const [processing, setProcessing] = useState<string | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+  const [showHistory, setShowHistory] = useState(true);
   
   // Confirmation dialog state - admin enters actual received amounts
   const [confirmingVerification, setConfirmingVerification] = useState<PendingVerification | null>(null);
