@@ -100,9 +100,12 @@ export default function Shift() {
   const [expenseResponsible, setExpenseResponsible] = useState('');
   const [addingExpense, setAddingExpense] = useState(false);
 
-  // Confirmation dialog
-  const [showEndShiftConfirm, setShowEndShiftConfirm] = useState(false);
+  // End shift dialog
+  const [showEndShiftDialog, setShowEndShiftDialog] = useState(false);
   const [pendingEndShiftEmployee, setPendingEndShiftEmployee] = useState<string | null>(null);
+  const [endShiftCash, setEndShiftCash] = useState('');
+  const [endShiftGcash, setEndShiftGcash] = useState('');
+  const [endingShift, setEndingShift] = useState(false);
 
   const currentShift = getCurrentShift();
   const currentDate = getShiftDate();
@@ -256,54 +259,64 @@ export default function Shift() {
 
   const confirmEndShift = (employeeId: string) => {
     setPendingEndShiftEmployee(employeeId);
-    setShowEndShiftConfirm(true);
+    setEndShiftCash('');
+    setEndShiftGcash('');
+    setShowEndShiftDialog(true);
   };
 
-  const handleConfirmEndShift = async () => {
+  const handleEndShiftWithCash = async (withCash: boolean) => {
     if (!pendingEndShiftEmployee) return;
     
     const activeShift = activeShifts.find(s => s.employee_id === pendingEndShiftEmployee);
     const employeeName = employees.find(e => e.id === pendingEndShiftEmployee)?.name || 'Unknown';
     
-    if (activeShift) {
+    if (!activeShift) return;
+
+    const cash = withCash ? (parseInt(endShiftCash) || 0) : 0;
+    const gcash = withCash ? (parseInt(endShiftGcash) || 0) : 0;
+
+    setEndingShift(true);
+    try {
+      const totalHours = calculateTotalHours(activeShift.shift_start);
+      
+      const { error } = await supabase
+        .from('shifts')
+        .update({
+          shift_end: new Date().toISOString(),
+          total_hours: totalHours,
+          cash_handed_over: cash,
+          gcash_handed_over: gcash,
+          status: 'closed'
+        })
+        .eq('id', activeShift.id);
+
+      if (error) throw error;
+
       try {
-        const totalHours = calculateTotalHours(activeShift.shift_start);
-        
-        const { error } = await supabase
-          .from('shifts')
-          .update({
-            shift_end: new Date().toISOString(),
-            total_hours: totalHours,
-            status: 'closed'
-          })
-          .eq('id', activeShift.id);
-
-        if (error) throw error;
-
-        try {
-          await supabase.functions.invoke('telegram-notify', {
-            body: {
-              action: 'shift_end',
-              employeeName,
-              totalHours: totalHours.toFixed(1),
-              cashHandedOver: 0,
-              baseSalary: 500
-            }
-          });
-        } catch (e) {
-          console.log('Telegram notification failed:', e);
-        }
-
-        toast.success('Shift ended');
-        loadData();
+        await supabase.functions.invoke('telegram-notify', {
+          body: {
+            action: 'shift_end',
+            employeeName,
+            totalHours: totalHours.toFixed(1),
+            cashHandedOver: cash,
+            gcashHandedOver: gcash,
+            baseSalary: 500
+          }
+        });
       } catch (e) {
-        console.error(e);
-        toast.error('Failed to end shift');
+        console.log('Telegram notification failed:', e);
       }
+
+      toast.success(withCash ? 'Shift ended, cash submitted' : 'Shift ended');
+      loadData();
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to end shift');
+    } finally {
+      setEndingShift(false);
+      setShowEndShiftDialog(false);
+      setPendingEndShiftEmployee(null);
     }
-    
-    setShowEndShiftConfirm(false);
-    setPendingEndShiftEmployee(null);
   };
 
   const submitCashHandover = async () => {
@@ -843,26 +856,79 @@ export default function Shift() {
         </DialogContent>
       </Dialog>
 
-      {/* End Shift Confirmation Dialog */}
-      <AlertDialog open={showEndShiftConfirm} onOpenChange={setShowEndShiftConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-500" />
-              End Shift?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to end this shift? A notification will be sent to Telegram.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingEndShiftEmployee(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmEndShift}>
-              Yes, End Shift
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* End Shift Dialog with Cash Submission */}
+      <Dialog open={showEndShiftDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowEndShiftDialog(false);
+          setPendingEndShiftEmployee(null);
+        }
+      }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Square className="w-5 h-5 text-red-500" />
+              End Shift
+            </DialogTitle>
+            <DialogDescription>
+              {pendingEndShiftEmployee && (
+                <span className="font-medium text-foreground">
+                  {activeShifts.find(s => s.employee_id === pendingEndShiftEmployee)?.employee_name}
+                </span>
+              )} — Enter cash amounts to hand over
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <Banknote className="w-3.5 h-3.5" />
+                  Cash
+                </label>
+                <Input
+                  type="number"
+                  value={endShiftCash}
+                  onChange={e => setEndShiftCash(e.target.value)}
+                  placeholder="0"
+                  className="text-lg font-mono"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded bg-blue-500 text-[8px] text-white flex items-center justify-center font-bold">G</span>
+                  GCash
+                </label>
+                <Input
+                  type="number"
+                  value={endShiftGcash}
+                  onChange={e => setEndShiftGcash(e.target.value)}
+                  placeholder="0"
+                  className="text-lg font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <Button 
+                onClick={() => handleEndShiftWithCash(true)} 
+                disabled={endingShift}
+                className="w-full"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                {endingShift ? 'Ending...' : 'End & Submit Cash'}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => handleEndShiftWithCash(false)}
+                disabled={endingShift}
+                className="w-full text-muted-foreground"
+              >
+                End without cash
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
