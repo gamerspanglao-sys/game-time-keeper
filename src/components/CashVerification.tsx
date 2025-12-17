@@ -197,7 +197,7 @@ export function CashVerification() {
           groupedVerifications[key] = {
             date: h.shift_date,
             shift: shiftType,
-            carryoverCash: 0,
+            carryoverCash: h.change_fund_amount || 0, // Opening cash from handover record
             carryoverGcash: 0,
             loyverseCash: register?.cash_expected || 0,
             loyverseGcash: register?.gcash_expected || 0,
@@ -220,10 +220,12 @@ export function CashVerification() {
           groupedVerifications[key].shifts.push(handoverEmployee);
           groupedVerifications[key].cashSubmitted += h.cash_amount || 0;
           groupedVerifications[key].gcashSubmitted += h.gcash_amount || 0;
+          // Add to carryover if multiple handovers
+          groupedVerifications[key].carryoverCash += h.change_fund_amount || 0;
         }
       });
 
-      // Add related expenses and calculate totals with carryover
+      // Add related expenses and calculate totals
       Object.values(groupedVerifications).forEach(v => {
         v.expenses = (expenses || []).filter(e => e.date === v.date && e.shift === v.shift) as PendingExpense[];
         
@@ -235,17 +237,8 @@ export function CashVerification() {
           .filter(e => e.payment_source === 'gcash')
           .reduce((sum, e) => sum + e.amount, 0);
         
-        // Find previous shift's carryover (approved cash handed over)
-        const prev = getPreviousShift(v.date, v.shift);
-        const prevShifts = (approvedShifts || []).filter(
-          (ps: any) => ps.date === prev.date && (ps.type === prev.shift || 
-            (prev.shift === 'night' && ps.type === 'night') ||
-            (prev.shift === 'day' && ps.type === 'day'))
-        );
-        v.carryoverCash = prevShifts.reduce((sum: number, ps: any) => sum + (ps.cash_handed_over || 0), 0);
-        v.carryoverGcash = prevShifts.reduce((sum: number, ps: any) => sum + (ps.gcash_handed_over || 0), 0);
-        
-        // Expected = Carryover + Loyverse Sales - Expenses
+        // Expected = Opening Cash (change_fund) + Loyverse Sales - Expenses
+        // carryoverCash is already set from change_fund_amount in handover record
         v.cashExpected = v.carryoverCash + v.loyverseCash - v.expensesCash;
         v.gcashExpected = v.carryoverGcash + v.loyverseGcash - v.expensesGcash;
         v.totalExpected = v.cashExpected + v.gcashExpected;
