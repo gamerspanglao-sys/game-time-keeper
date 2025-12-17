@@ -822,14 +822,6 @@ export default function Shift() {
                     </div>
                   </div>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive/70 hover:text-destructive shrink-0"
-                  onClick={() => deleteExpense(expense.id)}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </Button>
               </div>
             ))}
           </CardContent>
