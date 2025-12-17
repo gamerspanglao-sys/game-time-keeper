@@ -156,10 +156,21 @@ export function CashVerification() {
         groupedVerifications[key].cashSubmitted += s.cash_handed_over || 0;
         groupedVerifications[key].gcashSubmitted += s.gcash_handed_over || 0;
       });
-
       // Add related expenses and calculate totals
       Object.values(groupedVerifications).forEach(v => {
         v.expenses = (expenses || []).filter(e => e.date === v.date && e.shift === v.shift) as PendingExpense[];
+        
+        // Calculate expenses by payment source
+        const cashExpenses = v.expenses
+          .filter(e => e.payment_source === 'cash')
+          .reduce((sum, e) => sum + e.amount, 0);
+        const gcashExpenses = v.expenses
+          .filter(e => e.payment_source === 'gcash')
+          .reduce((sum, e) => sum + e.amount, 0);
+        
+        // Expected = Loyverse expected - expenses (since employees pay expenses from register)
+        v.cashExpected = (v.cashExpected || 0) - cashExpenses;
+        v.gcashExpected = (v.gcashExpected || 0) - gcashExpenses;
         v.totalExpected = v.cashExpected + v.gcashExpected;
         v.totalSubmitted = v.cashSubmitted + v.gcashSubmitted;
         v.difference = v.totalSubmitted - v.totalExpected;
