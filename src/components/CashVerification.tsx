@@ -557,7 +557,46 @@ export function CashVerification() {
                 <p className="font-bold mt-1 text-sm">Total: ₱{v.totalSubmitted.toLocaleString()}</p>
               </div>
 
-              {/* Employee submissions */}
+              {/* Discrepancy */}
+              {v.difference !== 0 && (
+                <div className={cn(
+                  "p-3 rounded-lg border-2 text-sm",
+                  isSurplus && "bg-green-500/10 border-green-500/50",
+                  isShortage && "bg-red-500/10 border-red-500/50"
+                )}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium flex items-center gap-1">
+                      {isShortage ? <TrendingDown className="w-4 h-4 text-red-500" /> : <TrendingUp className="w-4 h-4 text-green-500" />}
+                      {isShortage ? 'SHORTAGE' : 'SURPLUS'}
+                    </span>
+                    <span className={cn("font-bold text-lg", isShortage ? "text-red-500" : "text-green-500")}>
+                      {v.difference > 0 ? '+' : ''}₱{v.difference.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div></div>
+                    <div className="text-center"><Banknote className="w-3 h-3 inline text-green-600" /> Cash</div>
+                    <div className="text-center"><Smartphone className="w-3 h-3 inline text-blue-600" /> GCash</div>
+                    
+                    <div className="text-muted-foreground">Expected:</div>
+                    <div className="text-center">₱{v.cashExpected.toLocaleString()}</div>
+                    <div className="text-center">₱{v.gcashExpected.toLocaleString()}</div>
+                    
+                    <div className="text-muted-foreground">Submitted:</div>
+                    <div className="text-center">₱{v.cashSubmitted.toLocaleString()}</div>
+                    <div className="text-center">₱{v.gcashSubmitted.toLocaleString()}</div>
+                    
+                    <div className="font-medium">Diff:</div>
+                    <div className={cn("text-center font-bold", (v.cashSubmitted - v.cashExpected) >= 0 ? "text-green-500" : "text-red-500")}>
+                      {(v.cashSubmitted - v.cashExpected) >= 0 ? '+' : ''}₱{(v.cashSubmitted - v.cashExpected).toLocaleString()}
+                    </div>
+                    <div className={cn("text-center font-bold", (v.gcashSubmitted - v.gcashExpected) >= 0 ? "text-green-500" : "text-red-500")}>
+                      {(v.gcashSubmitted - v.gcashExpected) >= 0 ? '+' : ''}₱{(v.gcashSubmitted - v.gcashExpected).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <Users className="w-3 h-3" /> Employee Submissions ({v.shifts.length})
