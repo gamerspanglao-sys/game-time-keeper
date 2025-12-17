@@ -47,6 +47,14 @@ interface CashRegisterRecord {
 interface PendingVerification {
   date: string;
   shift: string;
+  // Breakdown values
+  carryoverCash: number;
+  carryoverGcash: number;
+  loyverseCash: number;
+  loyverseGcash: number;
+  expensesCash: number;
+  expensesGcash: number;
+  // Calculated expected
   cashExpected: number;
   gcashExpected: number;
   cashSubmitted: number;
@@ -149,8 +157,16 @@ export function CashVerification() {
           groupedVerifications[key] = {
             date: s.date,
             shift: shiftType,
-            cashExpected: register?.cash_expected || 0,
-            gcashExpected: register?.gcash_expected || 0,
+            // Breakdown - will be calculated later
+            carryoverCash: 0,
+            carryoverGcash: 0,
+            loyverseCash: register?.cash_expected || 0,
+            loyverseGcash: register?.gcash_expected || 0,
+            expensesCash: 0,
+            expensesGcash: 0,
+            // Calculated
+            cashExpected: 0,
+            gcashExpected: 0,
             cashSubmitted: 0,
             gcashSubmitted: 0,
             totalExpected: 0,
@@ -182,10 +198,10 @@ export function CashVerification() {
         v.expenses = (expenses || []).filter(e => e.date === v.date && e.shift === v.shift) as PendingExpense[];
         
         // Calculate expenses by payment source
-        const cashExpenses = v.expenses
+        v.expensesCash = v.expenses
           .filter(e => e.payment_source === 'cash')
           .reduce((sum, e) => sum + e.amount, 0);
-        const gcashExpenses = v.expenses
+        v.expensesGcash = v.expenses
           .filter(e => e.payment_source === 'gcash')
           .reduce((sum, e) => sum + e.amount, 0);
         
@@ -196,12 +212,12 @@ export function CashVerification() {
             (prev.shift === 'night' && ps.type === 'night') ||
             (prev.shift === 'day' && ps.type === 'day'))
         );
-        const carryoverCash = prevShifts.reduce((sum: number, ps: any) => sum + (ps.cash_handed_over || 0), 0);
-        const carryoverGcash = prevShifts.reduce((sum: number, ps: any) => sum + (ps.gcash_handed_over || 0), 0);
+        v.carryoverCash = prevShifts.reduce((sum: number, ps: any) => sum + (ps.cash_handed_over || 0), 0);
+        v.carryoverGcash = prevShifts.reduce((sum: number, ps: any) => sum + (ps.gcash_handed_over || 0), 0);
         
         // Expected = Carryover + Loyverse Sales - Expenses
-        v.cashExpected = carryoverCash + (v.cashExpected || 0) - cashExpenses;
-        v.gcashExpected = carryoverGcash + (v.gcashExpected || 0) - gcashExpenses;
+        v.cashExpected = v.carryoverCash + v.loyverseCash - v.expensesCash;
+        v.gcashExpected = v.carryoverGcash + v.loyverseGcash - v.expensesGcash;
         v.totalExpected = v.cashExpected + v.gcashExpected;
         v.totalSubmitted = v.cashSubmitted + v.gcashSubmitted;
         v.difference = v.totalSubmitted - v.totalExpected;
@@ -498,28 +514,47 @@ export function CashVerification() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {/* Comparison */}
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-2 rounded-lg bg-background/80">
-                  <p className="text-[10px] text-muted-foreground mb-1">Loyverse Expected</p>
-                  <div className="flex items-center gap-2">
-                    <Banknote className="w-3 h-3 text-green-500" />
-                    <span>₱{v.cashExpected.toLocaleString()}</span>
-                    <Smartphone className="w-3 h-3 text-blue-500 ml-2" />
-                    <span>₱{v.gcashExpected.toLocaleString()}</span>
-                  </div>
-                  <p className="font-bold mt-1">Total: ₱{v.totalExpected.toLocaleString()}</p>
+              {/* Calculation Breakdown */}
+              <div className="p-2 rounded-lg bg-background/80 text-xs space-y-1">
+                <p className="text-[10px] text-muted-foreground mb-2 font-medium">Expected Calculation</p>
+                <div className="grid grid-cols-3 gap-1 text-muted-foreground">
+                  <span></span>
+                  <span className="text-center"><Banknote className="w-3 h-3 inline text-green-500" /> Cash</span>
+                  <span className="text-center"><Smartphone className="w-3 h-3 inline text-blue-500" /> GCash</span>
                 </div>
-                <div className="p-2 rounded-lg bg-background/80">
-                  <p className="text-[10px] text-muted-foreground mb-1">Staff Submitted</p>
-                  <div className="flex items-center gap-2">
-                    <Banknote className="w-3 h-3 text-green-500" />
-                    <span>₱{v.cashSubmitted.toLocaleString()}</span>
-                    <Smartphone className="w-3 h-3 text-blue-500 ml-2" />
-                    <span>₱{v.gcashSubmitted.toLocaleString()}</span>
-                  </div>
-                  <p className="font-bold mt-1">Total: ₱{v.totalSubmitted.toLocaleString()}</p>
+                <div className="grid grid-cols-3 gap-1">
+                  <span className="text-muted-foreground">Carryover:</span>
+                  <span className="text-center">₱{v.carryoverCash.toLocaleString()}</span>
+                  <span className="text-center">₱{v.carryoverGcash.toLocaleString()}</span>
                 </div>
+                <div className="grid grid-cols-3 gap-1">
+                  <span className="text-muted-foreground">+ Sales:</span>
+                  <span className="text-center text-green-600">₱{v.loyverseCash.toLocaleString()}</span>
+                  <span className="text-center text-green-600">₱{v.loyverseGcash.toLocaleString()}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-1">
+                  <span className="text-muted-foreground">− Expenses:</span>
+                  <span className="text-center text-red-500">₱{v.expensesCash.toLocaleString()}</span>
+                  <span className="text-center text-red-500">₱{v.expensesGcash.toLocaleString()}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-1 pt-1 border-t border-border font-bold">
+                  <span>= Expected:</span>
+                  <span className="text-center">₱{v.cashExpected.toLocaleString()}</span>
+                  <span className="text-center">₱{v.gcashExpected.toLocaleString()}</span>
+                </div>
+                <p className="font-bold text-right pt-1">Total Expected: ₱{v.totalExpected.toLocaleString()}</p>
+              </div>
+
+              {/* Staff Submitted */}
+              <div className="p-2 rounded-lg bg-background/80">
+                <p className="text-[10px] text-muted-foreground mb-1">Staff Submitted</p>
+                <div className="flex items-center gap-2 text-sm">
+                  <Banknote className="w-3 h-3 text-green-500" />
+                  <span>₱{v.cashSubmitted.toLocaleString()}</span>
+                  <Smartphone className="w-3 h-3 text-blue-500 ml-2" />
+                  <span>₱{v.gcashSubmitted.toLocaleString()}</span>
+                </div>
+                <p className="font-bold mt-1 text-sm">Total: ₱{v.totalSubmitted.toLocaleString()}</p>
               </div>
 
               {/* Employee submissions */}
