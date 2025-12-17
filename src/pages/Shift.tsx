@@ -262,18 +262,16 @@ export default function Shift() {
 
   const loadShiftExpensesWithShifts = async (shifts: ActiveShift[]) => {
     try {
-      // Load expenses by shift_id for active shifts
-      const shiftIds = shifts.map(s => s.id);
-      
-      if (shiftIds.length === 0) {
-        setShiftExpenses([]);
-        return;
-      }
+      // Use Manila date for current shift (same logic as Finance)
+      const manilaTime = getManilaTime();
+      const currentManilaDate = format(manilaTime, 'yyyy-MM-dd');
+      const shiftType = shifts.length > 0 ? shifts[0].type : getCurrentShiftType();
       
       const { data, error } = await supabase
         .from('cash_expenses')
         .select('*')
-        .in('shift_id', shiftIds)
+        .eq('date', currentManilaDate)
+        .eq('shift', shiftType)
         .eq('expense_type', 'shift')
         .order('created_at', { ascending: false });
       
