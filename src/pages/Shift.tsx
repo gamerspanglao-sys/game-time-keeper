@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Square, AlertTriangle, CheckCircle2, Send, Lock } from 'lucide-react';
+import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Square, AlertTriangle, CheckCircle2, Send, Lock, Pencil, Trash2 } from 'lucide-react';
 
 type ShiftType = 'day' | 'night';
 type ShiftStatus = 'open' | 'ended' | 'closed';
@@ -141,7 +141,7 @@ export default function Shift() {
   const [expensePaymentSource, setExpensePaymentSource] = useState<'cash' | 'gcash'>('cash');
   const [expenseResponsible, setExpenseResponsible] = useState('');
   const [addingExpense, setAddingExpense] = useState(false);
-
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   // End work dialog (individual)
   const [showEndWorkDialog, setShowEndWorkDialog] = useState(false);
   const [pendingEndWorkEmployee, setPendingEndWorkEmployee] = useState<string | null>(null);
@@ -661,6 +661,55 @@ export default function Shift() {
     }
   };
 
+  const editExpense = (expense: ShiftExpense) => {
+    setEditingExpenseId(expense.id);
+    setExpenseAmount(expense.amount.toString());
+    setExpenseCategory(expense.category);
+    setExpenseDescription(expense.description || '');
+    setExpensePaymentSource(expense.payment_source as 'cash' | 'gcash');
+    setExpenseResponsible(expense.responsible_employee_id || '');
+    setShowExpenseDialog(true);
+  };
+
+  const updateExpense = async () => {
+    if (!editingExpenseId) return;
+    const amount = parseInt(expenseAmount);
+    if (!amount || amount <= 0) {
+      toast.error('Enter valid amount');
+      return;
+    }
+    if (!expenseCategory) {
+      toast.error('Select category');
+      return;
+    }
+
+    setAddingExpense(true);
+    try {
+      const { error } = await supabase
+        .from('cash_expenses')
+        .update({
+          amount,
+          category: expenseCategory,
+          description: expenseDescription || null,
+          payment_source: expensePaymentSource,
+          responsible_employee_id: expenseResponsible || null,
+        })
+        .eq('id', editingExpenseId);
+
+      if (error) throw error;
+
+      toast.success('Expense updated');
+      setShowExpenseDialog(false);
+      setEditingExpenseId(null);
+      loadShiftExpenses();
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to update');
+    } finally {
+      setAddingExpense(false);
+    }
+  };
+
   const getEmployeeShift = (employeeId: string) => {
     return activeShifts.find(s => s.employee_id === employeeId);
   };
@@ -858,6 +907,24 @@ export default function Shift() {
                     </div>
                   </div>
                 </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => editExpense(expense)}
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive"
+                    onClick={() => deleteExpense(expense.id)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               </div>
             ))}
           </CardContent>
@@ -895,16 +962,19 @@ export default function Shift() {
         </Card>
       )}
 
-      {/* Add Expense Dialog */}
-      <Dialog open={showExpenseDialog} onOpenChange={setShowExpenseDialog}>
+      {/* Add/Edit Expense Dialog */}
+      <Dialog open={showExpenseDialog} onOpenChange={(open) => {
+        setShowExpenseDialog(open);
+        if (!open) setEditingExpenseId(null);
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Receipt className="w-5 h-5" />
-              Add Expense
+              {editingExpenseId ? 'Edit Expense' : 'Add Expense'}
             </DialogTitle>
             <DialogDescription>
-              Expense will be tied to employee's shift
+              {editingExpenseId ? 'Update expense details' : "Expense will be tied to employee's shift"}
             </DialogDescription>
           </DialogHeader>
           
@@ -978,9 +1048,15 @@ export default function Shift() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowExpenseDialog(false)}>Cancel</Button>
-              <Button onClick={addExpense} disabled={addingExpense}>
-                {addingExpense ? 'Adding...' : 'Add'}
+              <Button variant="outline" onClick={() => {
+                setShowExpenseDialog(false);
+                setEditingExpenseId(null);
+              }}>Cancel</Button>
+              <Button 
+                onClick={editingExpenseId ? updateExpense : addExpense} 
+                disabled={addingExpense}
+              >
+                {addingExpense ? (editingExpenseId ? 'Saving...' : 'Adding...') : (editingExpenseId ? 'Save' : 'Add')}
               </Button>
             </div>
           </div>
