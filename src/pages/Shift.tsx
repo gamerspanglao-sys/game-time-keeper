@@ -35,6 +35,9 @@ interface ShiftExpense {
   description: string | null;
   created_at: string;
   payment_source: string;
+  date: string | null;
+  responsible_employee_id: string | null;
+  responsible_name?: string;
 }
 
 const EXPENSE_CATEGORIES = [
@@ -86,6 +89,7 @@ export default function Shift() {
 
   // Expense tracking
   const [shiftExpenses, setShiftExpenses] = useState<ShiftExpense[]>([]);
+  const [pendingExpenses, setPendingExpenses] = useState<ShiftExpense[]>([]);
   const [showExpenseDialog, setShowExpenseDialog] = useState(false);
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseCategory, setExpenseCategory] = useState('');
@@ -167,6 +171,7 @@ export default function Shift() {
 
   const loadShiftExpenses = async () => {
     try {
+      // Load current shift expenses
       const { data: register } = await supabase
         .from('cash_register')
         .select('id')
@@ -177,18 +182,46 @@ export default function Shift() {
       if (register) {
         const { data: expenses } = await supabase
           .from('cash_expenses')
-          .select('*')
+          .select('*, employees:responsible_employee_id(name)')
           .eq('cash_register_id', register.id)
           .eq('expense_type', 'shift')
           .order('created_at', { ascending: false });
 
-        setShiftExpenses(expenses || []);
+        setShiftExpenses((expenses || []).map((e: any) => ({
+          ...e,
+          responsible_name: e.employees?.name
+        })));
       } else {
         setShiftExpenses([]);
+      }
+
+      // Load pending expenses from previous shifts (awaiting confirmation)
+      const { data: allRegisters } = await supabase
+        .from('cash_register')
+        .select('id')
+        .eq('date', currentDate)
+        .neq('shift', currentShift);
+
+      if (allRegisters && allRegisters.length > 0) {
+        const registerIds = allRegisters.map(r => r.id);
+        const { data: pendingExp } = await supabase
+          .from('cash_expenses')
+          .select('*, employees:responsible_employee_id(name)')
+          .in('cash_register_id', registerIds)
+          .eq('expense_type', 'shift')
+          .order('created_at', { ascending: false });
+
+        setPendingExpenses((pendingExp || []).map((e: any) => ({
+          ...e,
+          responsible_name: e.employees?.name
+        })));
+      } else {
+        setPendingExpenses([]);
       }
     } catch (e) {
       console.error(e);
       setShiftExpenses([]);
+      setPendingExpenses([]);
     }
   };
 
@@ -609,29 +642,94 @@ export default function Shift() {
           <CardContent className="px-3 pb-3 pt-0 space-y-1.5">
             {shiftExpenses.map(expense => (
               <div key={expense.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg group">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
                   <div className={cn(
-                    "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
+                    "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
                     expense.payment_source === 'cash' ? "bg-green-500/15 text-green-500" : "bg-blue-500/15 text-blue-500"
                   )}>
                     {expense.payment_source === 'cash' ? '₱' : 'G'}
                   </div>
-                  <div>
-                    <div className="text-sm font-medium">₱{expense.amount.toLocaleString()}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label}
-                      {expense.description && ` • ${expense.description}`}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">₱{expense.amount.toLocaleString()}</span>
+                      <span className="text-[10px] text-muted-foreground truncate">
+                        {EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground/70 flex items-center gap-1.5">
+                      <span>{expense.date || format(new Date(expense.created_at), 'dd.MM')}</span>
+                      {expense.responsible_name && (
+                        <>
+                          <span>•</span>
+                          <span className="truncate">{expense.responsible_name}</span>
+                        </>
+                      )}
+                      {expense.description && (
+                        <>
+                          <span>•</span>
+                          <span className="truncate">{expense.description}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive/70 hover:text-destructive"
+                  className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive/70 hover:text-destructive shrink-0"
                   onClick={() => deleteExpense(expense.id)}
                 >
                   <Trash2 className="w-3 h-3" />
                 </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending Expenses - From Previous Shift */}
+      {pendingExpenses.length > 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardHeader className="py-2.5 px-3">
+            <CardTitle className="text-xs text-amber-600 flex items-center gap-1.5">
+              <AlertTriangle className="w-3 h-3" />
+              Awaiting Confirmation ({currentShift === 'day' ? 'Night' : 'Day'} Shift)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3 pt-0 space-y-1.5">
+            {pendingExpenses.map(expense => (
+              <div key={expense.id} className="flex items-center justify-between p-2 bg-background/50 rounded-lg">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
+                    expense.payment_source === 'cash' ? "bg-green-500/15 text-green-500" : "bg-blue-500/15 text-blue-500"
+                  )}>
+                    {expense.payment_source === 'cash' ? '₱' : 'G'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">₱{expense.amount.toLocaleString()}</span>
+                      <span className="text-[10px] text-muted-foreground truncate">
+                        {EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground/70 flex items-center gap-1.5">
+                      <span>{expense.date || format(new Date(expense.created_at), 'dd.MM')}</span>
+                      {expense.responsible_name && (
+                        <>
+                          <span>•</span>
+                          <span className="truncate">{expense.responsible_name}</span>
+                        </>
+                      )}
+                      {expense.description && (
+                        <>
+                          <span>•</span>
+                          <span className="truncate">{expense.description}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             ))}
           </CardContent>
