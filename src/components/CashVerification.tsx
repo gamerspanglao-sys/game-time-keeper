@@ -152,7 +152,15 @@ export function CashVerification() {
         .order('date', { ascending: false });
 
       // Load unapproved expenses
-      const { data: expenses } = await supabase
+      // Load ALL expenses for calculation (not just unapproved)
+      const { data: allExpenses } = await supabase
+        .from('cash_expenses')
+        .select('*')
+        .eq('expense_type', 'shift')
+        .order('date', { ascending: false });
+      
+      // Also load unapproved expenses for the pending list
+      const { data: unapprovedExpenses } = await supabase
         .from('cash_expenses')
         .select('*')
         .eq('approved', false)
@@ -171,7 +179,7 @@ export function CashVerification() {
         .eq('cash_approved', true)
         .order('date', { ascending: false });
 
-      setPendingExpenses((expenses || []) as PendingExpense[]);
+      setPendingExpenses((unapprovedExpenses || []) as PendingExpense[]);
 
       // Group by date+shift from cash_handovers
       const groupedVerifications: Record<string, PendingVerification> = {};
@@ -227,7 +235,9 @@ export function CashVerification() {
 
       // Add related expenses and calculate totals
       Object.values(groupedVerifications).forEach(v => {
-        v.expenses = (expenses || []).filter(e => e.date === v.date && e.shift === v.shift) as PendingExpense[];
+        // Use ALL expenses for calculation (not just unapproved)
+        const shiftExpenses = (allExpenses || []).filter(e => e.date === v.date && e.shift === v.shift);
+        v.expenses = shiftExpenses as PendingExpense[];
         
         // Calculate expenses by payment source
         v.expensesCash = v.expenses
