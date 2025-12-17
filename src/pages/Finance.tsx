@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
-  RefreshCw, Lock, Loader2, Sun, Moon, Plus, Trash2, Banknote, Smartphone, 
+  RefreshCw, Loader2, Sun, Moon, Plus, Trash2, Banknote, Smartphone, 
   Wallet, History, Download, CircleDollarSign, Minus, ShoppingCart, Receipt
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -60,7 +60,7 @@ interface InvestorContribution {
 }
 
 
-const ADMIN_PIN = '8808';
+
 
 const CATEGORIES = [
   { value: 'purchases', label: 'Purchases' },
@@ -106,9 +106,6 @@ export default function Finance() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [showPinDialog, setShowPinDialog] = useState(false);
-  const [pinInput, setPinInput] = useState('');
   
   const [selectedDate, setSelectedDate] = useState(getShiftDate());
   const [selectedShift, setSelectedShift] = useState<ShiftType>(getCurrentShift());
@@ -225,15 +222,6 @@ export default function Finance() {
     autoSync();
   }, []);
 
-  const handleLogin = () => {
-    if (pinInput === ADMIN_PIN) {
-      setIsAdmin(true);
-      setShowPinDialog(false);
-      setPinInput('');
-    } else {
-      toast.error('Invalid PIN');
-    }
-  };
 
   const syncLoyverse = async () => {
     setSyncing(true);
@@ -340,32 +328,6 @@ export default function Finance() {
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
-  }
-
-  if (!isAdmin) {
-    return (
-      <div className="p-4 max-w-md mx-auto">
-        <Card className="mt-10 border-border/50">
-          <CardContent className="py-10 text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto">
-              <Lock className="w-8 h-8 text-muted-foreground" />
-            </div>
-            <h2 className="text-xl font-bold">Finance</h2>
-            <p className="text-muted-foreground text-sm">Admin access required</p>
-            <Button size="lg" onClick={() => setShowPinDialog(true)} className="mt-4">
-              <Lock className="w-4 h-4 mr-2" />Enter PIN
-            </Button>
-          </CardContent>
-        </Card>
-        <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
-          <DialogContent className="max-w-xs">
-            <DialogHeader><DialogTitle>Enter PIN</DialogTitle></DialogHeader>
-            <Input type="password" value={pinInput} onChange={e => setPinInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="PIN" autoFocus />
-            <Button onClick={handleLogin} className="w-full">Login</Button>
-          </DialogContent>
-        </Dialog>
-      </div>
-    );
   }
 
   return (
