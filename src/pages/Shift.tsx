@@ -125,6 +125,13 @@ export default function Shift() {
     };
   }, []);
 
+  // Reload expenses when active shifts change
+  useEffect(() => {
+    if (!loading) {
+      loadShiftExpenses();
+    }
+  }, [activeShifts]);
+
   const loadData = async () => {
     try {
       const [{ data: empData }, { data: shiftsData }, { data: closedShifts }] = await Promise.all([
@@ -162,8 +169,6 @@ export default function Shift() {
         }));
       
       setCashSubmissions(shiftSubmissions);
-      
-      await loadShiftExpenses();
     } catch (e) {
       console.error(e);
     } finally {
@@ -173,30 +178,37 @@ export default function Shift() {
 
   const loadShiftExpenses = async () => {
     try {
-      const { data: register } = await supabase
-        .from('cash_register')
-        .select('id')
-        .eq('date', currentDate)
-        .eq('shift', currentShift)
-        .maybeSingle();
-
-      if (register) {
-        const { data: expenses } = await supabase
-          .from('cash_expenses')
-          .select('*, employees:responsible_employee_id(name)')
-          .eq('cash_register_id', register.id)
-          .eq('expense_type', 'shift')
-          .eq('shift', currentShift)
-          .eq('date', currentDate)
-          .order('created_at', { ascending: false });
-
-        setShiftExpenses((expenses || []).map((e: any) => ({
-          ...e,
-          responsible_name: e.employees?.name
-        })));
-      } else {
+      // Load expenses for all currently active employees
+      if (activeShifts.length === 0) {
         setShiftExpenses([]);
+        return;
       }
+
+      const employeeIds = activeShifts.map(s => s.employee_id);
+      
+      // Get today's start time (5 AM Manila) for filtering
+      const now = new Date();
+      const manilaOffset = 8 * 60;
+      const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const manilaTime = new Date(utcTime + (manilaOffset * 60000));
+      manilaTime.setHours(5, 0, 0, 0);
+      if (now.getHours() < 5) {
+        manilaTime.setDate(manilaTime.getDate() - 1);
+      }
+      const todayStart = manilaTime.toISOString();
+
+      const { data: expenses } = await supabase
+        .from('cash_expenses')
+        .select('*, employees:responsible_employee_id(name)')
+        .in('responsible_employee_id', employeeIds)
+        .eq('expense_type', 'shift')
+        .gte('created_at', todayStart)
+        .order('created_at', { ascending: false });
+
+      setShiftExpenses((expenses || []).map((e: any) => ({
+        ...e,
+        responsible_name: e.employees?.name
+      })));
     } catch (e) {
       console.error(e);
       setShiftExpenses([]);
@@ -435,19 +447,31 @@ export default function Shift() {
       return;
     }
 
+    // Get the responsible employee's active shift
+    const employeeShift = activeShifts.find(s => s.employee_id === expenseResponsible);
+    if (!employeeShift) {
+      toast.error('Employee has no active shift');
+      return;
+    }
+
     setAddingExpense(true);
     try {
+      // Use shift date from when employee started their shift
+      const shiftStartDate = format(new Date(employeeShift.shift_start), 'yyyy-MM-dd');
+      const shiftType = employeeShift.shift_type.includes('Day') ? 'day' : 'night';
+
+      // Get or create cash register for that shift date/type
       let { data: register } = await supabase
         .from('cash_register')
         .select('id')
-        .eq('date', currentDate)
-        .eq('shift', currentShift)
-        .single();
+        .eq('date', shiftStartDate)
+        .eq('shift', shiftType)
+        .maybeSingle();
 
       if (!register) {
         const { data: newRegister, error: createError } = await supabase
           .from('cash_register')
-          .insert({ date: currentDate, shift: currentShift })
+          .insert({ date: shiftStartDate, shift: shiftType })
           .select('id')
           .single();
         
@@ -462,8 +486,8 @@ export default function Shift() {
         description: expenseDescription || null,
         payment_source: expensePaymentSource,
         expense_type: 'shift',
-        shift: currentShift,
-        date: currentDate,
+        shift: shiftType,
+        date: shiftStartDate,
         responsible_employee_id: expenseResponsible
       });
 
