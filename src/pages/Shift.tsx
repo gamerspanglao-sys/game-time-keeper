@@ -247,41 +247,23 @@ export default function Shift() {
 
   const loadShiftExpensesWithShifts = async (shifts: ActiveShift[]) => {
     try {
-      // Load expenses either by shift IDs (if there are open shifts) 
-      // OR by current date/shift type (to keep showing after shifts close)
-      let expenses: any[] = [];
+      // Always load by current date and shift type to show all shift expenses
+      // regardless of whether shift_id is set or not
+      const { data, error } = await supabase
+        .from('cash_expenses')
+        .select('*')
+        .eq('date', currentDate)
+        .eq('shift', currentShiftType)
+        .eq('expense_type', 'shift')
+        .order('created_at', { ascending: false });
       
-      if (shifts.length > 0) {
-        // Load by open shift IDs
-        const shiftIds = shifts.map(s => s.id);
-        const { data, error } = await supabase
-          .from('cash_expenses')
-          .select('*')
-          .in('shift_id', shiftIds)
-          .eq('expense_type', 'shift')
-          .order('created_at', { ascending: false });
-        
-        if (error) {
-          console.error('Error loading expenses:', error);
-        } else {
-          expenses = data || [];
-        }
-      } else {
-        // No open shifts - load by current date and shift type
-        const { data, error } = await supabase
-          .from('cash_expenses')
-          .select('*')
-          .eq('date', currentDate)
-          .eq('shift', currentShiftType)
-          .eq('expense_type', 'shift')
-          .order('created_at', { ascending: false });
-        
-        if (error) {
-          console.error('Error loading expenses:', error);
-        } else {
-          expenses = data || [];
-        }
+      if (error) {
+        console.error('Error loading expenses:', error);
+        setShiftExpenses([]);
+        return;
       }
+      
+      const expenses = data || [];
 
       // Load employee names separately
       const expensesWithNames = await Promise.all(expenses.map(async (e: any) => {
