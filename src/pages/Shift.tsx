@@ -254,12 +254,14 @@ export default function Shift() {
       }
 
       const shiftIds = activeShifts.map(s => s.id);
+      const employeeIds = activeShifts.map(s => s.employee_id);
       
-      const { data: expenses } = await (supabase
+      // Query expenses by shift_id OR by responsible_employee_id (for legacy data)
+      const { data: expenses } = await supabase
         .from('cash_expenses')
-        .select('*, employees:responsible_employee_id(name)') as any)
-        .in('shift_id', shiftIds)
+        .select('*, employees:responsible_employee_id(name)')
         .eq('expense_type', 'shift')
+        .or(`shift_id.in.(${shiftIds.join(',')}),and(responsible_employee_id.in.(${employeeIds.join(',')}),shift_id.is.null)`)
         .order('created_at', { ascending: false });
 
       setShiftExpenses((expenses || []).map((e: any) => ({
