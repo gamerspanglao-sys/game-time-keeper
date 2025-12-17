@@ -319,8 +319,6 @@ export function CashVerification() {
         .order('shift_date', { ascending: false })
         .limit(30);
       
-      console.log('Approved handovers loaded:', approvedHandovers?.length || 0, approvedHandovers, 'Error:', handoverError);
-      
       const historyMap: Record<string, ApprovedHistory> = {};
       
       (approvedHandovers || []).forEach((h: any) => {
@@ -388,11 +386,8 @@ export function CashVerification() {
         h.difference = (h.cashActual + h.gcashActual) - (h.cashSubmitted + h.gcashSubmitted);
       });
 
-      console.log('HistoryMap built:', Object.keys(historyMap).length, historyMap);
-
       // Sort by date descending
       const sortedHistory = Object.values(historyMap).sort((a, b) => b.date.localeCompare(a.date));
-      console.log('Setting approvedHistory:', sortedHistory.length, sortedHistory);
       setApprovedHistory(sortedHistory.slice(0, 30));
       
     } catch (e) {
@@ -694,23 +689,97 @@ export function CashVerification() {
     !pendingVerifications.some(v => v.expenses.some(ve => ve.id === e.id))
   );
 
+  // Render history section component
+  const renderHistorySection = () => (
+    <Card>
+      <CardHeader className="py-3 pb-2 cursor-pointer" onClick={() => setShowHistory(!showHistory)}>
+        <CardTitle className="text-sm flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <History className="w-4 h-4 text-muted-foreground" />
+            Confirmation History ({approvedHistory.length})
+          </span>
+          {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </CardTitle>
+      </CardHeader>
+      {showHistory && (
+        <CardContent className="space-y-2 pt-0">
+          {approvedHistory.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No approved shifts yet</p>
+          )}
+          {approvedHistory.map(h => {
+            const totalSubmitted = h.cashSubmitted + h.gcashSubmitted;
+            const totalActual = h.cashActual + h.gcashActual;
+            const totalExpected = h.cashExpected + h.gcashExpected;
+            const adminDiff = totalActual - totalSubmitted;
+            const expectedDiff = totalSubmitted - totalExpected;
+            
+            return (
+              <div key={`${h.date}-${h.shift}`} className="p-3 rounded-lg bg-muted/30 text-sm space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium flex items-center gap-2">
+                    <Clock className="w-3 h-3 text-muted-foreground" />
+                    {h.date} • {h.shift === 'day' ? '☀️ Day' : '🌙 Night'}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {h.shortage > 0 && (
+                      <Badge variant="outline" className="text-red-500 border-red-500/30 text-xs">
+                        Shortage: ₱{h.shortage.toLocaleString()}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className={cn(
+                      "text-xs",
+                      expectedDiff >= 0 ? "text-green-500 border-green-500/30" : "text-red-500 border-red-500/30"
+                    )}>
+                      {expectedDiff >= 0 ? '+' : ''}₱{expectedDiff.toLocaleString()}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                  <div>
+                    <p className="opacity-70">Expected</p>
+                    <p>₱{totalExpected.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="opacity-70">Submitted</p>
+                    <p>₱{totalSubmitted.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="opacity-70">Received</p>
+                    <p>₱{totalActual.toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  <span className="opacity-70">Staff: </span>
+                  {h.employees.join(', ')}
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      )}
+    </Card>
+  );
+
   if (pendingVerifications.length === 0 && standalonePendingExpenses.length === 0) {
     return (
-      <Card className="border-dashed">
-        <CardContent className="py-8 text-center text-muted-foreground">
-          <Check className="w-8 h-8 mx-auto mb-2 text-green-500" />
-          <p>No pending approvals</p>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => { setLoading(true); loadPendingData(); }}
-            className="mt-3"
-          >
-            <RefreshCw className="w-4 h-4 mr-1" />
-            Refresh
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <Card className="border-dashed">
+          <CardContent className="py-8 text-center text-muted-foreground">
+            <Check className="w-8 h-8 mx-auto mb-2 text-green-500" />
+            <p>No pending approvals</p>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => { setLoading(true); loadPendingData(); }}
+              className="mt-3"
+            >
+              <RefreshCw className="w-4 h-4 mr-1" />
+              Refresh
+            </Button>
+          </CardContent>
+        </Card>
+        {renderHistorySection()}
+      </div>
     );
   }
 
