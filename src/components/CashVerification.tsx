@@ -388,8 +388,11 @@ export function CashVerification() {
         h.difference = (h.cashActual + h.gcashActual) - (h.cashSubmitted + h.gcashSubmitted);
       });
 
+      console.log('HistoryMap built:', Object.keys(historyMap).length, historyMap);
+
       // Sort by date descending
       const sortedHistory = Object.values(historyMap).sort((a, b) => b.date.localeCompare(a.date));
+      console.log('Setting approvedHistory:', sortedHistory.length, sortedHistory);
       setApprovedHistory(sortedHistory.slice(0, 30));
       
     } catch (e) {
