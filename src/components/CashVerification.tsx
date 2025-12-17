@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { 
   Check, X, AlertTriangle, TrendingUp, TrendingDown, 
   Banknote, Smartphone, Loader2, Clock, Users, Pencil, Trash2, Plus, RefreshCw,
-  History, ChevronDown, ChevronUp
+  History, ChevronDown, ChevronUp, Send
 } from 'lucide-react';
 
 interface PendingShift {
@@ -544,6 +544,44 @@ export function CashVerification() {
       loadPendingData();
     } catch (e) {
       toast.error('Failed to update');
+    }
+  };
+
+  // Send shift close report to Telegram
+  const sendToTelegram = async (v: PendingVerification) => {
+    const key = `${v.date}-${v.shift}`;
+    setProcessing(key + '-tg');
+    try {
+      const employeeNames = v.shifts.map(s => s.employee_name);
+      
+      await supabase.functions.invoke('telegram-notify', {
+        body: {
+          action: 'shift_close_report',
+          date: v.date,
+          shiftType: v.shift,
+          carryoverCash: v.carryoverCash,
+          loyverseCash: v.loyverseCash,
+          loyverseGcash: v.loyverseGcash,
+          expensesCash: v.expensesCash,
+          expensesGcash: v.expensesGcash,
+          cashExpected: v.cashExpected,
+          gcashExpected: v.gcashExpected,
+          cashSubmitted: v.cashSubmitted,
+          gcashSubmitted: v.gcashSubmitted,
+          changeFundLeft: v.changeFundLeaving,
+          totalExpected: v.totalExpected,
+          totalAccountedFor: v.totalAccountedFor,
+          difference: v.difference,
+          employees: employeeNames
+        }
+      });
+      
+      toast.success('Report sent to Telegram');
+    } catch (e) {
+      console.error('Failed to send to Telegram:', e);
+      toast.error('Failed to send to Telegram');
+    } finally {
+      setProcessing(null);
     }
   };
 
@@ -1496,6 +1534,18 @@ export function CashVerification() {
                     Split Equally
                   </Button>
                 )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => sendToTelegram(v)}
+                  disabled={processing === key + '-tg'}
+                >
+                  {processing === key + '-tg' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </Button>
                 <Button
                   className={cn(
                     "flex-1",

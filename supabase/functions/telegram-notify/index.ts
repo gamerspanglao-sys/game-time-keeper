@@ -599,6 +599,61 @@ serve(async (req) => {
       }
     }
     
+    // Full shift close report with calculation breakdown
+    if (action === 'shift_close_report') {
+      const formatMoney = (n: number) => `₱${n?.toLocaleString() || 0}`;
+      const { 
+        date, shiftType: st,
+        carryoverCash, loyverseCash, loyverseGcash, 
+        expensesCash, expensesGcash,
+        cashExpected, gcashExpected,
+        cashSubmitted, gcashSubmitted,
+        changeFundLeft, totalExpected, totalAccountedFor, difference,
+        employees: empList
+      } = body;
+      
+      const shiftLabel = st === 'day' ? '☀️ Day Shift' : '🌙 Night Shift';
+      const diffIcon = difference >= 0 ? '✅' : '⚠️';
+      const diffLabel = difference >= 0 ? 'SURPLUS' : 'SHORT';
+      
+      message = `📊 <b>SHIFT CLOSE REPORT</b>\n`;
+      message += `━━━━━━━━━━━━━━━━━━━━\n`;
+      message += `📅 ${date} • ${shiftLabel}\n`;
+      if (empList?.length > 0) {
+        message += `👥 Staff: ${empList.join(', ')}\n`;
+      }
+      message += `\n`;
+      
+      // Cash calculation
+      message += `💵 <b>CASH CALCULATION</b>\n`;
+      message += `   🔄 Opening balance: ${formatMoney(carryoverCash || 0)}\n`;
+      message += `   + Loyverse sales: ${formatMoney(loyverseCash || 0)}\n`;
+      message += `   − Expenses: ${formatMoney(expensesCash || 0)}\n`;
+      message += `   ━━━━━━━━━━━━━━\n`;
+      message += `   = Expected: <b>${formatMoney(cashExpected || 0)}</b>\n\n`;
+      
+      // GCash calculation
+      message += `📱 <b>GCASH CALCULATION</b>\n`;
+      message += `   Loyverse sales: ${formatMoney(loyverseGcash || 0)}\n`;
+      message += `   − Expenses: ${formatMoney(expensesGcash || 0)}\n`;
+      message += `   ━━━━━━━━━━━━━━\n`;
+      message += `   = Expected: <b>${formatMoney(gcashExpected || 0)}</b>\n\n`;
+      
+      // What was accounted
+      message += `💰 <b>ACCOUNTED FOR</b>\n`;
+      message += `   💵 Cash handed: ${formatMoney(cashSubmitted || 0)}\n`;
+      message += `   📱 GCash: ${formatMoney(gcashSubmitted || 0)}\n`;
+      message += `   🔄 Change fund left: ${formatMoney(changeFundLeft || 0)}\n`;
+      message += `   ━━━━━━━━━━━━━━\n`;
+      message += `   = Total: <b>${formatMoney(totalAccountedFor || 0)}</b>\n\n`;
+      
+      // Comparison
+      message += `━━━━━━━━━━━━━━━━━━━━\n`;
+      message += `📊 Expected: ${formatMoney(totalExpected || 0)}\n`;
+      message += `📊 Accounted: ${formatMoney(totalAccountedFor || 0)}\n`;
+      message += `${diffIcon} <b>${diffLabel}: ${difference >= 0 ? '+' : ''}${formatMoney(difference || 0)}</b>`;
+    }
+    
     if (action === 'bonus_added') {
       const formatMoney = (n: number) => `₱${n?.toLocaleString() || 0}`;
       const bonusLabels: Record<string, string> = {
