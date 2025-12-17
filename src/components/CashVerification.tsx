@@ -91,6 +91,19 @@ export function CashVerification() {
   const [newExpDescription, setNewExpDescription] = useState('');
   const [newExpSource, setNewExpSource] = useState<'cash' | 'gcash'>('cash');
 
+  // Helper to get previous shift date/type
+  const getPreviousShift = (date: string, shift: string): { date: string; shift: string } => {
+    if (shift === 'day') {
+      // Previous shift is night of previous day
+      const prevDate = new Date(date);
+      prevDate.setDate(prevDate.getDate() - 1);
+      return { date: prevDate.toISOString().split('T')[0], shift: 'night' };
+    } else {
+      // Previous shift is day of same date
+      return { date, shift: 'day' };
+    }
+  };
+
   const loadPendingData = async () => {
     try {
       // Load unapproved shifts
@@ -113,6 +126,13 @@ export function CashVerification() {
       const { data: registers } = await supabase
         .from('cash_register')
         .select('id, date, shift, cash_expected, gcash_expected')
+        .order('date', { ascending: false });
+
+      // Load approved shifts for carryover calculation
+      const { data: approvedShifts } = await supabase
+        .from('shifts')
+        .select('date, type, cash_handed_over, gcash_handed_over')
+        .eq('cash_approved', true)
         .order('date', { ascending: false });
 
       setPendingExpenses((expenses || []) as PendingExpense[]);
@@ -156,7 +176,8 @@ export function CashVerification() {
         groupedVerifications[key].cashSubmitted += s.cash_handed_over || 0;
         groupedVerifications[key].gcashSubmitted += s.gcash_handed_over || 0;
       });
-      // Add related expenses and calculate totals
+
+      // Add related expenses and calculate totals with carryover
       Object.values(groupedVerifications).forEach(v => {
         v.expenses = (expenses || []).filter(e => e.date === v.date && e.shift === v.shift) as PendingExpense[];
         
@@ -168,9 +189,19 @@ export function CashVerification() {
           .filter(e => e.payment_source === 'gcash')
           .reduce((sum, e) => sum + e.amount, 0);
         
-        // Expected = Loyverse expected - expenses (since employees pay expenses from register)
-        v.cashExpected = (v.cashExpected || 0) - cashExpenses;
-        v.gcashExpected = (v.gcashExpected || 0) - gcashExpenses;
+        // Find previous shift's carryover (approved cash handed over)
+        const prev = getPreviousShift(v.date, v.shift);
+        const prevShifts = (approvedShifts || []).filter(
+          (ps: any) => ps.date === prev.date && (ps.type === prev.shift || 
+            (prev.shift === 'night' && ps.type === 'night') ||
+            (prev.shift === 'day' && ps.type === 'day'))
+        );
+        const carryoverCash = prevShifts.reduce((sum: number, ps: any) => sum + (ps.cash_handed_over || 0), 0);
+        const carryoverGcash = prevShifts.reduce((sum: number, ps: any) => sum + (ps.gcash_handed_over || 0), 0);
+        
+        // Expected = Carryover + Loyverse Sales - Expenses
+        v.cashExpected = carryoverCash + (v.cashExpected || 0) - cashExpenses;
+        v.gcashExpected = carryoverGcash + (v.gcashExpected || 0) - gcashExpenses;
         v.totalExpected = v.cashExpected + v.gcashExpected;
         v.totalSubmitted = v.cashSubmitted + v.gcashSubmitted;
         v.difference = v.totalSubmitted - v.totalExpected;
