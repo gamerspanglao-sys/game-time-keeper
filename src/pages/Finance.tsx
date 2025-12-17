@@ -52,6 +52,14 @@ interface ShiftHandover {
   employee_id: string;
 }
 
+interface CashHandover {
+  id: string;
+  shift_date: string;
+  shift_type: string;
+  change_fund_amount: number;
+  approved: boolean;
+}
+
 interface InvestorContribution {
   id: string;
   date: string;
@@ -107,6 +115,7 @@ export default function Finance() {
   const [records, setRecords] = useState<CashRecord[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [shifts, setShifts] = useState<ShiftHandover[]>([]);
+  const [cashHandovers, setCashHandovers] = useState<CashHandover[]>([]);
   const [investorExpenses, setInvestorExpenses] = useState<InvestorContribution[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -187,7 +196,15 @@ export default function Finance() {
   const cashDiscrepancy = (currentRecord?.cash_actual || 0) - employeeCashSubmitted;
   const gcashDiscrepancy = (currentRecord?.gcash_actual || 0) - employeeGcashSubmitted;
   
-  const currentRegisterCash = (currentRecord?.cash_expected || 0) - shiftCashExp;
+  // Get carryover (change fund) from current shift's handover
+  const currentHandover = cashHandovers.find(h => {
+    const handoverShift = h.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
+    return h.shift_date === selectedDate && handoverShift === selectedShift;
+  });
+  const carryoverCash = currentHandover?.change_fund_amount || 0;
+  
+  // Current Register = Carryover + Loyverse Sales - Shift Expenses
+  const currentRegisterCash = carryoverCash + (currentRecord?.cash_expected || 0) - shiftCashExp;
   const currentRegisterGcash = (currentRecord?.gcash_expected || 0) - shiftGcashExp;
   const currentRegisterTotal = currentRegisterCash + currentRegisterGcash;
 
@@ -204,16 +221,18 @@ export default function Finance() {
 
   const loadData = async () => {
     try {
-      const [{ data: cashData }, { data: expData }, { data: shiftsData }, { data: investorData }] = await Promise.all([
+      const [{ data: cashData }, { data: expData }, { data: shiftsData }, { data: investorData }, { data: handoversData }] = await Promise.all([
         supabase.from('cash_register').select('id, date, shift, cash_expected, gcash_expected, cash_actual, gcash_actual').order('date', { ascending: false }),
         supabase.from('cash_expenses').select('*').order('created_at', { ascending: false }),
         supabase.from('shifts').select('id, date, shift_type, cash_handed_over, gcash_handed_over, employee_id').order('date', { ascending: false }),
-        supabase.from('investor_contributions').select('*').order('created_at', { ascending: false })
+        supabase.from('investor_contributions').select('*').order('created_at', { ascending: false }),
+        supabase.from('cash_handovers').select('id, shift_date, shift_type, change_fund_amount, approved').order('shift_date', { ascending: false })
       ]);
       setRecords((cashData || []) as CashRecord[]);
       setExpenses((expData || []) as Expense[]);
       setShifts((shiftsData || []) as ShiftHandover[]);
       setInvestorExpenses((investorData || []) as InvestorContribution[]);
+      setCashHandovers((handoversData || []) as CashHandover[]);
     } catch (e) {
       console.error(e);
     } finally {
@@ -228,6 +247,7 @@ export default function Finance() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_register' }, loadData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, loadData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, loadData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_handovers' }, loadData)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -577,9 +597,24 @@ export default function Finance() {
                     <span className="text-xs font-medium">Cash</span>
                   </div>
                   <p className="text-xl font-bold text-green-500">₱{currentRegisterCash.toLocaleString()}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Loyverse: ₱{(currentRecord?.cash_expected || 0).toLocaleString()}
-                  </p>
+                  <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
+                    {carryoverCash > 0 && (
+                      <div className="flex justify-between">
+                        <span>Change Fund:</span>
+                        <span className="text-amber-500">₱{carryoverCash.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span>+ Loyverse:</span>
+                      <span className="text-green-500">₱{(currentRecord?.cash_expected || 0).toLocaleString()}</span>
+                    </div>
+                    {shiftCashExp > 0 && (
+                      <div className="flex justify-between">
+                        <span>− Expenses:</span>
+                        <span className="text-red-500">₱{shiftCashExp.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
                   <Button 
                     size="sm" 
                     variant="ghost" 
@@ -595,9 +630,18 @@ export default function Finance() {
                     <span className="text-xs font-medium">GCash</span>
                   </div>
                   <p className="text-xl font-bold text-blue-500">₱{currentRegisterGcash.toLocaleString()}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Loyverse: ₱{(currentRecord?.gcash_expected || 0).toLocaleString()}
-                  </p>
+                  <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
+                    <div className="flex justify-between">
+                      <span>+ Loyverse:</span>
+                      <span className="text-blue-500">₱{(currentRecord?.gcash_expected || 0).toLocaleString()}</span>
+                    </div>
+                    {shiftGcashExp > 0 && (
+                      <div className="flex justify-between">
+                        <span>− Expenses:</span>
+                        <span className="text-red-500">₱{shiftGcashExp.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
                   <Button 
                     size="sm" 
                     variant="ghost" 
