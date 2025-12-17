@@ -3,16 +3,17 @@ import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
-  Loader2, Package, Download, RefreshCw, Plus, Check, X, Search, Truck, Edit2
+  Loader2, Package, Download, RefreshCw, Plus, Check, X, Search, Truck, Edit2, Send, ShoppingCart
 } from 'lucide-react';
 
 interface InventoryItem {
@@ -22,6 +23,27 @@ interface InventoryItem {
   cost: number;
   total_value: number;
   category?: string;
+}
+
+interface SalesItem {
+  name: string;
+  totalQuantity: number;
+  avgPerDay: number;
+  recommendedQty: number;
+  inStock: number;
+  toOrder: number;
+  caseSize: number;
+  casesToOrder: number;
+  category: string;
+  supplier: string;
+  note?: string;
+}
+
+interface PurchaseData {
+  recommendations: SalesItem[];
+  analysisDays: number;
+  bufferDays: number;
+  analysisPeriod: { start: string; end: string };
 }
 
 export default function Inventory() {
@@ -40,6 +62,13 @@ export default function Inventory() {
   const [receiptQty, setReceiptQty] = useState('');
   const [receiptCost, setReceiptCost] = useState('');
   const [receiptNotes, setReceiptNotes] = useState('');
+
+  // Purchase Order state
+  const [purchaseData, setPurchaseData] = useState<PurchaseData | null>(null);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [showOnlyToOrder, setShowOnlyToOrder] = useState(true);
+  const [excludedItems, setExcludedItems] = useState<Set<string>>(new Set());
+  const [sendingTelegram, setSendingTelegram] = useState(false);
 
   const loadInventory = async () => {
     setLoading(true);
@@ -60,7 +89,7 @@ export default function Inventory() {
             total_value: (item.in_stock || 0) * (item.cost || 0),
             category: item.category_name
           }))
-          .sort((a: InventoryItem, b: InventoryItem) => b.in_stock - a.in_stock); // Sort by stock descending
+          .sort((a: InventoryItem, b: InventoryItem) => b.in_stock - a.in_stock);
         
         setItems(inventoryItems);
         toast.success(`Loaded ${inventoryItems.length} items`);
@@ -218,8 +247,92 @@ export default function Inventory() {
     toast.success('Export complete');
   };
 
+  // Purchase Order functions
+  const generatePurchaseOrder = async () => {
+    setPurchaseLoading(true);
+    setExcludedItems(new Set());
+    try {
+      const { data, error } = await supabase.functions.invoke('loyverse-purchase-request');
+      if (error) throw error;
+      setPurchaseData(data);
+      toast.success('Purchase order generated');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to generate order');
+    } finally {
+      setPurchaseLoading(false);
+    }
+  };
+
+  const sendPurchaseToTelegram = async () => {
+    setSendingTelegram(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('telegram-notify', {
+        body: { action: 'purchase' }
+      });
+      if (error) throw error;
+      toast.success('Purchase order sent to Telegram');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to send to Telegram');
+    } finally {
+      setSendingTelegram(false);
+    }
+  };
+
+  const getFilteredPurchaseItems = () => {
+    if (!purchaseData?.recommendations) return [];
+    let items = purchaseData.recommendations.filter(item => !excludedItems.has(item.name));
+    if (showOnlyToOrder) {
+      items = items.filter(item => item.toOrder > 0);
+    }
+    return items;
+  };
+
+  const groupedPurchaseItems = () => {
+    const items = getFilteredPurchaseItems();
+    const groups: Record<string, SalesItem[]> = {};
+    items.forEach(item => {
+      const supplier = item.supplier || 'Others';
+      if (!groups[supplier]) groups[supplier] = [];
+      groups[supplier].push(item);
+    });
+    return groups;
+  };
+
+  const exportPurchaseCSV = () => {
+    const items = getFilteredPurchaseItems();
+    const csv = [
+      ['Supplier', 'Item', 'In Stock', 'Avg/Day', 'Recommended', 'To Order', 'Cases', 'Case Size'].join(','),
+      ...items.map(item => [
+        `"${item.supplier || 'Others'}"`,
+        `"${item.name}"`,
+        item.inStock,
+        item.avgPerDay.toFixed(1),
+        item.recommendedQty,
+        item.toOrder,
+        item.casesToOrder,
+        item.caseSize
+      ].join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `purchase_order_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+  };
+
+  const supplierStyles: Record<string, { emoji: string; color: string; bg: string }> = {
+    'San Miguel': { emoji: '🍺', color: 'text-amber-500', bg: 'bg-amber-500/10' },
+    'Tanduay': { emoji: '🥃', color: 'text-orange-500', bg: 'bg-orange-500/10' },
+    'Soft Drinks': { emoji: '🥤', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    'Snacks': { emoji: '🍿', color: 'text-purple-500', bg: 'bg-purple-500/10' },
+    'Others': { emoji: '📦', color: 'text-muted-foreground', bg: 'bg-muted/30' }
+  };
+
   return (
-    <div className="space-y-4 p-4 max-w-4xl mx-auto">
+    <div className="space-y-4 p-4 max-w-4xl mx-auto pb-24">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold flex items-center gap-2">
@@ -257,97 +370,229 @@ export default function Inventory() {
         </Card>
       </div>
 
-      {/* Search & Filters */}
-      <div className="flex gap-3 items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search item..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <div className="flex items-center gap-2 text-sm">
-          <Switch checked={showZeroStock} onCheckedChange={setShowZeroStock} />
-          <span className="text-muted-foreground whitespace-nowrap">Show zero</span>
-        </div>
-      </div>
+      {/* Tabs */}
+      <Tabs defaultValue="stock" className="w-full">
+        <TabsList className="w-full">
+          <TabsTrigger value="stock" className="flex-1 gap-2">
+            <Package className="w-4 h-4" />
+            Stock
+          </TabsTrigger>
+          <TabsTrigger value="orders" className="flex-1 gap-2">
+            <ShoppingCart className="w-4 h-4" />
+            Orders
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Stock List */}
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="w-6 h-6 animate-spin" />
+        <TabsContent value="stock" className="space-y-4 mt-4">
+          {/* Search & Filters */}
+          <div className="flex gap-3 items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search item..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
             </div>
-          ) : filteredItems.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">No items found</div>
-          ) : (
-            <div className="max-h-[500px] overflow-y-auto">
-              {sortedCategories.map(category => (
-                <div key={category}>
-                  <div className="sticky top-0 bg-primary/10 px-3 py-2 font-semibold text-sm border-b flex items-center justify-between">
-                    <span>{category}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {groupedItems[category].length} items
-                    </Badge>
-                  </div>
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {groupedItems[category].map((item) => (
-                        <tr key={item.item_id} className="border-b hover:bg-muted/30">
-                          <td className="py-2 px-3">
-                            <div className="font-medium">{item.item_name}</div>
-                          </td>
-                          <td className="text-right py-2 px-3 w-24">
-                            {editingId === item.item_id ? (
-                              <Input
-                                type="number"
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                className="w-20 h-7 text-right"
-                                autoFocus
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') saveEdit(item);
-                                  if (e.key === 'Escape') cancelEdit();
-                                }}
-                              />
-                            ) : (
-                              <Badge variant={item.in_stock > 0 ? "secondary" : "destructive"}>
-                                {item.in_stock}
-                              </Badge>
-                            )}
-                          </td>
-                          <td className="text-right py-2 px-3 w-24 text-muted-foreground">
-                            ₱{item.total_value.toLocaleString()}
-                          </td>
-                          <td className="py-2 px-2 w-16">
-                            {editingId === item.item_id ? (
-                              <div className="flex gap-1">
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" onClick={() => saveEdit(item)}>
-                                  <Check className="w-4 h-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600" onClick={cancelEdit}>
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(item)}>
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            <div className="flex items-center gap-2 text-sm">
+              <Switch checked={showZeroStock} onCheckedChange={setShowZeroStock} />
+              <span className="text-muted-foreground whitespace-nowrap">Show zero</span>
+            </div>
+          </div>
+
+          {/* Stock List */}
+          <Card>
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="flex items-center justify-center h-32">
+                  <Loader2 className="w-6 h-6 animate-spin" />
                 </div>
-              ))}
+              ) : filteredItems.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">No items found</div>
+              ) : (
+                <div className="max-h-[500px] overflow-y-auto">
+                  {sortedCategories.map(category => (
+                    <div key={category}>
+                      <div className="sticky top-0 bg-primary/10 px-3 py-2 font-semibold text-sm border-b flex items-center justify-between">
+                        <span>{category}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {groupedItems[category].length} items
+                        </Badge>
+                      </div>
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {groupedItems[category].map((item) => (
+                            <tr key={item.item_id} className="border-b hover:bg-muted/30">
+                              <td className="py-2 px-3">
+                                <div className="font-medium">{item.item_name}</div>
+                              </td>
+                              <td className="text-right py-2 px-3 w-24">
+                                {editingId === item.item_id ? (
+                                  <Input
+                                    type="number"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    className="w-20 h-7 text-right"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') saveEdit(item);
+                                      if (e.key === 'Escape') cancelEdit();
+                                    }}
+                                  />
+                                ) : (
+                                  <Badge variant={item.in_stock > 0 ? "secondary" : "destructive"}>
+                                    {item.in_stock}
+                                  </Badge>
+                                )}
+                              </td>
+                              <td className="text-right py-2 px-3 w-24 text-muted-foreground">
+                                ₱{item.total_value.toLocaleString()}
+                              </td>
+                              <td className="py-2 px-2 w-16">
+                                {editingId === item.item_id ? (
+                                  <div className="flex gap-1">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" onClick={() => saveEdit(item)}>
+                                      <Check className="w-4 h-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600" onClick={cancelEdit}>
+                                      <X className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(item)}>
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="orders" className="space-y-4 mt-4">
+          {/* Generate Button & Controls */}
+          <div className="flex items-center justify-between gap-3">
+            <Button 
+              onClick={generatePurchaseOrder} 
+              disabled={purchaseLoading}
+              className="flex-1"
+            >
+              {purchaseLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+              Generate Order
+            </Button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">To order only</span>
+              <Switch checked={showOnlyToOrder} onCheckedChange={setShowOnlyToOrder} />
             </div>
+          </div>
+
+          {/* Analysis Info */}
+          {purchaseData && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="p-3">
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-4 h-4 text-primary" />
+                    <span className="text-muted-foreground">Analysis: {purchaseData.analysisDays} days + {purchaseData.bufferDays} days buffer</span>
+                  </div>
+                  <Badge variant="secondary">{getFilteredPurchaseItems().length} items</Badge>
+                </div>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+
+          {/* Purchase Items by Supplier */}
+          {purchaseData ? (
+            <div className="space-y-4">
+              {Object.entries(groupedPurchaseItems()).map(([supplier, items]) => {
+                const style = supplierStyles[supplier] || supplierStyles['Others'];
+                return (
+                  <Card key={supplier} className={cn("border-border/50", style.bg)}>
+                    <CardHeader className="py-2 pb-1">
+                      <CardTitle className={cn("text-sm flex items-center gap-2", style.color)}>
+                        <span>{style.emoji}</span>
+                        {supplier}
+                        <Badge variant="secondary" className="ml-auto">{items.length}</Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="py-2">
+                      <div className="space-y-1.5">
+                        {items.map(item => (
+                          <div key={item.name} className="flex items-center justify-between p-2 bg-background/50 rounded-lg">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{item.name}</p>
+                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                <span>Stock: {item.inStock}</span>
+                                <span>•</span>
+                                <span>Avg: {item.avgPerDay.toFixed(1)}/day</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {item.toOrder > 0 ? (
+                                <div className="text-right">
+                                  <p className={cn("text-sm font-bold", style.color)}>+{item.toOrder}</p>
+                                  {item.casesToOrder > 0 && (
+                                    <p className="text-[10px] text-muted-foreground">{item.casesToOrder} cases × {item.caseSize}</p>
+                                  )}
+                                </div>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] text-green-500 border-green-500/30">OK</Badge>
+                              )}
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => setExcludedItems(prev => new Set([...prev, item.name]))}
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+
+              {/* Action Buttons */}
+              {getFilteredPurchaseItems().length > 0 && (
+                <div className="flex gap-2">
+                  <Button 
+                    variant="default"
+                    className="flex-1"
+                    onClick={sendPurchaseToTelegram}
+                    disabled={sendingTelegram}
+                  >
+                    {sendingTelegram ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                    Send to Telegram
+                  </Button>
+                  <Button variant="outline" onClick={exportPurchaseCSV}>
+                    <Download className="w-4 h-4 mr-2" />
+                    CSV
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Card className="border-dashed border-2">
+              <CardContent className="py-12 text-center">
+                <Package className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">Click "Generate Order" to analyze inventory</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">Uses 3-day sales average + 2-day delivery buffer</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Receipt Dialog */}
       <Dialog open={showReceiptDialog} onOpenChange={setShowReceiptDialog}>
