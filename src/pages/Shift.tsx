@@ -529,10 +529,12 @@ export default function Shift() {
           </div>
         </div>
         
-        <Button variant="outline" size="sm" onClick={openExpenseDialog} className="gap-1.5 h-9 border-border/50 hover:bg-secondary">
-          <Plus className="w-4 h-4" />
-          Expense
-        </Button>
+        {activeShifts.length > 0 && (
+          <Button variant="outline" size="sm" onClick={openExpenseDialog} className="gap-1.5 h-9 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600">
+            <Plus className="w-4 h-4" />
+            Expense
+          </Button>
+        )}
       </div>
 
       {/* Active Shifts */}
@@ -834,14 +836,19 @@ export default function Shift() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Responsible Person</label>
+              <label className="text-sm text-muted-foreground">Responsible Person (Working)</label>
               <Select value={expenseResponsible} onValueChange={setExpenseResponsible}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select responsible person" />
+                  <SelectValue placeholder="Select working employee" />
                 </SelectTrigger>
                 <SelectContent>
-                  {employees.map(emp => (
-                    <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+                  {activeShifts.map(shift => (
+                    <SelectItem key={shift.employee_id} value={shift.employee_id}>
+                      <span className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                        {shift.employee_name}
+                      </span>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
