@@ -586,7 +586,12 @@ export default function Shift() {
                     {shift.employee_name.charAt(0)}
                   </div>
                   <div>
-                    <div className="font-medium">{shift.employee_name}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{shift.employee_name}</span>
+                      <Badge className="bg-green-500/20 text-green-600 border-0 text-[10px] px-1.5 py-0">
+                        Open
+                      </Badge>
+                    </div>
                     <div className="text-xs text-green-600 font-mono flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {formatDuration(shift.shift_start)}
