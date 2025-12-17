@@ -253,18 +253,11 @@ export default function Shift() {
         return;
       }
 
-      // Only load expenses from shifts that match current shift type
-      const currentTypeShifts = activeShifts.filter(s => s.type === currentShiftType);
-      if (currentTypeShifts.length === 0) {
-        setShiftExpenses([]);
-        return;
-      }
-
-      const shiftIds = currentTypeShifts.map(s => s.id);
+      const shiftIds = activeShifts.map(s => s.id);
       
-      const { data: expenses } = await (supabase
+      const { data: expenses } = await supabase
         .from('cash_expenses')
-        .select('*, employees:responsible_employee_id(name)') as any)
+        .select('*, employees:responsible_employee_id(name)')
         .in('shift_id', shiftIds)
         .eq('expense_type', 'shift')
         .order('created_at', { ascending: false });
