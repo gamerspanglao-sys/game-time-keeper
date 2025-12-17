@@ -197,8 +197,14 @@ export function CashVerification() {
       // Load approved shifts for carryover calculation and history
       const { data: approvedShifts } = await supabase
         .from('shifts')
-        .select('date, type, shift_type, cash_handed_over, gcash_handed_over, cash_shortage, employees(name)')
+        .select('date, type, shift_type, cash_handed_over, gcash_handed_over, cash_shortage, change_fund_received, employees(name)')
         .eq('cash_approved', true)
+        .order('date', { ascending: false });
+
+      // Load all shifts to get change_fund_received
+      const { data: allShifts } = await supabase
+        .from('shifts')
+        .select('date, type, change_fund_received')
         .order('date', { ascending: false });
 
       setPendingExpenses((unapprovedExpenses || []) as PendingExpense[]);
@@ -217,8 +223,17 @@ export function CashVerification() {
         }
       };
       
-      // Helper to find previous shift's change_fund (carryover for current shift)
-      const findPreviousChangeFund = (date: string, shift: string): number => {
+      // Helper to find change_fund_received from shifts (what employees confirmed receiving)
+      const findChangeFundReceived = (date: string, shift: string): number => {
+        // Find any shift for this date/shift that has change_fund_received
+        const shiftRecord = (allShifts || []).find((s: any) => {
+          const sType = s.type || 'day';
+          return s.date === date && sType === shift && s.change_fund_received != null;
+        });
+        if (shiftRecord?.change_fund_received != null) {
+          return shiftRecord.change_fund_received;
+        }
+        // Fallback: look for previous shift's change_fund_amount in handovers
         const prev = getPrevShift(date, shift);
         const prevHandover = (allHandovers || []).find((ph: any) => {
           const phShift = ph.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
@@ -245,8 +260,8 @@ export function CashVerification() {
         if (!groupedVerifications[key]) {
           const register = registers?.find(r => r.date === h.shift_date && r.shift === shiftType);
           
-          // Get carryover from PREVIOUS shift's change_fund, not current
-          const carryover = findPreviousChangeFund(h.shift_date, shiftType);
+          // Get carryover - check change_fund_received first, then fallback to previous shift's change_fund
+          const carryover = findChangeFundReceived(h.shift_date, shiftType);
           
           groupedVerifications[key] = {
             date: h.shift_date,
@@ -334,8 +349,8 @@ export function CashVerification() {
         if (!historyMap[key]) {
           const register = registers?.find(r => r.date === h.shift_date && r.shift === shiftType);
           
-          // Get carryover from previous shift
-          const carryover = findPreviousChangeFund(h.shift_date, shiftType);
+          // Get carryover - check change_fund_received first, then fallback
+          const carryover = findChangeFundReceived(h.shift_date, shiftType);
           
           // Get expenses for this shift
           const shiftExpenses = (allExpenses || []).filter(e => e.date === h.shift_date && e.shift === shiftType);
