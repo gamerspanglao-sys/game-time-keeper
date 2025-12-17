@@ -66,6 +66,7 @@ interface PendingVerification {
   shifts: PendingShift[];
   expenses: PendingExpense[];
   registerId?: string;
+  handoverId?: string;
 }
 
 const CATEGORIES = [
@@ -136,13 +137,18 @@ export function CashVerification() {
 
   const loadPendingData = async () => {
     try {
-      // Load unapproved shifts
-      const { data: shifts } = await supabase
+      // Load unapproved cash handovers (collective shift closure)
+      const { data: handovers } = await supabase
+        .from('cash_handovers')
+        .select('*, employees:handed_by_employee_id(name)')
+        .eq('approved', false)
+        .order('shift_date', { ascending: false });
+
+      // Load closed shifts for handover employees display
+      const { data: closedShifts } = await supabase
         .from('shifts')
         .select('*, employees(name)')
         .eq('status', 'closed')
-        .eq('cash_approved', false)
-        .not('cash_handed_over', 'is', null)
         .order('date', { ascending: false });
 
       // Load unapproved expenses
@@ -167,52 +173,57 @@ export function CashVerification() {
 
       setPendingExpenses((expenses || []) as PendingExpense[]);
 
-      // Group shifts by date+shift
+      // Group by date+shift from cash_handovers
       const groupedVerifications: Record<string, PendingVerification> = {};
       
-      (shifts || []).forEach((s: any) => {
-        const shiftType = s.shift_type?.includes('Night') || s.shift_type === '12 hours' ? 'night' : 'day';
-        const key = `${s.date}-${shiftType}`;
+      (handovers || []).forEach((h: any) => {
+        const shiftType = h.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
+        const key = `${h.shift_date}-${shiftType}`;
         
         if (!groupedVerifications[key]) {
-          const register = registers?.find(r => r.date === s.date && r.shift === shiftType);
+          const register = registers?.find(r => r.date === h.shift_date && r.shift === shiftType);
+          
+          // Find all closed shifts for this date/shift to get employees
+          const relatedShifts = (closedShifts || []).filter((s: any) => {
+            const sType = s.type === 'night' || s.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
+            return s.date === h.shift_date && sType === shiftType;
+          });
+          
           groupedVerifications[key] = {
-            date: s.date,
+            date: h.shift_date,
             shift: shiftType,
-            // Breakdown - will be calculated later
             carryoverCash: 0,
             carryoverGcash: 0,
             loyverseCash: register?.cash_expected || 0,
             loyverseGcash: register?.gcash_expected || 0,
             expensesCash: 0,
             expensesGcash: 0,
-            // Calculated
             cashExpected: 0,
             gcashExpected: 0,
-            cashSubmitted: 0,
-            gcashSubmitted: 0,
+            cashSubmitted: h.cash_amount || 0,
+            gcashSubmitted: h.gcash_amount || 0,
             totalExpected: 0,
             totalSubmitted: 0,
             difference: 0,
-            shifts: [],
+            shifts: relatedShifts.map((s: any) => ({
+              id: s.id,
+              date: s.date,
+              shift_type: s.shift_type,
+              employee_id: s.employee_id,
+              employee_name: s.employees?.name || 'Unknown',
+              cash_handed_over: null,
+              gcash_handed_over: null,
+              cash_approved: s.cash_approved
+            })),
             expenses: [],
-            registerId: register?.id
+            registerId: register?.id,
+            handoverId: h.id
           };
+        } else {
+          // Add to existing - in case multiple handovers for same shift
+          groupedVerifications[key].cashSubmitted += h.cash_amount || 0;
+          groupedVerifications[key].gcashSubmitted += h.gcash_amount || 0;
         }
-        
-        groupedVerifications[key].shifts.push({
-          id: s.id,
-          date: s.date,
-          shift_type: s.shift_type,
-          employee_id: s.employee_id,
-          employee_name: s.employees?.name || 'Unknown',
-          cash_handed_over: s.cash_handed_over,
-          gcash_handed_over: s.gcash_handed_over,
-          cash_approved: s.cash_approved
-        });
-        
-        groupedVerifications[key].cashSubmitted += s.cash_handed_over || 0;
-        groupedVerifications[key].gcashSubmitted += s.gcash_handed_over || 0;
       });
 
       // Add related expenses and calculate totals with carryover
@@ -320,6 +331,7 @@ export function CashVerification() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, loadPendingData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_expenses' }, loadPendingData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_register' }, loadPendingData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_handovers' }, loadPendingData)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -434,6 +446,14 @@ export function CashVerification() {
             cash_shortage: shortage
           })
           .eq('id', shift.id);
+      }
+
+      // Approve the cash handover record
+      if (confirmingVerification.handoverId) {
+        await supabase
+          .from('cash_handovers')
+          .update({ approved: true })
+          .eq('id', confirmingVerification.handoverId);
       }
 
       // Approve related expenses
