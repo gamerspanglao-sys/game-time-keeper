@@ -650,7 +650,7 @@ export default function Finance() {
             <CardHeader className="py-3 pb-2">
               <CardTitle className="text-sm flex items-center gap-2"><CircleDollarSign className="w-4 h-4 text-primary" />Current Register<Badge variant="secondary" className="ml-auto">₱{currentRegisterTotal.toLocaleString()}</Badge></CardTitle>
             </CardHeader>
-            <CardContent className="py-2">
+            <CardContent className="py-2 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-lg bg-green-500/10">
                   <div className="flex items-center justify-between mb-1">
@@ -669,34 +669,37 @@ export default function Finance() {
                   <p className="text-[10px] text-muted-foreground">₱{(currentRecord?.gcash_expected || 0).toLocaleString()} - ₱{shiftGcashExp.toLocaleString()}</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="py-3 pb-2"><CardTitle className="text-sm flex items-center justify-between"><span>Shift Expenses</span><Badge variant="secondary">₱{totalShiftExpenses.toLocaleString()}</Badge></CardTitle></CardHeader>
-            <CardContent className="py-2">
-              {currentExpenses.length > 0 ? (
-                <div className="space-y-1.5 max-h-60 overflow-y-auto">
-                  {currentExpenses.map(exp => (
-                    <div key={exp.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <span className={cn("w-6 h-6 rounded-full flex items-center justify-center", exp.expense_type === 'shift' ? "bg-primary/20" : exp.payment_source === 'gcash' ? "bg-blue-500/20" : "bg-green-500/20")}>
-                          {exp.expense_type === 'shift' ? <CircleDollarSign className="w-3 h-3 text-primary" /> : exp.payment_source === 'gcash' ? <Smartphone className="w-3 h-3 text-blue-500" /> : <Banknote className="w-3 h-3 text-green-500" />}
-                        </span>
-                        <div>
-                          <div className="text-sm font-medium">{getCategoryLabel(exp.category)}</div>
-                          {exp.description && <div className="text-[10px] text-muted-foreground">{exp.description}</div>}
+              
+              {/* Register Expenses - deducted from current register */}
+              {currentExpenses.filter(e => e.expense_type === 'shift').length > 0 && (
+                <div className="border-t border-border/50 pt-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-muted-foreground">Register Expenses</span>
+                    <Badge variant="outline" className="text-[10px]">-₱{totalShiftExpenses.toLocaleString()}</Badge>
+                  </div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {currentExpenses.filter(e => e.expense_type === 'shift').map(exp => (
+                      <div key={exp.id} className="flex items-center justify-between text-xs p-1.5 bg-muted/30 rounded">
+                        <div className="flex items-center gap-2">
+                          <span className={cn("w-5 h-5 rounded-full flex items-center justify-center", exp.payment_source === 'gcash' ? "bg-blue-500/20" : "bg-green-500/20")}>
+                            {exp.payment_source === 'gcash' ? <Smartphone className="w-2.5 h-2.5 text-blue-500" /> : <Banknote className="w-2.5 h-2.5 text-green-500" />}
+                          </span>
+                          <div>
+                            <span className="font-medium">{getCategoryLabel(exp.category)}</span>
+                            {exp.description && <span className="text-muted-foreground/60 ml-1">• {exp.description}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className={cn("font-semibold", exp.payment_source === 'gcash' ? "text-blue-500" : "text-green-500")}>
+                            -₱{exp.amount.toLocaleString()}
+                          </span>
+                          <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive/70 hover:text-destructive" onClick={() => deleteExpense(exp.id)}><Trash2 className="w-2.5 h-2.5" /></Button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Badge variant={exp.payment_source === 'gcash' ? 'outline' : 'secondary'} className="text-[10px] px-1.5">{exp.payment_source === 'gcash' ? 'GC' : '₱'}</Badge>
-                        <span className="font-semibold text-sm">₱{exp.amount.toLocaleString()}</span>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive/70 hover:text-destructive" onClick={() => deleteExpense(exp.id)}><Trash2 className="w-3 h-3" /></Button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              ) : <p className="text-sm text-muted-foreground text-center py-4">No expenses this shift</p>}
+              )}
             </CardContent>
           </Card>
 
