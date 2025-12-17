@@ -262,17 +262,18 @@ export default function Shift() {
 
   const loadShiftExpensesWithShifts = async (shifts: ActiveShift[]) => {
     try {
-      // Use effective shift type from active shifts
-      const shiftType = shifts.length > 0 ? shifts[0].type : getCurrentShiftType();
-      const shiftDate = shifts.length > 0 
-        ? format(new Date(shifts[0].shift_start), 'yyyy-MM-dd')
-        : getShiftDate();
+      // Load expenses by shift_id for active shifts
+      const shiftIds = shifts.map(s => s.id);
+      
+      if (shiftIds.length === 0) {
+        setShiftExpenses([]);
+        return;
+      }
       
       const { data, error } = await supabase
         .from('cash_expenses')
         .select('*')
-        .eq('date', shiftDate)
-        .eq('shift', shiftType)
+        .in('shift_id', shiftIds)
         .eq('expense_type', 'shift')
         .order('created_at', { ascending: false });
       
@@ -599,22 +600,23 @@ export default function Shift() {
 
     setAddingExpense(true);
     try {
-      // Use shift date from when employee started their shift
-      const shiftStartDate = format(new Date(employeeShift.shift_start), 'yyyy-MM-dd');
+      // Use current Manila date (when expense is actually made)
+      const manilaTime = getManilaTime();
+      const expenseDate = format(manilaTime, 'yyyy-MM-dd');
       const shiftType = employeeShift.type;
 
-      // Get or create cash register for that shift date/type
+      // Get or create cash register for that date/shift
       let { data: register } = await supabase
         .from('cash_register')
         .select('id')
-        .eq('date', shiftStartDate)
+        .eq('date', expenseDate)
         .eq('shift', shiftType)
         .maybeSingle();
 
       if (!register) {
         const { data: newRegister, error: createError } = await supabase
           .from('cash_register')
-          .insert({ date: shiftStartDate, shift: shiftType })
+          .insert({ date: expenseDate, shift: shiftType })
           .select('id')
           .single();
         
@@ -631,7 +633,7 @@ export default function Shift() {
         payment_source: expensePaymentSource,
         expense_type: 'shift',
         shift: shiftType,
-        date: shiftStartDate,
+        date: expenseDate,
         responsible_employee_id: expenseResponsible,
         approved: false
       });
