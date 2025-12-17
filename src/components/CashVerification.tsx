@@ -585,6 +585,42 @@ export function CashVerification() {
     }
   };
 
+  // Send history report to Telegram
+  const sendHistoryToTelegram = async (h: ApprovedHistory) => {
+    const key = `${h.date}-${h.shift}`;
+    setProcessing(key + '-tg');
+    try {
+      await supabase.functions.invoke('telegram-notify', {
+        body: {
+          action: 'shift_close_report',
+          date: h.date,
+          shiftType: h.shift,
+          carryoverCash: h.carryoverCash,
+          loyverseCash: h.loyverseCash,
+          loyverseGcash: h.loyverseGcash,
+          expensesCash: h.expensesCash,
+          expensesGcash: h.expensesGcash,
+          cashExpected: h.cashExpected,
+          gcashExpected: h.gcashExpected,
+          cashSubmitted: h.cashSubmitted,
+          gcashSubmitted: h.gcashSubmitted,
+          changeFundLeft: h.changeFundLeft,
+          totalExpected: h.cashExpected + h.gcashExpected,
+          totalAccountedFor: h.totalAccountedFor,
+          difference: h.difference,
+          employees: h.employees
+        }
+      });
+      
+      toast.success('Report sent to Telegram');
+    } catch (e) {
+      console.error('Failed to send to Telegram:', e);
+      toast.error('Failed to send to Telegram');
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   // Start confirmation flow - prefill with submitted amounts
   const startConfirmation = (v: PendingVerification) => {
     setConfirmingVerification(v);
@@ -1662,6 +1698,19 @@ export function CashVerification() {
                         )}>
                           {expectedDiff >= 0 ? '+' : ''}₱{expectedDiff.toLocaleString()}
                         </Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => sendHistoryToTelegram(h)}
+                          disabled={processing === `${h.date}-${h.shift}-tg`}
+                        >
+                          {processing === `${h.date}-${h.shift}-tg` ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Send className="w-3 h-3" />
+                          )}
+                        </Button>
                       </div>
                     </div>
                     
