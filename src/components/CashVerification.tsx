@@ -87,14 +87,14 @@ export function CashVerification() {
   const [shortageInputs, setShortageInputs] = useState<Record<string, Record<string, string>>>({});
   const [processing, setProcessing] = useState<string | null>(null);
   
+  // Confirmation dialog state - admin enters actual received amounts
+  const [confirmingVerification, setConfirmingVerification] = useState<PendingVerification | null>(null);
+  const [actualCash, setActualCash] = useState('');
+  const [actualGcash, setActualGcash] = useState('');
+  
   // Edit expense state
   const [editingExpense, setEditingExpense] = useState<PendingExpense | null>(null);
   const [editAmount, setEditAmount] = useState('');
-  
-  // Edit shift cash state
-  const [editingShift, setEditingShift] = useState<PendingShift | null>(null);
-  const [editShiftCash, setEditShiftCash] = useState('');
-  const [editShiftGcash, setEditShiftGcash] = useState('');
   
   // Add expense dialog state
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -253,73 +253,6 @@ export function CashVerification() {
 
   useEffect(() => { loadPendingData(); }, []);
 
-  const approveVerification = async (verification: PendingVerification, addToStorage: boolean) => {
-    const key = `${verification.date}-${verification.shift}`;
-    setProcessing(key);
-    
-    try {
-      // Update all shifts as approved
-      for (const shift of verification.shifts) {
-        const shortage = verification.difference < 0 
-          ? parseInt(shortageInputs[key]?.[shift.id] || '0') 
-          : 0;
-        
-        await supabase
-          .from('shifts')
-          .update({ 
-            cash_approved: true,
-            cash_shortage: shortage
-          })
-          .eq('id', shift.id);
-      }
-
-      // Approve related expenses
-      for (const expense of verification.expenses) {
-        await supabase
-          .from('cash_expenses')
-          .update({ approved: true })
-          .eq('id', expense.id);
-      }
-
-      // If surplus, add to cash_register.cash_actual
-      if (addToStorage && verification.difference > 0) {
-        const { data: existing } = await supabase
-          .from('cash_register')
-          .select('id, cash_actual, gcash_actual')
-          .eq('date', verification.date)
-          .eq('shift', verification.shift)
-          .single();
-        
-        if (existing) {
-          await supabase
-            .from('cash_register')
-            .update({
-              cash_actual: (existing.cash_actual || 0) + verification.cashSubmitted,
-              gcash_actual: (existing.gcash_actual || 0) + verification.gcashSubmitted
-            })
-            .eq('id', existing.id);
-        } else {
-          await supabase
-            .from('cash_register')
-            .insert({
-              date: verification.date,
-              shift: verification.shift,
-              cash_actual: verification.cashSubmitted,
-              gcash_actual: verification.gcashSubmitted
-            });
-        }
-      }
-
-      toast.success('Approved successfully');
-      loadPendingData();
-    } catch (e) {
-      console.error('Error approving:', e);
-      toast.error('Failed to approve');
-    } finally {
-      setProcessing(null);
-    }
-  };
-
   const rejectShift = async (shiftId: string) => {
     try {
       await supabase
@@ -401,27 +334,80 @@ export function CashVerification() {
     }
   };
 
-  // Edit shift cash amounts
-  const startEditShift = (shift: PendingShift) => {
-    setEditingShift(shift);
-    setEditShiftCash((shift.cash_handed_over || 0).toString());
-    setEditShiftGcash((shift.gcash_handed_over || 0).toString());
+  // Start confirmation flow - prefill with submitted amounts
+  const startConfirmation = (v: PendingVerification) => {
+    setConfirmingVerification(v);
+    setActualCash(v.cashSubmitted.toString());
+    setActualGcash(v.gcashSubmitted.toString());
   };
 
-  const saveEditShift = async () => {
-    if (!editingShift) return;
-    const cash = parseInt(editShiftCash) || 0;
-    const gcash = parseInt(editShiftGcash) || 0;
+  // Confirm with actual received amounts
+  const confirmWithActualAmounts = async () => {
+    if (!confirmingVerification) return;
+    const cash = parseInt(actualCash) || 0;
+    const gcash = parseInt(actualGcash) || 0;
+    const key = `${confirmingVerification.date}-${confirmingVerification.shift}`;
+    setProcessing(key);
+    
     try {
-      await supabase
-        .from('shifts')
-        .update({ cash_handed_over: cash, gcash_handed_over: gcash })
-        .eq('id', editingShift.id);
-      toast.success('Cash amounts updated');
-      setEditingShift(null);
+      // Update all shifts as approved
+      for (const shift of confirmingVerification.shifts) {
+        const shortage = (cash + gcash) < confirmingVerification.totalExpected
+          ? parseInt(shortageInputs[key]?.[shift.id] || '0') 
+          : 0;
+        
+        await supabase
+          .from('shifts')
+          .update({ 
+            cash_approved: true,
+            cash_shortage: shortage
+          })
+          .eq('id', shift.id);
+      }
+
+      // Approve related expenses
+      for (const expense of confirmingVerification.expenses) {
+        await supabase
+          .from('cash_expenses')
+          .update({ approved: true })
+          .eq('id', expense.id);
+      }
+
+      // Add ACTUAL received amounts to storage
+      const { data: existing } = await supabase
+        .from('cash_register')
+        .select('id, cash_actual, gcash_actual')
+        .eq('date', confirmingVerification.date)
+        .eq('shift', confirmingVerification.shift)
+        .maybeSingle();
+      
+      if (existing) {
+        await supabase
+          .from('cash_register')
+          .update({
+            cash_actual: (existing.cash_actual || 0) + cash,
+            gcash_actual: (existing.gcash_actual || 0) + gcash
+          })
+          .eq('id', existing.id);
+      } else {
+        await supabase
+          .from('cash_register')
+          .insert({
+            date: confirmingVerification.date,
+            shift: confirmingVerification.shift,
+            cash_actual: cash,
+            gcash_actual: gcash
+          });
+      }
+
+      toast.success(`Confirmed: ₱${cash.toLocaleString()} cash + ₱${gcash.toLocaleString()} gcash added to storage`);
+      setConfirmingVerification(null);
       loadPendingData();
     } catch (e) {
-      toast.error('Failed to update');
+      console.error('Error confirming:', e);
+      toast.error('Failed to confirm');
+    } finally {
+      setProcessing(null);
     }
   };
 
@@ -704,14 +690,6 @@ export function CashVerification() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7 opacity-0 group-hover:opacity-100 text-blue-500 hover:bg-blue-500/10"
-                      onClick={() => startEditShift(s)}
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
                       className="h-7 w-7 text-red-500 hover:bg-red-500/10"
                       onClick={() => rejectShift(s.id)}
                     >
@@ -786,7 +764,7 @@ export function CashVerification() {
                     isShortage && "bg-red-500 hover:bg-red-600",
                     isMatch && "bg-blue-500 hover:bg-blue-600"
                   )}
-                  onClick={() => approveVerification(v, true)}
+                  onClick={() => startConfirmation(v)}
                   disabled={processing === key}
                 >
                   {processing === key ? (
@@ -794,9 +772,7 @@ export function CashVerification() {
                   ) : (
                     <Check className="w-4 h-4 mr-2" />
                   )}
-                  {isSurplus && `Add +₱${v.difference.toLocaleString()} to Storage & Approve`}
-                  {isShortage && `Assign Shortage & Approve`}
-                  {isMatch && `Approve`}
+                  Confirm & Add to Storage
                 </Button>
               </div>
             </CardContent>
@@ -956,48 +932,76 @@ export function CashVerification() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Shift Cash Dialog */}
-      <Dialog open={!!editingShift} onOpenChange={(open) => !open && setEditingShift(null)}>
-        <DialogContent className="max-w-xs">
+      {/* Confirm Verification Dialog */}
+      <Dialog open={!!confirmingVerification} onOpenChange={(open) => !open && setConfirmingVerification(null)}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Pencil className="w-4 h-4" />
-              Edit Cash Handover
+              <Check className="w-4 h-4 text-green-500" />
+              Confirm & Add to Storage
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              {editingShift?.employee_name}
-            </p>
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1">
-                <Banknote className="w-3 h-3 text-green-500" /> Cash
-              </label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={editShiftCash}
-                onChange={e => setEditShiftCash(e.target.value)}
-                className="text-lg"
-                autoFocus
-              />
+          {confirmingVerification && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                <p className="text-muted-foreground mb-2">Staff submitted:</p>
+                <div className="flex gap-4">
+                  <span className="flex items-center gap-1">
+                    <Banknote className="w-4 h-4 text-green-500" />
+                    ₱{confirmingVerification.cashSubmitted.toLocaleString()}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Smartphone className="w-4 h-4 text-blue-500" />
+                    ₱{confirmingVerification.gcashSubmitted.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+              
+              <p className="text-sm font-medium">Enter actual amounts received:</p>
+              
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                  <Banknote className="w-3 h-3 text-green-500" /> Actual Cash Received
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={actualCash}
+                  onChange={e => setActualCash(e.target.value)}
+                  className="text-lg"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                  <Smartphone className="w-3 h-3 text-blue-500" /> Actual GCash Received
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={actualGcash}
+                  onChange={e => setActualGcash(e.target.value)}
+                  className="text-lg"
+                />
+              </div>
+              
+              {(parseInt(actualCash) || 0) + (parseInt(actualGcash) || 0) !== confirmingVerification.cashSubmitted + confirmingVerification.gcashSubmitted && (
+                <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30 text-xs text-amber-600">
+                  <AlertTriangle className="w-3 h-3 inline mr-1" />
+                  Total differs from submitted: ₱{((parseInt(actualCash) || 0) + (parseInt(actualGcash) || 0) - confirmingVerification.cashSubmitted - confirmingVerification.gcashSubmitted).toLocaleString()}
+                </div>
+              )}
+              
+              <Button 
+                className="w-full" 
+                onClick={confirmWithActualAmounts}
+                disabled={processing === `${confirmingVerification.date}-${confirmingVerification.shift}`}
+              >
+                {processing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+                Confirm & Add to Storage
+              </Button>
             </div>
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1">
-                <Smartphone className="w-3 h-3 text-blue-500" /> GCash
-              </label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={editShiftGcash}
-                onChange={e => setEditShiftGcash(e.target.value)}
-                className="text-lg"
-              />
-            </div>
-            <Button className="w-full" onClick={saveEditShift}>
-              Save
-            </Button>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
