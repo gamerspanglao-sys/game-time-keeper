@@ -514,92 +514,131 @@ export default function Shift() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Clock className="w-5 h-5 text-primary" />
+          <div className={cn(
+            "w-10 h-10 rounded-xl flex items-center justify-center",
+            currentShift === 'day' ? 'bg-amber-500/15' : 'bg-indigo-500/15'
+          )}>
+            {currentShift === 'day' ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5 text-indigo-500" />}
           </div>
           <div>
-            <h1 className="text-xl font-bold">Shift</h1>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className={cn(
-                "text-[10px] h-5",
-                currentShift === 'day' ? 'border-amber-500/50 text-amber-500' : 'border-indigo-500/50 text-indigo-500'
-              )}>
-                {currentShift === 'day' ? <Sun className="w-3 h-3 mr-1" /> : <Moon className="w-3 h-3 mr-1" />}
-                {currentShift === 'day' ? 'Day' : 'Night'}
-              </Badge>
-              <span className="text-[10px] text-muted-foreground">{currentDate}</span>
-            </div>
+            <h1 className="text-lg font-bold">{currentShift === 'day' ? 'Day Shift' : 'Night Shift'}</h1>
+            <span className="text-xs text-muted-foreground">{currentDate}</span>
           </div>
         </div>
+        
+        {/* Add Employee Button */}
+        <Select onValueChange={startShift}>
+          <SelectTrigger className="w-auto h-8 px-3 text-xs gap-1.5 border-green-500/30 text-green-600 hover:bg-green-500/10">
+            <Plus className="w-3.5 h-3.5" />
+            <span>Start Shift</span>
+          </SelectTrigger>
+          <SelectContent>
+            {employees.filter(emp => !getEmployeeShift(emp.id)).map(emp => (
+              <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Employees - Combined Section */}
-      <Card className="border-border/50">
-        <CardHeader className="py-2.5 px-3">
-          <CardTitle className="text-xs flex items-center gap-2 text-muted-foreground">
-            <User className="w-3.5 h-3.5" />
-            Staff
-            {activeShifts.length > 0 && (
-              <Badge className="ml-auto bg-green-500/20 text-green-500 border-0 text-[10px]">
-                {activeShifts.length} working
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-3 pb-3 pt-0 space-y-1.5">
-          {employees.map(emp => {
-            const activeShift = getEmployeeShift(emp.id);
-            return (
-              <div key={emp.id} className={cn(
-                "flex items-center justify-between p-2.5 rounded-lg border transition-all",
-                activeShift 
-                  ? "bg-green-500/5 border-green-500/20" 
-                  : "bg-muted/30 border-transparent"
-              )}>
-                <div className="flex items-center gap-2.5">
-                  <div className={cn(
-                    "w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold",
-                    activeShift ? "bg-green-500/20 text-green-500" : "bg-muted text-muted-foreground"
-                  )}>
-                    {emp.name.charAt(0)}
+      {/* Working Staff */}
+      {activeShifts.length > 0 ? (
+        <div className="space-y-2">
+          {activeShifts.map(shift => (
+            <Card key={shift.id} className="border-green-500/20 bg-green-500/5">
+              <CardContent className="p-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-green-500/20 flex items-center justify-center text-sm font-bold text-green-500">
+                    {shift.employee_name.charAt(0)}
                   </div>
                   <div>
-                    <span className="text-sm font-medium">{emp.name}</span>
-                    {activeShift && (
-                      <div className="text-[10px] text-green-500 font-mono">
-                        {formatDuration(activeShift.shift_start)}
-                      </div>
-                    )}
+                    <div className="font-medium">{shift.employee_name}</div>
+                    <div className="text-xs text-green-600 font-mono flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {formatDuration(shift.shift_start)}
+                    </div>
                   </div>
                 </div>
-                {activeShift ? (
-                  <Button 
-                    size="sm" 
-                    variant="ghost"
-                    onClick={() => confirmEndShift(emp.id)}
-                    className="h-7 px-2.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                  >
-                    <Square className="w-3 h-3 mr-1" />
-                    End
-                  </Button>
-                ) : (
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={() => startShift(emp.id)} 
-                    className="h-7 px-2.5 text-xs text-green-600 hover:text-green-600 hover:bg-green-500/10"
-                  >
-                    <Play className="w-3 h-3 mr-1" />
-                    Start
-                  </Button>
-                )}
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+                <Button 
+                  size="sm" 
+                  variant="ghost"
+                  onClick={() => confirmEndShift(shift.employee_id)}
+                  className="h-8 px-3 text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                >
+                  <Square className="w-3 h-3 mr-1.5" />
+                  End
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card className="border-dashed border-muted-foreground/30">
+          <CardContent className="p-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-3">
+              <User className="w-6 h-6 text-muted-foreground/50" />
+            </div>
+            <p className="text-sm text-muted-foreground">No one working yet</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">Use "Start Shift" to add staff</p>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Cash Submission - Compact */}
+      {/* Expense Button - Only when staff working */}
+      {activeShifts.length > 0 && (
+        <Button 
+          onClick={openExpenseDialog}
+          variant="outline"
+          className="w-full h-12 text-sm border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 text-amber-600"
+        >
+          <Receipt className="w-4 h-4 mr-2" />
+          Add Expense
+          {totalShiftExpenses > 0 && (
+            <Badge className="ml-2 bg-amber-500/20 text-amber-600 border-0">
+              ₱{totalShiftExpenses.toLocaleString()}
+            </Badge>
+          )}
+        </Button>
+      )}
+
+      {/* Shift Expenses History */}
+      {shiftExpenses.length > 0 && (
+        <Card className="border-border/50">
+          <CardHeader className="py-2.5 px-3">
+            <CardTitle className="text-xs text-muted-foreground">Shift Expenses</CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3 pt-0 space-y-1.5">
+            {shiftExpenses.map(expense => (
+              <div key={expense.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg group">
+                <div className="flex items-center gap-2">
+                  <div className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
+                    expense.payment_source === 'cash' ? "bg-green-500/15 text-green-500" : "bg-blue-500/15 text-blue-500"
+                  )}>
+                    {expense.payment_source === 'cash' ? '₱' : 'G'}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">₱{expense.amount.toLocaleString()}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label}
+                      {expense.description && ` • ${expense.description}`}
+                    </div>
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive/70 hover:text-destructive"
+                  onClick={() => deleteExpense(expense.id)}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Cash Handover - Compact */}
       <Card className="border-border/50">
         <CardHeader className="py-2.5 px-3">
           <CardTitle className="text-xs flex items-center gap-2 text-muted-foreground">
@@ -613,7 +652,7 @@ export default function Shift() {
           </CardTitle>
         </CardHeader>
         <CardContent className="px-3 pb-3 pt-0 space-y-3">
-          {/* Already submitted - compact */}
+          {/* Already submitted */}
           {cashSubmissions.length > 0 && (
             <div className="text-xs space-y-1 p-2 bg-green-500/5 rounded-lg border border-green-500/20">
               {cashSubmissions.map((sub, i) => (
@@ -632,7 +671,7 @@ export default function Shift() {
             </div>
           )}
 
-          {/* Submit form - compact */}
+          {/* Submit form */}
           <div className="space-y-2">
             <Select value={cashEmployee} onValueChange={setCashEmployee}>
               <SelectTrigger className="h-9 text-sm">
@@ -646,116 +685,18 @@ export default function Shift() {
             </Select>
 
             <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Input
-                  type="number"
-                  value={cashAmount}
-                  onChange={e => setCashAmount(e.target.value)}
-                  placeholder="Cash"
-                  className="h-9 text-sm"
-                />
-              </div>
-              <div>
-                <Input
-                  type="number"
-                  value={gcashAmount}
-                  onChange={e => setGcashAmount(e.target.value)}
-                  placeholder="GCash"
-                  className="h-9 text-sm"
-                />
-              </div>
-              <div>
-                <Input
-                  type="number"
-                  value={changeFundAmount}
-                  onChange={e => setChangeFundAmount(e.target.value)}
-                  placeholder="Change"
-                  className="h-9 text-sm"
-                />
-              </div>
+              <Input type="number" value={cashAmount} onChange={e => setCashAmount(e.target.value)} placeholder="Cash" className="h-9 text-sm" />
+              <Input type="number" value={gcashAmount} onChange={e => setGcashAmount(e.target.value)} placeholder="GCash" className="h-9 text-sm" />
+              <Input type="number" value={changeFundAmount} onChange={e => setChangeFundAmount(e.target.value)} placeholder="Change" className="h-9 text-sm" />
             </div>
 
-            <Button 
-              onClick={submitCashHandover} 
-              disabled={submittingCash || !cashEmployee}
-              className="w-full h-9 text-sm"
-              size="sm"
-            >
+            <Button onClick={submitCashHandover} disabled={submittingCash || !cashEmployee} className="w-full h-9 text-sm" size="sm">
               <Send className="w-3.5 h-3.5 mr-1.5" />
               {submittingCash ? 'Submitting...' : 'Submit'}
             </Button>
           </div>
         </CardContent>
       </Card>
-
-      {/* Shift Expenses - Only show if there are active shifts or expenses */}
-      {(activeShifts.length > 0 || shiftExpenses.length > 0) && (
-        <Card className="border-border/50">
-          <CardHeader className="py-2.5 px-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xs flex items-center gap-2 text-muted-foreground">
-                <Receipt className="w-3.5 h-3.5" />
-                Shift Expenses
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                {totalShiftExpenses > 0 && (
-                  <Badge variant="outline" className="text-[10px] h-5">
-                    ₱{totalShiftExpenses.toLocaleString()}
-                  </Badge>
-                )}
-                {activeShifts.length > 0 && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={openExpenseDialog} 
-                    className="h-6 px-2 text-[10px]"
-                  >
-                    <Plus className="w-3 h-3 mr-1" />
-                    Add
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="px-3 pb-3 pt-0">
-            {shiftExpenses.length === 0 ? (
-              <div className="text-center py-6 text-xs text-muted-foreground">
-                No expenses
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {shiftExpenses.map(expense => (
-                  <div key={expense.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg group">
-                    <div className="flex items-center gap-2">
-                      <div className={cn(
-                        "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
-                        expense.payment_source === 'cash' ? "bg-green-500/15 text-green-500" : "bg-blue-500/15 text-blue-500"
-                      )}>
-                        {expense.payment_source === 'cash' ? '₱' : 'G'}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium">₱{expense.amount.toLocaleString()}</div>
-                        <div className="text-[10px] text-muted-foreground">
-                          {EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label}
-                          {expense.description && ` • ${expense.description}`}
-                        </div>
-                      </div>
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive/70 hover:text-destructive"
-                      onClick={() => deleteExpense(expense.id)}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {/* Add Expense Dialog */}
       <Dialog open={showExpenseDialog} onOpenChange={setShowExpenseDialog}>
