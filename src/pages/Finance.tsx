@@ -605,6 +605,47 @@ export default function Finance() {
             </Card>
           </div>
 
+          {/* Balance Expenses History (Storage deductions) */}
+          {expenses.filter(e => e.expense_type === 'balance').length > 0 && (
+            <Card className="border-orange-500/20">
+              <CardHeader className="py-2 pb-1">
+                <CardTitle className="text-xs flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-orange-500">
+                    <ArrowDownCircle className="w-3.5 h-3.5" />
+                    Storage Expenses (Purchases & Salaries)
+                  </span>
+                  <Badge variant="secondary" className="bg-orange-500/20 text-orange-500 text-[10px]">
+                    ₱{(totalBalanceCashExp + totalBalanceGcashExp).toLocaleString()}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="py-2">
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {expenses
+                    .filter(e => e.expense_type === 'balance')
+                    .slice(0, 20)
+                    .map(exp => (
+                      <div key={exp.id} className="flex items-center justify-between text-xs p-1.5 bg-muted/30 rounded">
+                        <div className="flex items-center gap-2">
+                          <span className={cn("w-5 h-5 rounded-full flex items-center justify-center", exp.payment_source === 'gcash' ? "bg-blue-500/20" : "bg-green-500/20")}>
+                            {exp.payment_source === 'gcash' ? <Smartphone className="w-2.5 h-2.5 text-blue-500" /> : <Banknote className="w-2.5 h-2.5 text-green-500" />}
+                          </span>
+                          <div>
+                            <span className="font-medium">{getCategoryLabel(exp.category)}</span>
+                            <span className="text-muted-foreground ml-1">• {exp.date}</span>
+                            {exp.description && <span className="text-muted-foreground/60 ml-1">• {exp.description}</span>}
+                          </div>
+                        </div>
+                        <span className={cn("font-semibold", exp.payment_source === 'gcash' ? "text-blue-500" : "text-green-500")}>
+                          -₱{exp.amount.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border-primary/20">
             <CardHeader className="py-3 pb-2">
               <CardTitle className="text-sm flex items-center gap-2"><CircleDollarSign className="w-4 h-4 text-primary" />Current Register<Badge variant="secondary" className="ml-auto">₱{currentRegisterTotal.toLocaleString()}</Badge></CardTitle>
