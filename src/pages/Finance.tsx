@@ -196,14 +196,27 @@ export default function Finance() {
   const cashDiscrepancy = (currentRecord?.cash_actual || 0) - employeeCashSubmitted;
   const gcashDiscrepancy = (currentRecord?.gcash_actual || 0) - employeeGcashSubmitted;
   
-  // Get carryover (change fund) from current shift's handover
-  const currentHandover = cashHandovers.find(h => {
-    const handoverShift = h.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
-    return h.shift_date === selectedDate && handoverShift === selectedShift;
-  });
-  const carryoverCash = currentHandover?.change_fund_amount || 0;
+  // Get carryover (change fund) from PREVIOUS shift's approved handover
+  // Previous shift: if current is day -> previous is night of previous day
+  //                 if current is night -> previous is day of same day
+  const getPreviousShiftInfo = (date: string, shift: string): { date: string; shift: string } => {
+    if (shift === 'day') {
+      const prevDate = new Date(date);
+      prevDate.setDate(prevDate.getDate() - 1);
+      return { date: prevDate.toISOString().split('T')[0], shift: 'night' };
+    } else {
+      return { date, shift: 'day' };
+    }
+  };
   
-  // Current Register = Carryover + Loyverse Sales - Shift Expenses
+  const prevShiftInfo = getPreviousShiftInfo(selectedDate, selectedShift);
+  const previousHandover = cashHandovers.find(h => {
+    const handoverShift = h.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
+    return h.shift_date === prevShiftInfo.date && handoverShift === prevShiftInfo.shift;
+  });
+  const carryoverCash = previousHandover?.change_fund_amount || 0;
+  
+  // Current Register = Carryover (from previous shift) + Loyverse Sales - Shift Expenses
   const currentRegisterCash = carryoverCash + (currentRecord?.cash_expected || 0) - shiftCashExp;
   const currentRegisterGcash = (currentRecord?.gcash_expected || 0) - shiftGcashExp;
   const currentRegisterTotal = currentRegisterCash + currentRegisterGcash;
