@@ -104,6 +104,8 @@ export function CashVerification() {
   const [shortageInputs, setShortageInputs] = useState<Record<string, Record<string, string>>>({});
   const [processing, setProcessing] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(true);
+  const [editingCarryover, setEditingCarryover] = useState<string | null>(null);
+  const [carryoverInput, setCarryoverInput] = useState('');
   
   // Confirmation dialog state - admin enters actual received amounts
   const [confirmingVerification, setConfirmingVerification] = useState<PendingVerification | null>(null);
@@ -417,6 +419,22 @@ export function CashVerification() {
     }
   };
 
+  // Save carryover (change fund) amount
+  const saveCarryover = async (verification: PendingVerification, amount: number) => {
+    if (!verification.handoverId) return;
+    try {
+      await supabase
+        .from('cash_handovers')
+        .update({ change_fund_amount: amount })
+        .eq('id', verification.handoverId);
+      toast.success('Change fund updated');
+      setEditingCarryover(null);
+      loadPendingData();
+    } catch (e) {
+      toast.error('Failed to update');
+    }
+  };
+
   // Start confirmation flow - prefill with submitted amounts
   const startConfirmation = (v: PendingVerification) => {
     setConfirmingVerification(v);
@@ -680,9 +698,55 @@ export function CashVerification() {
                   <span className="text-center"><Smartphone className="w-3 h-3 inline text-blue-500" /> GCash</span>
                 </div>
                 <div className="grid grid-cols-3 gap-1">
-                  <span className="text-muted-foreground">Carryover:</span>
-                  <span className="text-center">₱{v.carryoverCash.toLocaleString()}</span>
-                  <span className="text-center">₱{v.carryoverGcash.toLocaleString()}</span>
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    Carryover:
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      className="h-4 w-4 p-0"
+                      onClick={() => {
+                        setEditingCarryover(key);
+                        setCarryoverInput(v.carryoverCash.toString());
+                      }}
+                    >
+                      <Pencil className="w-2.5 h-2.5" />
+                    </Button>
+                  </span>
+                  {editingCarryover === key ? (
+                    <>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          className="h-5 w-16 text-xs text-center p-1"
+                          value={carryoverInput}
+                          onChange={(e) => setCarryoverInput(e.target.value)}
+                          autoFocus
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-4 w-4 p-0 text-green-500"
+                          onClick={() => saveCarryover(v, parseInt(carryoverInput) || 0)}
+                        >
+                          <Check className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-4 w-4 p-0 text-red-500"
+                          onClick={() => setEditingCarryover(null)}
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                      <span className="text-center">₱{v.carryoverGcash.toLocaleString()}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-center">₱{v.carryoverCash.toLocaleString()}</span>
+                      <span className="text-center">₱{v.carryoverGcash.toLocaleString()}</span>
+                    </>
+                  )}
                 </div>
                 <div className="grid grid-cols-3 gap-1">
                   <span className="text-muted-foreground">+ Sales:</span>
