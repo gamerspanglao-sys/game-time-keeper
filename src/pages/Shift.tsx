@@ -247,23 +247,40 @@ export default function Shift() {
 
   const loadShiftExpensesWithShifts = async (shifts: ActiveShift[]) => {
     try {
-      // Always load by current date and shift type to show all shift expenses
-      // regardless of whether shift_id is set or not
-      const { data, error } = await supabase
-        .from('cash_expenses')
-        .select('*')
-        .eq('date', currentDate)
-        .eq('shift', currentShiftType)
-        .eq('expense_type', 'shift')
-        .order('created_at', { ascending: false });
+      let expenses: any[] = [];
       
-      if (error) {
-        console.error('Error loading expenses:', error);
-        setShiftExpenses([]);
-        return;
+      if (shifts.length > 0) {
+        // Load expenses linked to active shifts
+        const shiftIds = shifts.map(s => s.id);
+        const { data, error } = await supabase
+          .from('cash_expenses')
+          .select('*')
+          .in('shift_id', shiftIds)
+          .eq('expense_type', 'shift')
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Error loading expenses:', error);
+        } else {
+          expenses = data || [];
+        }
+      } else {
+        // No active shifts - load expenses by date/shift that have shift_id (linked to closed shifts)
+        const { data, error } = await supabase
+          .from('cash_expenses')
+          .select('*')
+          .eq('date', currentDate)
+          .eq('shift', currentShiftType)
+          .eq('expense_type', 'shift')
+          .not('shift_id', 'is', null)
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Error loading expenses:', error);
+        } else {
+          expenses = data || [];
+        }
       }
-      
-      const expenses = data || [];
 
       // Load employee names separately
       const expensesWithNames = await Promise.all(expenses.map(async (e: any) => {
