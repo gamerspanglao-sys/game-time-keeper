@@ -139,11 +139,11 @@ export default function MoneyFlow() {
     }
   });
   const carryoverCash = previousHandover?.change_fund_amount || 0;
-  const carryoverGcash = previousHandover?.gcash_amount || 0;
   
   // Current Register = Carryover + Loyverse Sales - Shift Expenses
+  // Cash includes carryover (change fund), GCash is only current shift sales
   const currentRegisterCash = carryoverCash + (currentRecord?.cash_expected || 0) - shiftCashExp;
-  const currentRegisterGcash = carryoverGcash + (currentRecord?.gcash_expected || 0) - shiftGcashExp;
+  const currentRegisterGcash = (currentRecord?.gcash_expected || 0) - shiftGcashExp;
   const currentRegisterTotal = currentRegisterCash + currentRegisterGcash;
   
   // CUMULATIVE Storage: ALL received cash - ALL balance expenses
