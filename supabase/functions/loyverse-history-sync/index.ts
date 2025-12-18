@@ -10,25 +10,29 @@ const STORE_ID = '77f9b0db-9be9-4907-b4ec-9d68653f7a21';
 
 // Get shift time boundaries from the shifts table
 async function getShiftTimesFromDB(supabase: any, dateStr: string, shift: 'day' | 'night'): Promise<{ start: Date; end: Date } | null> {
-  // Find the earliest shift_start and latest shift_end for this date and shift type
+  // Find shifts for this date and shift type, excluding archived
   const { data: shifts, error } = await supabase
     .from('shifts')
-    .select('shift_start, shift_end')
+    .select('shift_start, shift_end, status')
     .eq('date', dateStr)
     .eq('type', shift)
+    .neq('status', 'archived')
     .not('shift_start', 'is', null)
     .order('shift_start', { ascending: true });
 
   if (error || !shifts || shifts.length === 0) {
-    console.log(`⚠️ No shifts found for ${dateStr} ${shift}, using fallback times`);
+    console.log(`⚠️ No active shifts found for ${dateStr} ${shift}, using fallback times`);
     return null;
   }
 
   // Get the earliest start time
   const earliestStart = shifts[0].shift_start;
   
-  // Get the latest end time (from closed shifts)
-  const closedShifts = shifts.filter((s: any) => s.shift_end);
+  // Check if any shift is still open
+  const hasOpenShift = shifts.some((s: any) => s.status === 'open');
+  
+  // Get the latest end time (from closed shifts only)
+  const closedShifts = shifts.filter((s: any) => s.shift_end && s.status === 'closed');
   let latestEnd: string | null = null;
   
   if (closedShifts.length > 0) {
@@ -37,11 +41,11 @@ async function getShiftTimesFromDB(supabase: any, dateStr: string, shift: 'day' 
     latestEnd = closedShifts[0].shift_end;
   }
 
-  // If shift is not closed yet, use current time
+  // If shift is still open, use current time as end
   const start = new Date(earliestStart);
-  const end = latestEnd ? new Date(latestEnd) : new Date();
+  const end = (hasOpenShift || !latestEnd) ? new Date() : new Date(latestEnd);
 
-  console.log(`📍 Found shift times from DB: ${dateStr} ${shift} -> ${start.toISOString()} to ${end.toISOString()}`);
+  console.log(`📍 Found shift times from DB: ${dateStr} ${shift} -> ${start.toISOString()} to ${end.toISOString()} (open: ${hasOpenShift})`);
   
   return { start, end };
 }
