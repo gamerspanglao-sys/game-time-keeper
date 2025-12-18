@@ -48,9 +48,11 @@ interface ShiftHandover {
   id: string;
   date: string;
   shift_type: string | null;
+  type?: string | null;
   cash_handed_over: number | null;
   gcash_handed_over: number | null;
   employee_id: string;
+  change_fund_received?: number | null;
 }
 
 interface CashHandover {
@@ -215,7 +217,16 @@ export default function Finance() {
     const handoverShift = h.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
     return h.shift_date === prevShiftInfo.date && handoverShift === prevShiftInfo.shift;
   });
-  const carryoverCash = previousHandover?.change_fund_amount || 0;
+  
+  // First try handover from previous shift, then fallback to current shift's change_fund_received
+  let carryoverCash = previousHandover?.change_fund_amount || 0;
+  if (carryoverCash === 0) {
+    const currentShiftData = shifts.find(s => {
+      const shiftType = s.type?.toLowerCase() === 'night' || s.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
+      return s.date === selectedDate && shiftType === selectedShift;
+    });
+    carryoverCash = currentShiftData?.change_fund_received || 0;
+  }
   
   // Current Register = Carryover (from previous shift) + Loyverse Sales - Shift Expenses
   const currentRegisterCash = carryoverCash + (currentRecord?.cash_expected || 0) - shiftCashExp;
@@ -238,7 +249,7 @@ export default function Finance() {
       const [{ data: cashData }, { data: expData }, { data: shiftsData }, { data: investorData }, { data: handoversData }] = await Promise.all([
         supabase.from('cash_register').select('id, date, shift, cash_expected, gcash_expected, cash_actual, gcash_actual').order('date', { ascending: false }),
         supabase.from('cash_expenses').select('*').order('created_at', { ascending: false }),
-        supabase.from('shifts').select('id, date, shift_type, cash_handed_over, gcash_handed_over, employee_id').order('date', { ascending: false }),
+        supabase.from('shifts').select('id, date, shift_type, type, cash_handed_over, gcash_handed_over, employee_id, change_fund_received').order('date', { ascending: false }),
         supabase.from('investor_contributions').select('*').order('created_at', { ascending: false }),
         supabase.from('cash_handovers').select('id, shift_date, shift_type, change_fund_amount, approved').order('shift_date', { ascending: false })
       ]);
