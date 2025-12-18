@@ -1844,7 +1844,8 @@ export function CashVerification() {
                 const totalActual = h.cashActual + h.gcashActual;
                 const totalExpected = h.cashExpected + h.gcashExpected;
                 const adminDiff = totalActual - totalSubmitted;
-                const expectedDiff = totalSubmitted - totalExpected;
+                // Use pre-calculated difference that includes change fund left
+                const displayDiff = h.difference;
                 
                 return (
                   <div key={`${h.date}-${h.shift}`} className="p-3 rounded-lg bg-muted/30 text-sm space-y-2">
@@ -1861,9 +1862,9 @@ export function CashVerification() {
                         )}
                         <Badge variant="outline" className={cn(
                           "text-xs",
-                          expectedDiff >= 0 ? "text-green-500 border-green-500/30" : "text-red-500 border-red-500/30"
+                          displayDiff >= 0 ? "text-green-500 border-green-500/30" : "text-red-500 border-red-500/30"
                         )}>
-                          {expectedDiff >= 0 ? '+' : ''}₱{expectedDiff.toLocaleString()}
+                          {displayDiff >= 0 ? '+' : ''}₱{displayDiff.toLocaleString()}
                         </Badge>
                         <Button
                           variant="ghost"
@@ -1947,11 +1948,11 @@ export function CashVerification() {
                         <p className="text-muted-foreground">vs Expected</p>
                         <p className={cn(
                           "font-medium",
-                          expectedDiff > 0 && "text-green-500",
-                          expectedDiff < 0 && "text-red-500",
-                          expectedDiff === 0 && "text-muted-foreground"
+                          displayDiff > 0 && "text-green-500",
+                          displayDiff < 0 && "text-red-500",
+                          displayDiff === 0 && "text-muted-foreground"
                         )}>
-                          {expectedDiff === 0 ? 'Match' : `${expectedDiff > 0 ? '+' : ''}₱${expectedDiff.toLocaleString()}`}
+                          {displayDiff === 0 ? 'Match' : `${displayDiff > 0 ? '+' : ''}₱${displayDiff.toLocaleString()}`}
                         </p>
                       </div>
                     </div>
