@@ -488,120 +488,191 @@ export function ShiftDashboard() {
           </TabsList>
 
           {/* All Employees View */}
-          <TabsContent value="all" className="mt-3 space-y-3">
-            {stats.map((emp, idx) => {
-              const baseSalary = emp.total_shifts * SALARY_PER_SHIFT;
-              const netPay = baseSalary + emp.bonuses - emp.shortages;
-              
-              return (
-                <Card key={emp.id} className="border-border/50 hover:border-primary/30 transition-all">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                          idx === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white' :
-                          idx === 1 ? 'bg-gradient-to-br from-slate-300 to-slate-500 text-white' :
-                          idx === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600 text-white' :
-                          'bg-muted text-muted-foreground'
-                        }`}>
-                          {idx + 1}
+          <TabsContent value="all" className="mt-4 space-y-4">
+            <div className="grid gap-4">
+              {stats.map((emp, idx) => {
+                const baseSalary = emp.total_shifts * SALARY_PER_SHIFT;
+                const netPay = baseSalary + emp.bonuses - emp.shortages;
+                const progressPercent = Math.min((emp.total_shifts / maxShifts) * 100, 100);
+                
+                return (
+                  <Card 
+                    key={emp.id} 
+                    className={`overflow-hidden transition-all duration-300 hover:shadow-lg cursor-pointer group ${
+                      emp.salaryPaid 
+                        ? 'border-emerald-500/30 bg-gradient-to-r from-emerald-500/5 to-transparent' 
+                        : 'border-border/50 hover:border-primary/50'
+                    }`}
+                    onClick={() => setSelectedEmployee(emp.id)}
+                  >
+                    {/* Progress bar at top */}
+                    <div className="h-1 bg-muted">
+                      <div 
+                        className={`h-full transition-all duration-500 ${
+                          idx === 0 ? 'bg-gradient-to-r from-amber-400 to-amber-600' :
+                          idx === 1 ? 'bg-gradient-to-r from-slate-400 to-slate-600' :
+                          idx === 2 ? 'bg-gradient-to-r from-orange-400 to-orange-600' :
+                          'bg-primary/50'
+                        }`}
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                    
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        {/* Left: Avatar & Info */}
+                        <div className="flex items-start gap-3 flex-1">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shrink-0 ${
+                            idx === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-lg shadow-amber-500/30' :
+                            idx === 1 ? 'bg-gradient-to-br from-slate-300 to-slate-500 text-white shadow-lg shadow-slate-500/20' :
+                            idx === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-500/30' :
+                            'bg-muted text-muted-foreground'
+                          }`}>
+                            {emp.name.charAt(0).toUpperCase()}
+                          </div>
+                          
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="font-bold text-base truncate">{emp.name}</h4>
+                              {emp.salaryPaid && (
+                                <Badge className="bg-emerald-500/20 text-emerald-500 text-[10px] gap-0.5 px-1.5 py-0">
+                                  <CheckCircle className="w-2.5 h-2.5" />
+                                  Paid
+                                </Badge>
+                              )}
+                            </div>
+                            
+                            {/* Stats row */}
+                            <div className="flex items-center gap-3 text-xs">
+                              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10">
+                                <Sun className="w-3 h-3 text-amber-500" />
+                                <span className="font-medium text-amber-600">{emp.day_shifts}</span>
+                              </div>
+                              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/10">
+                                <Moon className="w-3 h-3 text-indigo-500" />
+                                <span className="font-medium text-indigo-600">{emp.night_shifts}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <Clock className="w-3 h-3" />
+                                <span>{emp.total_hours}h</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <span className="font-semibold">{emp.name}</span>
-                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                            <span>{emp.total_shifts} shifts</span>
-                            <span>•</span>
-                            <span>{emp.total_hours}h</span>
+                        
+                        {/* Right: Salary breakdown */}
+                        <div className="text-right shrink-0">
+                          <div className="text-2xl font-bold text-emerald-500 mb-1">
+                            ₱{netPay.toLocaleString()}
+                          </div>
+                          <div className="space-y-0.5 text-[10px]">
+                            <div className="text-muted-foreground">
+                              Base: ₱{baseSalary.toLocaleString()}
+                            </div>
+                            {emp.bonuses > 0 && (
+                              <div className="text-emerald-500 font-medium">
+                                +₱{emp.bonuses.toLocaleString()} bonus
+                              </div>
+                            )}
                             {emp.shortages > 0 && (
-                              <>
-                                <span>•</span>
-                                <span className="text-red-500 flex items-center gap-0.5">
-                                  <AlertTriangle className="w-2.5 h-2.5" />
-                                  -₱{emp.shortages}
-                                </span>
-                              </>
+                              <div className="text-red-500 font-medium flex items-center justify-end gap-0.5">
+                                <AlertTriangle className="w-2.5 h-2.5" />
+                                -₱{emp.shortages.toLocaleString()}
+                              </div>
                             )}
                           </div>
                         </div>
+                        
+                        {/* Arrow */}
+                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors shrink-0 mt-3" />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-emerald-500">₱{netPay.toLocaleString()}</p>
-                          {(emp.bonuses > 0 || emp.shortages > 0) && (
-                            <p className="text-[9px] text-muted-foreground">
-                              Base: ₱{baseSalary}
-                              {emp.bonuses > 0 && <span className="text-emerald-500"> +{emp.bonuses}</span>}
-                              {emp.shortages > 0 && <span className="text-red-500"> -{emp.shortages}</span>}
-                            </p>
-                          )}
-                        </div>
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="h-7 w-7 p-0"
-                          onClick={() => setSelectedEmployee(emp.id)}
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           </TabsContent>
 
           {/* Individual Employee Views */}
           {stats.map(emp => {
             const baseSalary = emp.total_shifts * SALARY_PER_SHIFT;
             const netPay = baseSalary + emp.bonuses - emp.shortages;
+            const idx = stats.findIndex(e => e.id === emp.id);
             
             return (
-              <TabsContent key={emp.id} value={emp.id} className="mt-3 space-y-3">
-                {/* Employee Summary */}
-                <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-semibold text-lg">{emp.name}</h4>
+              <TabsContent key={emp.id} value={emp.id} className="mt-4 space-y-4">
+                {/* Employee Header Card */}
+                <Card className={`overflow-hidden ${
+                  emp.salaryPaid 
+                    ? 'border-emerald-500/30' 
+                    : 'border-primary/20'
+                }`}>
+                  {/* Gradient Header */}
+                  <div className={`h-2 ${
+                    idx === 0 ? 'bg-gradient-to-r from-amber-400 to-amber-600' :
+                    idx === 1 ? 'bg-gradient-to-r from-slate-400 to-slate-600' :
+                    idx === 2 ? 'bg-gradient-to-r from-orange-400 to-orange-600' :
+                    'bg-gradient-to-r from-primary/50 to-primary'
+                  }`} />
+                  
+                  <CardContent className="p-5">
+                    {/* Name & Actions */}
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl font-bold ${
+                          idx === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-lg shadow-amber-500/30' :
+                          idx === 1 ? 'bg-gradient-to-br from-slate-300 to-slate-500 text-white shadow-lg shadow-slate-500/20' :
+                          idx === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-500/30' :
+                          'bg-muted text-muted-foreground'
+                        }`}>
+                          {emp.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-xl">{emp.name}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {emp.total_shifts} shifts • {emp.total_hours}h total
+                          </p>
+                        </div>
+                      </div>
                       <div className="flex items-center gap-2">
                         {isAdmin && (
                           <>
                             <Button 
                               size="sm" 
                               variant="outline" 
-                              className="h-7 text-xs"
+                              className="h-8 text-xs"
                               onClick={() => requestAdminAction('edit', emp.id)}
                             >
-                              <Pencil className="w-3 h-3 mr-1" />
+                              <Pencil className="w-3.5 h-3.5 mr-1" />
                               Edit
                             </Button>
                             <Button 
                               size="sm" 
                               variant="outline"
-                              className="h-7 text-xs text-red-500 border-red-500/30"
+                              className="h-8 text-xs text-red-500 border-red-500/30 hover:bg-red-500/10"
                               onClick={() => requestAdminAction('reset', emp.id)}
                             >
-                              <RotateCcw className="w-3 h-3 mr-1" />
+                              <RotateCcw className="w-3.5 h-3.5 mr-1" />
                               Reset
                             </Button>
                             {!emp.salaryPaid && (
                               <Button 
                                 size="sm" 
-                                className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
+                                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700"
                                 onClick={() => {
                                   setPayingEmployee(emp);
                                   setShowPayDialog(true);
                                 }}
                               >
-                                <Wallet className="w-3 h-3 mr-1" />
+                                <Wallet className="w-3.5 h-3.5 mr-1" />
                                 Pay Salary
                               </Button>
                             )}
                           </>
                         )}
                         {emp.salaryPaid && (
-                          <Badge className="bg-emerald-500/20 text-emerald-500 gap-1">
-                            <CheckCircle className="w-3 h-3" />
+                          <Badge className="bg-emerald-500/20 text-emerald-500 gap-1 px-3 py-1">
+                            <CheckCircle className="w-3.5 h-3.5" />
                             Paid
                           </Badge>
                         )}
@@ -609,56 +680,73 @@ export function ShiftDashboard() {
                     </div>
 
                     {/* Stats Grid */}
-                    <div className="grid grid-cols-4 gap-2 mb-4">
-                      <div className="bg-amber-500/10 rounded-lg p-2 text-center">
-                        <Sun className="w-4 h-4 mx-auto mb-1 text-amber-500" />
-                        <p className="text-sm font-bold text-amber-500">{emp.day_shifts}</p>
-                        <p className="text-[9px] text-muted-foreground">Day</p>
+                    <div className="grid grid-cols-4 gap-3 mb-5">
+                      <div className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 rounded-xl p-3 text-center border border-amber-500/20">
+                        <Sun className="w-5 h-5 mx-auto mb-1.5 text-amber-500" />
+                        <p className="text-xl font-bold text-amber-500">{emp.day_shifts}</p>
+                        <p className="text-xs text-amber-600/70">Day Shifts</p>
                       </div>
-                      <div className="bg-indigo-500/10 rounded-lg p-2 text-center">
-                        <Moon className="w-4 h-4 mx-auto mb-1 text-indigo-500" />
-                        <p className="text-sm font-bold text-indigo-500">{emp.night_shifts}</p>
-                        <p className="text-[9px] text-muted-foreground">Night</p>
+                      <div className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 rounded-xl p-3 text-center border border-indigo-500/20">
+                        <Moon className="w-5 h-5 mx-auto mb-1.5 text-indigo-500" />
+                        <p className="text-xl font-bold text-indigo-500">{emp.night_shifts}</p>
+                        <p className="text-xs text-indigo-600/70">Night Shifts</p>
                       </div>
-                      <div className="bg-green-500/10 rounded-lg p-2 text-center">
-                        <Clock className="w-4 h-4 mx-auto mb-1 text-green-500" />
-                        <p className="text-sm font-bold text-green-500">{emp.total_hours}h</p>
-                        <p className="text-[9px] text-muted-foreground">Hours</p>
+                      <div className="bg-gradient-to-br from-green-500/10 to-green-500/5 rounded-xl p-3 text-center border border-green-500/20">
+                        <Clock className="w-5 h-5 mx-auto mb-1.5 text-green-500" />
+                        <p className="text-xl font-bold text-green-500">{emp.total_hours}h</p>
+                        <p className="text-xs text-green-600/70">Total Hours</p>
                       </div>
-                      <div className="bg-red-500/10 rounded-lg p-2 text-center">
-                        <AlertTriangle className="w-4 h-4 mx-auto mb-1 text-red-500" />
-                        <p className="text-sm font-bold text-red-500">₱{emp.shortages}</p>
-                        <p className="text-[9px] text-muted-foreground">Shortage</p>
+                      <div className="bg-gradient-to-br from-red-500/10 to-red-500/5 rounded-xl p-3 text-center border border-red-500/20">
+                        <AlertTriangle className="w-5 h-5 mx-auto mb-1.5 text-red-500" />
+                        <p className="text-xl font-bold text-red-500">₱{emp.shortages.toLocaleString()}</p>
+                        <p className="text-xs text-red-600/70">Shortages</p>
                       </div>
                     </div>
 
-                    {/* Earnings Calculation */}
-                    <div className="bg-background/50 rounded-lg p-3 space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Base Salary ({emp.total_shifts} × ₱{SALARY_PER_SHIFT})</span>
-                        <span className="font-medium">₱{baseSalary.toLocaleString()}</span>
-                      </div>
-                      {emp.bonuses > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-emerald-500">+ Bonuses</span>
-                          <span className="font-medium text-emerald-500">₱{emp.bonuses.toLocaleString()}</span>
-                        </div>
-                      )}
-                      {emp.shortages > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-red-500">− Shortages</span>
-                          <span className="font-medium text-red-500">₱{emp.shortages.toLocaleString()}</span>
-                        </div>
-                      )}
-                      <div className="border-t border-border pt-2 mt-2">
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold">Net Pay</span>
+                    {/* Earnings Calculation - Beautiful Receipt Style */}
+                    <div className="bg-gradient-to-br from-muted/50 to-muted/20 rounded-xl p-4 border border-border/50">
+                      <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Banknote className="w-4 h-4" />
+                        Salary Calculation
+                      </h5>
+                      
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center py-2 border-b border-dashed border-border/50">
+                          <span className="text-sm text-muted-foreground">Base Salary</span>
                           <div className="text-right">
-                            <span className="text-xl font-bold text-emerald-500">₱{netPay.toLocaleString()}</span>
-                            {emp.salaryPaid && (
-                              <p className="text-[10px] text-emerald-500 flex items-center gap-1 justify-end">
+                            <span className="font-mono text-sm">{emp.total_shifts} × ₱{SALARY_PER_SHIFT}</span>
+                            <span className="font-bold ml-3">₱{baseSalary.toLocaleString()}</span>
+                          </div>
+                        </div>
+                        
+                        {emp.bonuses > 0 && (
+                          <div className="flex justify-between items-center py-2 border-b border-dashed border-border/50">
+                            <span className="text-sm text-emerald-500 flex items-center gap-1">
+                              <TrendingUp className="w-3.5 h-3.5" />
+                              Bonuses
+                            </span>
+                            <span className="font-bold text-emerald-500">+₱{emp.bonuses.toLocaleString()}</span>
+                          </div>
+                        )}
+                        
+                        {emp.shortages > 0 && (
+                          <div className="flex justify-between items-center py-2 border-b border-dashed border-border/50">
+                            <span className="text-sm text-red-500 flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              Shortages
+                            </span>
+                            <span className="font-bold text-red-500">−₱{emp.shortages.toLocaleString()}</span>
+                          </div>
+                        )}
+                        
+                        <div className="flex justify-between items-center pt-3 mt-2">
+                          <span className="font-bold text-lg">Net Pay</span>
+                          <div className="text-right">
+                            <span className="text-3xl font-bold text-emerald-500">₱{netPay.toLocaleString()}</span>
+                            {emp.salaryPaid && emp.salaryPaidAt && (
+                              <p className="text-xs text-emerald-500 flex items-center gap-1 justify-end mt-1">
                                 <CheckCircle className="w-3 h-3" />
-                                Paid {emp.salaryPaidAt && format(new Date(emp.salaryPaidAt), 'MMM d, HH:mm')}
+                                Paid on {format(new Date(emp.salaryPaidAt), 'MMM d, HH:mm')}
                               </p>
                             )}
                           </div>
