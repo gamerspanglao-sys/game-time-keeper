@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { FileSpreadsheet, Download, Loader2, RefreshCw, Check, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
+import { ActivityLogger } from '@/lib/activityLogger';
 import * as XLSX from 'xlsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -70,6 +71,7 @@ export function PayrollReport() {
       const { data, error } = await supabase.functions.invoke('google-sheets-sync');
       if (error) throw error;
       toast.success('Synced to Google Sheets');
+      ActivityLogger.syncSheets('success');
     } catch (error) {
       console.error('Error syncing to Google Sheets:', error);
       toast.error('Failed to sync to Google Sheets');
@@ -203,7 +205,7 @@ export function PayrollReport() {
     loadPayroll();
   }, [dateFrom, dateTo]);
 
-  const toggleSalaryPaid = async (shiftId: string, currentPaid: boolean, amount: number) => {
+  const toggleSalaryPaid = async (shiftId: string, currentPaid: boolean, amount: number, employeeName: string) => {
     try {
       const { error } = await supabase
         .from('shifts')
@@ -217,6 +219,9 @@ export function PayrollReport() {
       if (error) throw error;
       
       toast.success(currentPaid ? 'Marked as unpaid' : 'Marked as paid');
+      if (!currentPaid) {
+        ActivityLogger.salaryPaid(employeeName, amount);
+      }
       loadPayroll();
     } catch (error) {
       console.error('Error updating salary status:', error);
@@ -457,7 +462,7 @@ export function PayrollReport() {
                           <td className="text-center py-3 px-4">
                             <Checkbox
                               checked={shift.salary_paid}
-                              onCheckedChange={() => toggleSalaryPaid(shift.id, shift.salary_paid, shift.base_salary)}
+                              onCheckedChange={() => toggleSalaryPaid(shift.id, shift.salary_paid, shift.base_salary, shift.employee_name)}
                             />
                           </td>
                         </tr>
