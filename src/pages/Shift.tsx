@@ -116,27 +116,28 @@ const getHandoverDateFromShiftStart = (shiftStart: string, shiftType: string): s
 };
 
 // Get previous shift type and date for handover lookup
+// Night shifts that start after 5 PM are recorded with the NEXT day's date
 const getPreviousShiftInfo = (): { shiftType: ShiftType; shiftDate: string } => {
   const currentType = getCurrentShiftType();
   const manilaTime = getManilaTime();
   const hour = manilaTime.getHours();
+  const today = format(manilaTime, 'yyyy-MM-dd');
   
   if (currentType === 'day') {
-    // Previous was night shift - check if we're before or after 5 AM
+    // Day shift - previous was night shift
+    // Night shift handover is recorded with TODAY's date (since it started yesterday evening)
     if (hour < 5) {
-      // Still in the night shift period, previous was day shift yesterday
+      // Before 5 AM, still night shift period - previous was yesterday's day shift
       const yesterday = new Date(manilaTime);
       yesterday.setDate(yesterday.getDate() - 1);
       return { shiftType: 'day', shiftDate: format(yesterday, 'yyyy-MM-dd') };
     } else {
-      // Day shift, previous was night shift that started yesterday
-      const yesterday = new Date(manilaTime);
-      yesterday.setDate(yesterday.getDate() - 1);
-      return { shiftType: 'night', shiftDate: format(yesterday, 'yyyy-MM-dd') };
+      // After 5 AM, day shift - previous was night shift with TODAY's date
+      return { shiftType: 'night', shiftDate: today };
     }
   } else {
-    // Night shift, previous was day shift today
-    return { shiftType: 'day', shiftDate: format(manilaTime, 'yyyy-MM-dd') };
+    // Night shift - previous was day shift today
+    return { shiftType: 'day', shiftDate: today };
   }
 };
 
