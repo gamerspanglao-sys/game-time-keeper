@@ -1837,6 +1837,7 @@ export function CashVerification() {
         </CardHeader>
         {showHistory && (
           <CardContent className="space-y-2 pt-0">
+            <p className="text-xs text-amber-500">DEBUG: approvedHistory has {approvedHistory.length} items, loading={loading ? 'true' : 'false'}</p>
             {approvedHistory.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">No approved shifts yet</p>
             )}
