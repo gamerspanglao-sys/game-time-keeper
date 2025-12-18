@@ -265,35 +265,29 @@ export function CashVerification() {
       const groupedVerifications: Record<string, PendingVerification> = {};
       
       // Helper to get previous shift info
-      // Night shift (5PM-5AM) is recorded under the date when it ENDS (next day)
-      // So for day shift Dec 18 (starts 5AM), previous shift is night Dec 18 (ended 5AM Dec 18)
+      // Day shift: previous is night of PREVIOUS day (ended at 5AM today)
+      // Night shift: previous is day of SAME day
       const getPrevShift = (date: string, shift: string): { date: string; shift: string } => {
         if (shift === 'day') {
-          // Day shift starts at 5AM, previous is night shift that ended at 5AM same date
-          return { date, shift: 'night' };
+          // Day shift (5AM-5PM), previous is night shift that started YESTERDAY and ended today 5AM
+          const prevDate = new Date(date);
+          prevDate.setDate(prevDate.getDate() - 1);
+          return { date: prevDate.toISOString().split('T')[0], shift: 'night' };
         } else {
-          // Night shift starts at 5PM, previous is day shift of same date
+          // Night shift (5PM-5AM), previous is day shift of same date
           return { date, shift: 'day' };
         }
       };
       
-      // Helper to find change_fund_received from shifts (what employees confirmed receiving)
-      const findChangeFundReceived = (date: string, shift: string): number => {
-        // Find any shift for this date/shift that has change_fund_received
-        const shiftRecord = (allShifts || []).find((s: any) => {
-          const sType = s.type || 'day';
-          return s.date === date && sType === shift && s.change_fund_received != null;
-        });
-        if (shiftRecord?.change_fund_received != null) {
-          return shiftRecord.change_fund_received;
-        }
-        // Fallback: look for previous shift's change_fund_amount in handovers
+      // SIMPLIFIED: Get carryover from previous shift's APPROVED handover change_fund_amount
+      const findCarryover = (date: string, shift: string): number => {
         const prev = getPrevShift(date, shift);
+        // Find previous shift's handover (approved or not)
         const prevHandover = (allHandovers || []).find((ph: any) => {
           const phShift = ph.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
           return ph.shift_date === prev.date && phShift === prev.shift;
         });
-        return prevHandover?.change_fund_amount || 0;
+        return prevHandover?.change_fund_amount || 2000; // Default 2000 if no previous handover
       };
       
       (handovers || []).forEach((h: any) => {
@@ -314,8 +308,8 @@ export function CashVerification() {
         if (!groupedVerifications[key]) {
           const register = registers?.find(r => r.date === h.shift_date && r.shift === shiftType);
           
-          // Get carryover - check change_fund_received first, then fallback to previous shift's change_fund
-          const carryover = findChangeFundReceived(h.shift_date, shiftType);
+          // Get carryover from previous shift's handover
+          const carryover = findCarryover(h.shift_date, shiftType);
           
           groupedVerifications[key] = {
             date: h.shift_date,
@@ -411,8 +405,8 @@ export function CashVerification() {
         if (!historyMap[key]) {
           const register = registers?.find(r => r.date === h.shift_date && r.shift === shiftType);
           
-          // Get carryover - check change_fund_received first, then fallback
-          const carryover = findChangeFundReceived(h.shift_date, shiftType);
+          // Get carryover from previous shift's handover
+          const carryover = findCarryover(h.shift_date, shiftType);
           
           // Get expenses for this shift
           const shiftExpenses = (allExpenses || []).filter(e => e.date === h.shift_date && e.shift === shiftType);
@@ -1411,181 +1405,152 @@ export function CashVerification() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {/* Calculation Breakdown */}
-              <div className="p-2 rounded-lg bg-background/80 text-xs space-y-1">
-                <p className="text-[10px] text-muted-foreground mb-2 font-medium">Expected Calculation</p>
-                <div className="grid grid-cols-3 gap-1 text-muted-foreground">
-                  <span></span>
-                  <span className="text-center"><Banknote className="w-3 h-3 inline text-green-500" /> Cash</span>
-                  <span className="text-center"><Smartphone className="w-3 h-3 inline text-blue-500" /> GCash</span>
-                </div>
-                <div className="grid grid-cols-3 gap-1">
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    Carryover:
+              {/* SIMPLIFIED: What was expected */}
+              <div className="p-3 rounded-lg bg-muted/30 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground mb-2">💰 Ожидаемая касса</p>
+                
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Размен с прошлой смены:</span>
+                  <span className="font-medium flex items-center gap-1">
+                    ₱{v.carryoverCash.toLocaleString()}
                     <Button 
                       variant="ghost" 
                       size="icon"
-                      className="h-4 w-4 p-0"
+                      className="h-5 w-5 p-0"
                       onClick={() => {
                         setEditingCarryover(key);
                         setCarryoverInput(v.carryoverCash.toString());
                       }}
                     >
-                      <Pencil className="w-2.5 h-2.5" />
+                      <Pencil className="w-3 h-3" />
                     </Button>
                   </span>
-                  {editingCarryover === key ? (
-                    <>
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          className="h-5 w-16 text-xs text-center p-1"
-                          value={carryoverInput}
-                          onChange={(e) => setCarryoverInput(e.target.value)}
-                          autoFocus
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-4 w-4 p-0 text-green-500"
-                          onClick={() => saveCarryover(v, parseInt(carryoverInput) || 0)}
-                        >
-                          <Check className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-4 w-4 p-0 text-red-500"
-                          onClick={() => setEditingCarryover(null)}
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      <span className="text-center">₱{v.carryoverGcash.toLocaleString()}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-center">₱{v.carryoverCash.toLocaleString()}</span>
-                      <span className="text-center">₱{v.carryoverGcash.toLocaleString()}</span>
-                    </>
-                  )}
                 </div>
-                <div className="grid grid-cols-3 gap-1">
-                  <span className="text-muted-foreground">+ Sales:</span>
-                  <span className="text-center text-green-600">₱{v.loyverseCash.toLocaleString()}</span>
-                  <span className="text-center text-green-600">₱{v.loyverseGcash.toLocaleString()}</span>
+                
+                {editingCarryover === key && (
+                  <div className="flex items-center gap-2 pl-4">
+                    <Input
+                      type="number"
+                      className="h-7 w-24 text-sm"
+                      value={carryoverInput}
+                      onChange={(e) => setCarryoverInput(e.target.value)}
+                      autoFocus
+                    />
+                    <Button size="sm" variant="ghost" className="h-7 text-green-500" onClick={() => saveCarryover(v, parseInt(carryoverInput) || 0)}>
+                      <Check className="w-4 h-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-red-500" onClick={() => setEditingCarryover(null)}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+                
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">+ Продажи (Cash):</span>
+                  <span className="text-green-600">₱{v.loyverseCash.toLocaleString()}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-1">
-                  <span className="text-muted-foreground">− Expenses:</span>
-                  <span className="text-center text-red-500">₱{v.expensesCash.toLocaleString()}</span>
-                  <span className="text-center text-red-500">₱{v.expensesGcash.toLocaleString()}</span>
+                
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">+ Продажи (GCash):</span>
+                  <span className="text-blue-500">₱{v.loyverseGcash.toLocaleString()}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-1 pt-1 border-t border-border font-bold">
-                  <span>= Expected:</span>
-                  <span className="text-center">₱{v.cashExpected.toLocaleString()}</span>
-                  <span className="text-center">₱{v.gcashExpected.toLocaleString()}</span>
+                
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">− Расходы (Cash):</span>
+                  <span className="text-red-500">₱{v.expensesCash.toLocaleString()}</span>
                 </div>
-                <p className="font-bold text-right pt-1">Total Expected: ₱{v.totalExpected.toLocaleString()}</p>
+                
+                {v.expensesGcash > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">− Расходы (GCash):</span>
+                    <span className="text-red-500">₱{v.expensesGcash.toLocaleString()}</span>
+                  </div>
+                )}
+                
+                <div className="flex justify-between text-sm pt-2 border-t border-border font-bold">
+                  <span>= Должно быть:</span>
+                  <span>₱{v.totalExpected.toLocaleString()}</span>
+                </div>
               </div>
 
-              {/* Staff Submitted + Change Fund Left */}
-              <div className="p-2 rounded-lg bg-background/80 space-y-2">
+              {/* SIMPLIFIED: What staff submitted */}
+              <div className="p-3 rounded-lg bg-muted/30 space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] text-muted-foreground">Staff Accounted For</p>
+                  <p className="text-xs font-medium text-muted-foreground">📋 Сдано сотрудниками</p>
                   {editingSubmitted !== key ? (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5"
-                      onClick={() => startEditSubmitted(v)}
-                    >
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => startEditSubmitted(v)}>
                       <Pencil className="w-3 h-3" />
                     </Button>
                   ) : (
                     <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 text-green-500"
-                        onClick={() => saveEditedSubmitted(v)}
-                      >
-                        <Check className="w-3 h-3" />
+                      <Button size="sm" variant="ghost" className="h-6 text-green-500" onClick={() => saveEditedSubmitted(v)}>
+                        <Check className="w-4 h-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 text-red-500"
-                        onClick={() => setEditingSubmitted(null)}
-                      >
-                        <X className="w-3 h-3" />
+                      <Button size="sm" variant="ghost" className="h-6 text-red-500" onClick={() => setEditingSubmitted(null)}>
+                        <X className="w-4 h-4" />
                       </Button>
                     </div>
                   )}
                 </div>
                 
                 {editingSubmitted === key ? (
-                  <>
-                    <div className="grid grid-cols-3 gap-1 text-xs items-center">
-                      <span className="text-muted-foreground">💵 Total Cash:</span>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Вся касса:</span>
                       <Input
                         type="number"
-                        className="h-6 text-xs text-center col-span-2"
+                        className="h-8 w-28 text-right"
                         value={editTotalCash}
                         onChange={e => setEditTotalCash(e.target.value)}
-                        placeholder="All cash in register"
                       />
                     </div>
-                    <div className="grid grid-cols-3 gap-1 text-xs items-center">
-                      <span className="text-muted-foreground">− Change fund:</span>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Оставлено на размен:</span>
                       <Input
                         type="number"
-                        className="h-6 text-xs text-center col-span-2"
+                        className="h-8 w-28 text-right"
                         value={editChangeFundLeaving}
                         onChange={e => setEditChangeFundLeaving(e.target.value)}
                       />
                     </div>
-                    <div className="grid grid-cols-3 gap-1 text-xs items-center pt-1 border-t border-border/50">
-                      <span className="text-muted-foreground">= Cash handed:</span>
-                      <span className="text-center col-span-2 font-medium">
-                        ₱{((parseInt(editTotalCash) || 0) - (parseInt(editChangeFundLeaving) || 0)).toLocaleString()}
-                      </span>
+                    <div className="flex justify-between text-sm pt-1 border-t border-border/50">
+                      <span className="text-muted-foreground">= Сдано наличными:</span>
+                      <span className="font-medium">₱{((parseInt(editTotalCash) || 0) - (parseInt(editChangeFundLeaving) || 0)).toLocaleString()}</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 text-xs items-center mt-2">
-                      <span className="text-muted-foreground">📱 GCash:</span>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">GCash:</span>
                       <Input
                         type="number"
-                        className="h-6 text-xs text-center col-span-2"
+                        className="h-8 w-28 text-right"
                         value={editGcashSubmitted}
                         onChange={e => setEditGcashSubmitted(e.target.value)}
                       />
                     </div>
-                  </>
+                  </div>
                 ) : (
-                  <>
-                    <div className="grid grid-cols-3 gap-1 text-xs">
-                      <span className="text-muted-foreground">Total Cash:</span>
-                      <span className="text-center font-medium col-span-2">
-                        ₱{(v.cashSubmitted + v.changeFundLeaving).toLocaleString()}
-                      </span>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Вся касса:</span>
+                      <span className="font-medium">₱{(v.cashSubmitted + v.changeFundLeaving).toLocaleString()}</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 text-xs">
-                      <span className="text-muted-foreground">− Change fund:</span>
-                      <span className="text-center text-amber-600 col-span-2">₱{v.changeFundLeaving.toLocaleString()}</span>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Оставлено на размен:</span>
+                      <span className="text-amber-600">₱{v.changeFundLeaving.toLocaleString()}</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 text-xs pt-1 border-t border-border/50">
-                      <span className="text-muted-foreground">= Cash handed:</span>
-                      <span className="text-center col-span-2">₱{v.cashSubmitted.toLocaleString()}</span>
+                    <div className="flex justify-between text-sm pt-1 border-t border-border/50">
+                      <span className="text-muted-foreground">= Сдано наличными:</span>
+                      <span>₱{v.cashSubmitted.toLocaleString()}</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 text-xs mt-2">
+                    <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">GCash:</span>
-                      <span className="text-center col-span-2">₱{v.gcashSubmitted.toLocaleString()}</span>
+                      <span className="text-blue-500">₱{v.gcashSubmitted.toLocaleString()}</span>
                     </div>
-                  </>
+                  </div>
                 )}
                 
-                <div className="grid grid-cols-3 gap-1 text-sm pt-2 border-t border-border font-bold">
-                  <span>Total Accounted:</span>
-                  <span className="text-center col-span-2">
+                <div className="flex justify-between text-sm pt-2 border-t border-border font-bold">
+                  <span>Итого учтено:</span>
+                  <span>
                     ₱{editingSubmitted === key 
                       ? ((parseInt(editTotalCash) || 0) + (parseInt(editGcashSubmitted) || 0)).toLocaleString()
                       : v.totalAccountedFor.toLocaleString()
@@ -1594,53 +1559,41 @@ export function CashVerification() {
                 </div>
               </div>
 
-              {/* Discrepancy */}
-              {v.difference !== 0 && (
-                <div className={cn(
-                  "p-3 rounded-lg border-2 text-sm",
-                  isSurplus && "bg-green-500/10 border-green-500/50",
-                  isShortage && "bg-red-500/10 border-red-500/50"
-                )}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium flex items-center gap-1">
-                      {isShortage ? <TrendingDown className="w-4 h-4 text-red-500" /> : <TrendingUp className="w-4 h-4 text-green-500" />}
-                      {isShortage ? 'SHORTAGE' : 'SURPLUS'}
-                    </span>
-                    <span className={cn("font-bold text-lg", isShortage ? "text-red-500" : "text-green-500")}>
-                      {v.difference > 0 ? '+' : ''}₱{v.difference.toLocaleString()}
-                    </span>
+              {/* SIMPLIFIED: Result */}
+              <div className={cn(
+                "p-3 rounded-lg border-2",
+                isSurplus && "bg-green-500/10 border-green-500/50",
+                isShortage && "bg-red-500/10 border-red-500/50",
+                isMatch && "bg-blue-500/10 border-blue-500/50"
+              )}>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium flex items-center gap-2">
+                    {isShortage && <TrendingDown className="w-5 h-5 text-red-500" />}
+                    {isSurplus && <TrendingUp className="w-5 h-5 text-green-500" />}
+                    {isMatch && <Check className="w-5 h-5 text-blue-500" />}
+                    {isShortage ? 'НЕДОСТАЧА' : isSurplus ? 'ИЗЛИШЕК' : 'СХОДИТСЯ'}
+                  </span>
+                  <span className={cn(
+                    "font-bold text-xl",
+                    isShortage && "text-red-500",
+                    isSurplus && "text-green-500",
+                    isMatch && "text-blue-500"
+                  )}>
+                    {v.difference !== 0 && (v.difference > 0 ? '+' : '')}₱{Math.abs(v.difference).toLocaleString()}
+                  </span>
+                </div>
+                
+                <div className="mt-2 pt-2 border-t border-border/50 text-sm text-muted-foreground">
+                  <div className="flex justify-between">
+                    <span>Должно быть:</span>
+                    <span>₱{v.totalExpected.toLocaleString()}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div></div>
-                    <div className="text-center"><Banknote className="w-3 h-3 inline text-green-600" /> Cash</div>
-                    <div className="text-center"><Smartphone className="w-3 h-3 inline text-blue-600" /> GCash</div>
-                    
-                    <div className="text-muted-foreground">Expected:</div>
-                    <div className="text-center">₱{v.cashExpected.toLocaleString()}</div>
-                    <div className="text-center">₱{v.gcashExpected.toLocaleString()}</div>
-                    
-                    <div className="text-muted-foreground">Handed:</div>
-                    <div className="text-center">₱{v.cashSubmitted.toLocaleString()}</div>
-                    <div className="text-center">₱{v.gcashSubmitted.toLocaleString()}</div>
-                    
-                    <div className="text-muted-foreground text-amber-600">+ Change left:</div>
-                    <div className="text-center text-amber-600">₱{v.changeFundLeaving.toLocaleString()}</div>
-                    <div className="text-center text-muted-foreground">—</div>
-                    
-                    <div className="text-muted-foreground font-medium">= Accounted:</div>
-                    <div className="text-center font-medium">₱{(v.cashSubmitted + v.changeFundLeaving).toLocaleString()}</div>
-                    <div className="text-center font-medium">₱{v.gcashSubmitted.toLocaleString()}</div>
-                    
-                    <div className="font-medium">Diff:</div>
-                    <div className={cn("text-center font-bold", ((v.cashSubmitted + v.changeFundLeaving) - v.cashExpected) >= 0 ? "text-green-500" : "text-red-500")}>
-                      {((v.cashSubmitted + v.changeFundLeaving) - v.cashExpected) >= 0 ? '+' : ''}₱{((v.cashSubmitted + v.changeFundLeaving) - v.cashExpected).toLocaleString()}
-                    </div>
-                    <div className={cn("text-center font-bold", (v.gcashSubmitted - v.gcashExpected) >= 0 ? "text-green-500" : "text-red-500")}>
-                      {(v.gcashSubmitted - v.gcashExpected) >= 0 ? '+' : ''}₱{(v.gcashSubmitted - v.gcashExpected).toLocaleString()}
-                    </div>
+                  <div className="flex justify-between">
+                    <span>Учтено:</span>
+                    <span>₱{v.totalAccountedFor.toLocaleString()}</span>
                   </div>
                 </div>
-              )}
+              </div>
 
               {/* Mis-categorization warning */}
               {(() => {
