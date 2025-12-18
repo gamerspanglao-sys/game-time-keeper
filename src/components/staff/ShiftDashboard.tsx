@@ -389,87 +389,119 @@ export function ShiftDashboard() {
       </div>
 
       {/* Employee List */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {loading ? (
           <div className="text-center py-8 text-muted-foreground text-sm">Loading...</div>
         ) : stats.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground text-sm">No shift data for this period</div>
         ) : (
-          stats.map((emp, idx) => (
-            <Card key={emp.id} className="border-border/50 hover:border-primary/30 transition-colors">
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                      idx === 0 ? 'bg-amber-500/20 text-amber-500' :
-                      idx === 1 ? 'bg-slate-400/20 text-slate-400' :
-                      idx === 2 ? 'bg-orange-600/20 text-orange-600' :
-                      'bg-muted text-muted-foreground'
-                    }`}>
-                      {idx + 1}
+          stats.map((emp, idx) => {
+            const baseSalary = emp.total_shifts * SALARY_PER_SHIFT;
+            const totalEarnings = baseSalary + emp.bonuses;
+            
+            return (
+              <Card key={emp.id} className="border-border/50 hover:border-primary/30 transition-all hover:shadow-md">
+                <CardContent className="p-4">
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                        idx === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-lg shadow-amber-500/30' :
+                        idx === 1 ? 'bg-gradient-to-br from-slate-300 to-slate-500 text-white shadow-lg shadow-slate-400/30' :
+                        idx === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-500/30' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {idx + 1}
+                      </div>
+                      <div>
+                        <span className="font-semibold">{emp.name}</span>
+                        <p className="text-[10px] text-muted-foreground">
+                          {emp.total_shifts} shifts • {emp.total_hours}h total
+                        </p>
+                      </div>
                     </div>
-                    <span className="font-medium text-sm">{emp.name}</span>
+                    <div className="flex items-center gap-2">
+                      {isAdmin && (
+                        <>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-7 w-7 p-0 text-blue-500 hover:bg-blue-500/10"
+                            onClick={() => requestAdminAction('edit', emp.id)}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-7 w-7 p-0 text-red-500 hover:bg-red-500/10"
+                            onClick={() => requestAdminAction('reset', emp.id)}
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {isAdmin && (
-                      <>
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="h-6 w-6 p-0 text-blue-500 hover:bg-blue-500/10"
-                          onClick={() => requestAdminAction('edit', emp.id)}
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="h-6 w-6 p-0 text-red-500 hover:bg-red-500/10"
-                          onClick={() => requestAdminAction('reset', emp.id)}
-                        >
-                          <RotateCcw className="w-3 h-3" />
-                        </Button>
-                      </>
-                    )}
-                    <Badge variant="secondary" className="text-xs">
-                      ₱{((emp.total_shifts * SALARY_PER_SHIFT) + emp.bonuses).toLocaleString()}
-                      {emp.bonuses > 0 && <span className="text-emerald-500 ml-1">(+{emp.bonuses})</span>}
-                    </Badge>
-                  </div>
-                </div>
 
-                <Progress 
-                  value={(emp.total_shifts / maxShifts) * 100} 
-                  className="h-2 mb-2"
-                />
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-4 gap-2 mb-3">
+                    <div className="bg-amber-500/10 rounded-lg p-2 text-center">
+                      <Sun className="w-4 h-4 mx-auto mb-1 text-amber-500" />
+                      <p className="text-sm font-bold text-amber-500">{emp.day_shifts}</p>
+                      <p className="text-[9px] text-muted-foreground">Day</p>
+                    </div>
+                    <div className="bg-indigo-500/10 rounded-lg p-2 text-center">
+                      <Moon className="w-4 h-4 mx-auto mb-1 text-indigo-500" />
+                      <p className="text-sm font-bold text-indigo-500">{emp.night_shifts}</p>
+                      <p className="text-[9px] text-muted-foreground">Night</p>
+                    </div>
+                    <div className="bg-green-500/10 rounded-lg p-2 text-center">
+                      <Clock className="w-4 h-4 mx-auto mb-1 text-green-500" />
+                      <p className="text-sm font-bold text-green-500">{emp.total_hours}h</p>
+                      <p className="text-[9px] text-muted-foreground">Hours</p>
+                    </div>
+                    <div className="bg-primary/10 rounded-lg p-2 text-center">
+                      <TrendingUp className="w-4 h-4 mx-auto mb-1 text-primary" />
+                      <p className="text-sm font-bold text-primary">~{emp.avg_hours_per_shift}h</p>
+                      <p className="text-[9px] text-muted-foreground">Avg/Shift</p>
+                    </div>
+                  </div>
 
-                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1">
-                      <Sun className="w-3 h-3 text-amber-500" />
-                      {emp.day_shifts}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Moon className="w-3 h-3 text-indigo-500" />
-                      {emp.night_shifts}
-                    </span>
+                  {/* Earnings Breakdown */}
+                  <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Banknote className="w-3.5 h-3.5" />
+                        Earnings Breakdown
+                      </span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Base ({emp.total_shifts} × ₱{SALARY_PER_SHIFT})</span>
+                        <span className="font-medium">₱{baseSalary.toLocaleString()}</span>
+                      </div>
+                      {emp.bonuses > 0 && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-emerald-500">+ Bonuses</span>
+                          <span className="font-medium text-emerald-500">₱{emp.bonuses.toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div className="border-t border-border/50 pt-1.5 mt-1.5">
+                        <div className="flex justify-between">
+                          <span className="text-sm font-semibold">Total</span>
+                          <span className="text-lg font-bold text-emerald-500">₱{totalEarnings.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {emp.total_hours}h
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <TrendingUp className="w-3 h-3" />
-                      ~{emp.avg_hours_per_shift}h/shift
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
+                </CardContent>
+              </Card>
+            );
+          })
         )}
       </div>
+
 
       {/* PIN Dialog */}
       <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
