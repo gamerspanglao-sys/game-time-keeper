@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Timer, Gamepad2, Maximize, Minimize, Wallet, Activity, Package, Clock, Shield, ShieldOff, Lock } from 'lucide-react';
+import { Timer, Gamepad2, Maximize, Minimize, Wallet, Activity, Package, Clock, Shield, ShieldOff, Lock, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { useAdminMode } from '@/hooks/useAdminMode';
@@ -164,6 +164,11 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
           <NavLink to="/finance" className={navLinkClass}>
             <Wallet className="w-5 h-5" />
             <span>Finance</span>
+          </NavLink>
+
+          <NavLink to="/money-flow" className={navLinkClass}>
+            <TrendingUp className="w-5 h-5" />
+            <span>Money Flow</span>
           </NavLink>
 
           {/* Admin sections - only visible when admin mode is active */}
