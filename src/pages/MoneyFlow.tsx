@@ -46,6 +46,7 @@ interface CashHandover {
   shift_date: string;
   shift_type: string;
   change_fund_amount: number;
+  gcash_amount?: number;
 }
 
 interface InvestorContribution {
@@ -138,10 +139,11 @@ export default function MoneyFlow() {
     }
   });
   const carryoverCash = previousHandover?.change_fund_amount || 0;
+  const carryoverGcash = previousHandover?.gcash_amount || 0;
   
   // Current Register = Carryover + Loyverse Sales - Shift Expenses
   const currentRegisterCash = carryoverCash + (currentRecord?.cash_expected || 0) - shiftCashExp;
-  const currentRegisterGcash = (currentRecord?.gcash_expected || 0) - shiftGcashExp;
+  const currentRegisterGcash = carryoverGcash + (currentRecord?.gcash_expected || 0) - shiftGcashExp;
   const currentRegisterTotal = currentRegisterCash + currentRegisterGcash;
   
   // CUMULATIVE Storage: ALL received cash - ALL balance expenses
@@ -160,7 +162,7 @@ export default function MoneyFlow() {
         supabase.from('cash_register').select('id, date, shift, cash_expected, gcash_expected, cash_actual, gcash_actual').order('date', { ascending: false }),
         supabase.from('cash_expenses').select('*').order('created_at', { ascending: false }),
         supabase.from('investor_contributions').select('*').order('created_at', { ascending: false }),
-        supabase.from('cash_handovers').select('id, shift_date, shift_type, change_fund_amount').order('shift_date', { ascending: false }),
+        supabase.from('cash_handovers').select('id, shift_date, shift_type, change_fund_amount, gcash_amount').order('shift_date', { ascending: false }),
         supabase.from('shifts').select('date, type').eq('status', 'open').order('shift_start', { ascending: false }).limit(1).maybeSingle()
       ]);
       setRecords((cashData || []) as CashRecord[]);
