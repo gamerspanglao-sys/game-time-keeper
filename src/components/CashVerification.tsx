@@ -1329,6 +1329,12 @@ export function CashVerification() {
 
   return (
     <div className="space-y-4">
+      {/* DEBUG BANNER */}
+      <div className="p-3 bg-yellow-500 text-black rounded-lg text-sm">
+        <strong>DEBUG:</strong> pendingVerifications={pendingVerifications.length}, 
+        standalonePendingExpenses={standalonePendingExpenses.length}, 
+        approvedHistory={approvedHistory.length}
+      </div>
       {/* Header with refresh */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
