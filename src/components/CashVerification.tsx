@@ -368,7 +368,6 @@ export function CashVerification() {
       if (handoverError) {
         console.error('Error fetching approved handovers:', handoverError);
       }
-      console.log('APPROVED HANDOVERS COUNT:', approvedHandovers?.length, approvedHandovers);
       
       const historyMap: Record<string, ApprovedHistory> = {};
       
@@ -409,7 +408,7 @@ export function CashVerification() {
             gcashSubmitted: h.gcash_amount || 0,
             cashActual: register?.cash_actual || 0,
             gcashActual: register?.gcash_actual || 0,
-            totalAccountedFor: 0, // Will be calculated below
+            totalAccountedFor: 0,
             difference: 0,
             shortage: 0,
             changeFundLeft: h.change_fund_amount || 0
@@ -443,7 +442,6 @@ export function CashVerification() {
 
       // Sort by date descending
       const sortedHistory = Object.values(historyMap).sort((a, b) => b.date.localeCompare(a.date));
-      console.log('FINAL HISTORY COUNT:', sortedHistory.length, sortedHistory);
       setApprovedHistory(sortedHistory.slice(0, 30));
       
     } catch (e) {
