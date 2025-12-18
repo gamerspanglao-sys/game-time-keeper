@@ -20,6 +20,7 @@ interface EmployeeStats {
   night_shifts: number;
   total_hours: number;
   avg_hours_per_shift: number;
+  bonuses: number;
 }
 
 interface ShiftRecord {
@@ -88,13 +89,21 @@ export function ShiftDashboard() {
       .gte('date', format(start, 'yyyy-MM-dd'))
       .lte('date', format(end, 'yyyy-MM-dd'));
 
+    const { data: bonuses } = await supabase
+      .from('bonuses')
+      .select('employee_id, amount')
+      .gte('date', format(start, 'yyyy-MM-dd'))
+      .lte('date', format(end, 'yyyy-MM-dd'));
+
     if (employees && shifts) {
       const employeeStats: EmployeeStats[] = employees.map(emp => {
         const empShifts = shifts.filter(s => s.employee_id === emp.id);
+        const empBonuses = bonuses?.filter(b => b.employee_id === emp.id) || [];
         const dayShifts = empShifts.filter(s => s.type === 'day').length;
         const nightShifts = empShifts.filter(s => s.type === 'night').length;
         const totalHours = empShifts.reduce((sum, s) => sum + (Number(s.total_hours) || 0), 0);
         const totalShifts = dayShifts + nightShifts;
+        const totalBonuses = empBonuses.reduce((sum, b) => sum + (b.amount || 0), 0);
 
         return {
           id: emp.id,
@@ -103,7 +112,8 @@ export function ShiftDashboard() {
           day_shifts: dayShifts,
           night_shifts: nightShifts,
           total_hours: Math.round(totalHours * 10) / 10,
-          avg_hours_per_shift: totalShifts > 0 ? Math.round((totalHours / totalShifts) * 10) / 10 : 0
+          avg_hours_per_shift: totalShifts > 0 ? Math.round((totalHours / totalShifts) * 10) / 10 : 0,
+          bonuses: totalBonuses
         };
       }).filter(e => e.total_shifts > 0).sort((a, b) => b.total_shifts - a.total_shifts);
 
@@ -275,7 +285,9 @@ export function ShiftDashboard() {
   const totalHours = stats.reduce((s, e) => s + e.total_hours, 0);
   const totalDayShifts = stats.reduce((s, e) => s + e.day_shifts, 0);
   const totalNightShifts = stats.reduce((s, e) => s + e.night_shifts, 0);
-  const totalSalary = totalShifts * SALARY_PER_SHIFT;
+  const totalBonuses = stats.reduce((s, e) => s + e.bonuses, 0);
+  const totalBaseSalary = totalShifts * SALARY_PER_SHIFT;
+  const totalSalary = totalBaseSalary + totalBonuses;
   const maxShifts = Math.max(...stats.map(e => e.total_shifts), 1);
 
   const periodLabel = period === 'current' ? 'This Month' : period === 'previous' ? 'Last Month' : 'All Time';
@@ -367,6 +379,11 @@ export function ShiftDashboard() {
               <span className="text-xs text-muted-foreground">Total Salary</span>
             </div>
             <span className="text-lg font-bold text-emerald-500">₱{totalSalary.toLocaleString()}</span>
+            {totalBonuses > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Base: ₱{totalBaseSalary.toLocaleString()} + Bonus: ₱{totalBonuses.toLocaleString()}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -415,7 +432,8 @@ export function ShiftDashboard() {
                       </>
                     )}
                     <Badge variant="secondary" className="text-xs">
-                      ₱{(emp.total_shifts * SALARY_PER_SHIFT).toLocaleString()}
+                      ₱{((emp.total_shifts * SALARY_PER_SHIFT) + emp.bonuses).toLocaleString()}
+                      {emp.bonuses > 0 && <span className="text-emerald-500 ml-1">(+{emp.bonuses})</span>}
                     </Badge>
                   </div>
                 </div>
