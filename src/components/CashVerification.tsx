@@ -1307,6 +1307,7 @@ export function CashVerification() {
           <CardContent className="py-8 text-center text-muted-foreground">
             <Check className="w-8 h-8 mx-auto mb-2 text-green-500" />
             <p>No pending approvals</p>
+            <p className="text-xs text-amber-500 mt-2">Debug: History count = {approvedHistory.length}</p>
             <Button 
               variant="ghost" 
               size="sm" 
