@@ -167,7 +167,7 @@ export function ShiftDashboard() {
           salaryPaidAmount: paidShift?.salary_paid_amount ?? null,
           salaryPaidAt: paidShift?.salary_paid_at ?? null
         };
-      }).filter(e => e.total_shifts > 0).sort((a, b) => b.total_shifts - a.total_shifts);
+      }).sort((a, b) => b.total_shifts - a.total_shifts);
 
       setStats(employeeStats);
       
