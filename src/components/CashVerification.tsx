@@ -265,20 +265,23 @@ export function CashVerification() {
       const groupedVerifications: Record<string, PendingVerification> = {};
       
       // Helper to get previous shift info
-      // Night shift is recorded under the date when it ENDS (morning)
+      // Night shift is recorded under the date when it ENDS (morning of that date)
+      // So "night 18 Dec" = worked evening 17 Dec to morning 18 Dec
       // Day shift 18 Dec (5AM-5PM): previous is night shift 18 Dec (which ended 5AM Dec 18)
-      // Night shift 18 Dec (5PM-5AM): previous is day shift 18 Dec (same day)
+      // Night shift 18 Dec: previous is day shift of PREVIOUS day (17 Dec)
       const getPrevShift = (date: string, shift: string): { date: string; shift: string } => {
         if (shift === 'day') {
-          // Day shift, previous is night shift of SAME date (night ended this morning)
+          // Day shift receives from night shift of SAME date (night ended this morning)
           return { date, shift: 'night' };
         } else {
-          // Night shift, previous is day shift of SAME date
-          return { date, shift: 'day' };
+          // Night shift receives from day shift of PREVIOUS date
+          const prevDate = new Date(date);
+          prevDate.setDate(prevDate.getDate() - 1);
+          return { date: prevDate.toISOString().split('T')[0], shift: 'day' };
         }
       };
       
-      // SIMPLIFIED: Get carryover from previous shift's handover change_fund_amount
+      // Get carryover from previous shift's handover change_fund_amount
       const findCarryover = (date: string, shift: string): number => {
         const prev = getPrevShift(date, shift);
         // Find previous shift's handover (approved or not)
