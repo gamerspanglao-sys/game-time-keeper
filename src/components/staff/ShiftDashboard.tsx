@@ -234,7 +234,7 @@ export function ShiftDashboard() {
   const resetAllShifts = async () => {
     const { start, end } = getPeriodDates();
     
-    // First get shift IDs to delete related expenses
+    // Get shift IDs to process
     const { data: shiftsToDelete } = await supabase
       .from('shifts')
       .select('id')
@@ -245,20 +245,20 @@ export function ShiftDashboard() {
     if (shiftsToDelete && shiftsToDelete.length > 0) {
       const shiftIds = shiftsToDelete.map(s => s.id);
       
-      // Delete related cash_expenses first
+      // Unlink expenses from shifts (keep expenses, just remove shift_id)
       await supabase
         .from('cash_expenses')
-        .delete()
+        .update({ shift_id: null })
         .in('shift_id', shiftIds);
       
-      // Delete related bonuses
+      // Delete bonuses
       await supabase
         .from('bonuses')
         .delete()
         .in('shift_id', shiftIds);
     }
     
-    // Now delete the shifts
+    // Delete the shifts
     const { error } = await supabase
       .from('shifts')
       .delete()
