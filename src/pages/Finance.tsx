@@ -12,9 +12,10 @@ import { cn } from '@/lib/utils';
 import { 
   RefreshCw, Loader2, Sun, Moon, Plus, Trash2, Banknote, Smartphone, 
   Wallet, History, Download, CircleDollarSign, Minus, ShoppingCart, Receipt,
-  ClipboardCheck
+  ClipboardCheck, Users
 } from 'lucide-react';
 import { CashVerification } from '@/components/CashVerification';
+import { ShiftDashboard } from '@/components/staff/ShiftDashboard';
 import { ActivityLogger } from '@/lib/activityLogger';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -458,23 +459,31 @@ export default function Finance() {
 
       {/* Tabs */}
       <Tabs defaultValue="pending" className="w-full">
-        <TabsList className="w-full">
-          <TabsTrigger value="pending" className="flex-1 gap-2">
-            <ClipboardCheck className="w-4 h-4" />
+        <TabsList className="w-full grid grid-cols-4">
+          <TabsTrigger value="pending" className="gap-1.5 text-xs">
+            <ClipboardCheck className="w-3.5 h-3.5" />
             Pending
           </TabsTrigger>
-          <TabsTrigger value="balance" className="flex-1 gap-2">
-            <Wallet className="w-4 h-4" />
+          <TabsTrigger value="balance" className="gap-1.5 text-xs">
+            <Wallet className="w-3.5 h-3.5" />
             Balance
           </TabsTrigger>
-          <TabsTrigger value="history" className="flex-1 gap-2">
-            <History className="w-4 h-4" />
+          <TabsTrigger value="shifts" className="gap-1.5 text-xs">
+            <Users className="w-3.5 h-3.5" />
+            Shifts
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-1.5 text-xs">
+            <History className="w-3.5 h-3.5" />
             History
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="pending" className="space-y-4 mt-4">
           <CashVerification />
+        </TabsContent>
+
+        <TabsContent value="shifts" className="space-y-4 mt-4">
+          <ShiftDashboard />
         </TabsContent>
 
         <TabsContent value="balance" className="space-y-4 mt-4">
