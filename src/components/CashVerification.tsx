@@ -438,6 +438,21 @@ export function CashVerification() {
 
       // Sort by date descending
       const sortedHistory = Object.values(historyMap).sort((a, b) => b.date.localeCompare(a.date));
+      
+      // Debug logging
+      sortedHistory.forEach(h => {
+        console.log(`History ${h.date} ${h.shift}:`, {
+          carryoverCash: h.carryoverCash,
+          loyverseCash: h.loyverseCash,
+          expensesCash: h.expensesCash,
+          cashExpected: h.cashExpected,
+          cashSubmitted: h.cashSubmitted,
+          changeFundLeft: h.changeFundLeft,
+          totalAccountedFor: h.totalAccountedFor,
+          difference: h.difference
+        });
+      });
+      
       setApprovedHistory(sortedHistory.slice(0, 30));
       
     } catch (e) {
