@@ -79,13 +79,14 @@ const getCategoryLabel = (v: string) =>
   INVESTOR_CATEGORIES.find(c => c.value === v)?.label || 
   v;
 
-const getCurrentShift = (): ShiftType => {
+// Fallback functions for when no open shift is found
+const getFallbackShift = (): ShiftType => {
   const now = new Date();
   const manilaTime = new Date(now.getTime() + (now.getTimezoneOffset() + 480) * 60000);
   return manilaTime.getHours() >= 5 && manilaTime.getHours() < 17 ? 'day' : 'night';
 };
 
-const getShiftDate = (): string => {
+const getFallbackDate = (): string => {
   const now = new Date();
   const manilaTime = new Date(now.getTime() + (now.getTimezoneOffset() + 480) * 60000);
   const hours = manilaTime.getHours();
@@ -102,8 +103,8 @@ export default function MoneyFlow() {
   const [investorExpenses, setInvestorExpenses] = useState<InvestorContribution[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const [selectedDate, setSelectedDate] = useState(getShiftDate());
-  const [selectedShift, setSelectedShift] = useState<ShiftType>(getCurrentShift());
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [selectedShift, setSelectedShift] = useState<ShiftType>('day');
   
   const [showExpenseDialog, setShowExpenseDialog] = useState(false);
   const [expAmount, setExpAmount] = useState('');
@@ -112,7 +113,6 @@ export default function MoneyFlow() {
   const [expSource, setExpSource] = useState<PaymentSource>('cash');
   const [expType, setExpType] = useState<ExpenseType>('balance');
   const [isInvestorExpense, setIsInvestorExpense] = useState(false);
-
   // Current shift data
   const currentRecord = records.find(r => r.date === selectedDate && r.shift === selectedShift);
   const currentExpenses = expenses.filter(e => e.date === selectedDate && e.shift === selectedShift);
@@ -156,16 +156,28 @@ export default function MoneyFlow() {
 
   const loadData = async () => {
     try {
-      const [{ data: cashData }, { data: expData }, { data: investorData }, { data: handoversData }] = await Promise.all([
+      const [{ data: cashData }, { data: expData }, { data: investorData }, { data: handoversData }, { data: openShift }] = await Promise.all([
         supabase.from('cash_register').select('id, date, shift, cash_expected, gcash_expected, cash_actual, gcash_actual').order('date', { ascending: false }),
         supabase.from('cash_expenses').select('*').order('created_at', { ascending: false }),
         supabase.from('investor_contributions').select('*').order('created_at', { ascending: false }),
-        supabase.from('cash_handovers').select('id, shift_date, shift_type, change_fund_amount').order('shift_date', { ascending: false })
+        supabase.from('cash_handovers').select('id, shift_date, shift_type, change_fund_amount').order('shift_date', { ascending: false }),
+        supabase.from('shifts').select('date, type').eq('status', 'open').order('shift_start', { ascending: false }).limit(1).maybeSingle()
       ]);
       setRecords((cashData || []) as CashRecord[]);
       setExpenses((expData || []) as Expense[]);
       setInvestorExpenses((investorData || []) as InvestorContribution[]);
       setCashHandovers((handoversData || []) as CashHandover[]);
+      
+      // Set initial date/shift from open shift or fallback
+      if (!selectedDate) {
+        if (openShift) {
+          setSelectedDate(openShift.date);
+          setSelectedShift(openShift.type as ShiftType);
+        } else {
+          setSelectedDate(getFallbackDate());
+          setSelectedShift(getFallbackShift());
+        }
+      }
     } catch (e) {
       console.error(e);
     } finally {
