@@ -25,8 +25,8 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/shift" element={<Layout><Shift /></Layout>} />
+            <Route path="/finance" element={<Layout><Finance /></Layout>} />
             {/* Admin-only routes */}
-            <Route path="/finance" element={<Layout><AdminGuard><Finance /></AdminGuard></Layout>} />
             <Route path="/activity" element={<Layout><AdminGuard><Activity /></AdminGuard></Layout>} />
             <Route path="/inventory" element={<Layout><AdminGuard><Inventory /></AdminGuard></Layout>} />
             <Route path="*" element={<NotFound />} />
