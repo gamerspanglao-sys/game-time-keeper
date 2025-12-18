@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { QueueEntry, QueueState } from '@/types/queue';
-
+import { ActivityLogger } from '@/lib/activityLogger';
 export function useSupabaseQueue() {
   const [queue, setQueue] = useState<QueueState>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -67,7 +67,7 @@ export function useSupabaseQueue() {
     };
   }, [loadQueue]);
 
-  const addToQueue = useCallback(async (timerId: string, name: string, hours: number = 1) => {
+  const addToQueue = useCallback(async (timerId: string, name: string, hours: number = 1, timerName?: string) => {
     const entry = {
       timer_id: timerId,
       customer_name: name.trim(),
@@ -100,13 +100,15 @@ export function useSupabaseQueue() {
           ...prev,
           [timerId]: [...(prev[timerId] || []), queueEntry],
         }));
+
+        ActivityLogger.queueAdd(timerName || timerId, name.trim(), hours);
       }
     } catch (err) {
       console.error('Error in addToQueue:', err);
     }
   }, []);
 
-  const removeFromQueue = useCallback(async (timerId: string, entryId: string) => {
+  const removeFromQueue = useCallback(async (timerId: string, entryId: string, customerName?: string, timerName?: string) => {
     try {
       const { error } = await supabase
         .from('queue')
@@ -118,10 +120,16 @@ export function useSupabaseQueue() {
         return;
       }
 
-      setQueue(prev => ({
-        ...prev,
-        [timerId]: (prev[timerId] || []).filter(e => e.id !== entryId),
-      }));
+      setQueue(prev => {
+        const entry = (prev[timerId] || []).find(e => e.id === entryId);
+        if (entry || customerName) {
+          ActivityLogger.queueRemove(timerName || timerId, customerName || entry?.name || 'Unknown');
+        }
+        return {
+          ...prev,
+          [timerId]: (prev[timerId] || []).filter(e => e.id !== entryId),
+        };
+      });
     } catch (err) {
       console.error('Error in removeFromQueue:', err);
     }
@@ -136,7 +144,7 @@ export function useSupabaseQueue() {
     return timerQueue[0] || null;
   }, [queue]);
 
-  const clearTimerQueue = useCallback(async (timerId: string) => {
+  const clearTimerQueue = useCallback(async (timerId: string, timerName?: string) => {
     try {
       const { error } = await supabase
         .from('queue')
@@ -148,10 +156,16 @@ export function useSupabaseQueue() {
         return;
       }
 
-      setQueue(prev => ({
-        ...prev,
-        [timerId]: [],
-      }));
+      setQueue(prev => {
+        const hadEntries = (prev[timerId] || []).length > 0;
+        if (hadEntries) {
+          ActivityLogger.queueClear(timerName || timerId);
+        }
+        return {
+          ...prev,
+          [timerId]: [],
+        };
+      });
     } catch (err) {
       console.error('Error in clearTimerQueue:', err);
     }

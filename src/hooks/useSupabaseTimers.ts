@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Timer, ActivityLogEntry, TimerStatus, WARNING_THRESHOLD } from '@/types/timer';
 import { useTimerAlerts } from './useTimerAlerts';
 import { TIMER_PRICING, getDailyPeriodKey } from '@/lib/timerUtils';
+import { ActivityLogger } from '@/lib/activityLogger';
 
 const DEFAULT_TIMERS: Timer[] = [
   { id: 'table-1', name: 'Table 1', category: 'billiard', status: 'idle', startTime: null, duration: 3600000, remainingTime: 3600000, elapsedTime: 0, paidAmount: 0, unpaidAmount: 0 },
@@ -402,6 +403,8 @@ export function useSupabaseTimers() {
     const timer = timers.find(t => t.id === timerId);
     if (!timer || timer.status === 'running' || timer.status === 'warning') return;
 
+    const durationMin = Math.round(timer.duration / 60000);
+    ActivityLogger.timerStart(timer.name, durationMin, paymentType);
     addActivityLogEntry(timerId, timer.name, 'started');
 
     // Calculate price for this duration
@@ -455,6 +458,8 @@ export function useSupabaseTimers() {
       warnedTimersRef.current.delete(timerId);
       finishedTimersRef.current.delete(timerId);
       
+      const elapsedMin = Math.round(timer.elapsedTime / 60000);
+      ActivityLogger.timerStop(timer.name, elapsedMin);
       addActivityLogEntry(timerId, timer.name, 'stopped');
       
       // Calculate overtime if timer went negative
@@ -483,6 +488,7 @@ export function useSupabaseTimers() {
     finishedTimersRef.current.delete(timerId);
     
     const additionalMs = additionalMinutes * 60 * 1000;
+    ActivityLogger.timerExtend(timer.name, additionalMinutes, paymentType);
     addActivityLogEntry(timerId, timer.name, 'extended');
 
     // Calculate additional price
@@ -536,6 +542,7 @@ export function useSupabaseTimers() {
       warnedTimersRef.current.delete(timerId);
       finishedTimersRef.current.delete(timerId);
 
+      ActivityLogger.timerReset(timer.name);
       addActivityLogEntry(timerId, timer.name, 'reset');
 
       const updated = prevTimers.map(t =>
@@ -567,6 +574,7 @@ export function useSupabaseTimers() {
         return prevTimers;
       }
 
+      ActivityLogger.timerAdjust(timer.name, adjustMinutes);
       const adjustMs = adjustMinutes * 60 * 1000;
       const newRemaining = Math.max(0, timer.remainingTime + adjustMs);
       const newDuration = Math.max(0, timer.duration + adjustMs);
@@ -725,6 +733,7 @@ export function useSupabaseTimers() {
     }
 
     // Only start timer if receipt was created successfully
+    ActivityLogger.timerPromo(timer.name, promoPrice);
     addActivityLogEntry(timerId, timer.name, 'started');
 
     const updatedTimer: Timer = {
