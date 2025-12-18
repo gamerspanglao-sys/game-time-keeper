@@ -54,6 +54,7 @@ export function ShiftDashboard() {
   // Reset state
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetEmployeeId, setResetEmployeeId] = useState<string | null>(null);
+  const [showResetAllDialog, setShowResetAllDialog] = useState(false);
 
   const getPeriodDates = () => {
     const now = new Date();
@@ -230,6 +231,26 @@ export function ShiftDashboard() {
     }
   };
 
+  const resetAllShifts = async () => {
+    const { start, end } = getPeriodDates();
+    
+    const { error } = await supabase
+      .from('shifts')
+      .delete()
+      .eq('status', 'closed')
+      .gte('date', format(start, 'yyyy-MM-dd'))
+      .lte('date', format(end, 'yyyy-MM-dd'));
+    
+    if (error) {
+      console.error('Reset error:', error);
+      toast.error('Failed to reset: ' + error.message);
+    } else {
+      toast.success('All shifts reset');
+      setShowResetAllDialog(false);
+      loadStats();
+    }
+  };
+
   const totalShifts = stats.reduce((s, e) => s + e.total_shifts, 0);
   const totalHours = stats.reduce((s, e) => s + e.total_hours, 0);
   const totalDayShifts = stats.reduce((s, e) => s + e.day_shifts, 0);
@@ -248,6 +269,17 @@ export function ShiftDashboard() {
           {isAdmin && <Badge className="bg-red-500/20 text-red-500 text-[10px]">Admin</Badge>}
         </h3>
         <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="h-8 px-2 text-xs text-red-500 border-red-500/30 hover:bg-red-500/10"
+              onClick={() => setShowResetAllDialog(true)}
+            >
+              <RotateCcw className="w-3.5 h-3.5 mr-1" />
+              Reset All
+            </Button>
+          )}
           {!isAdmin && (
             <Button 
               size="sm" 
@@ -509,6 +541,31 @@ export function ShiftDashboard() {
               className="bg-red-500 hover:bg-red-600"
             >
               Reset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset All Confirmation Dialog */}
+      <AlertDialog open={showResetAllDialog} onOpenChange={setShowResetAllDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-500">
+              <RotateCcw className="w-5 h-5" />
+              Reset ALL Shifts?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete <span className="font-bold text-foreground">{totalShifts} shifts</span> for all employees in <span className="font-bold text-foreground">{periodLabel}</span>. 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={resetAllShifts}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              Reset All
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
