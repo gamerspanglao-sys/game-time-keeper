@@ -403,7 +403,7 @@ export default function Shift() {
     // Use calculated shift type for new shifts (no active shifts)
     const newShiftType = activeShifts.length > 0 ? activeShifts[0].type : getCurrentShiftType();
     const newShiftDate = activeShifts.length > 0 
-      ? format(new Date(activeShifts[0].shift_start), 'yyyy-MM-dd')
+      ? getHandoverDateFromShiftStart(activeShifts[0].shift_start, activeShifts[0].type)
       : getShiftDate();
     
     setStartingShift(true);
