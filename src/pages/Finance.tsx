@@ -613,12 +613,10 @@ export default function Finance() {
                   </div>
                   <p className="text-xl font-bold text-green-500">₱{currentRegisterCash.toLocaleString()}</p>
                   <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
-                    {carryoverCash > 0 && (
-                      <div className="flex justify-between">
-                        <span>Change Fund:</span>
-                        <span className="text-amber-500">₱{carryoverCash.toLocaleString()}</span>
-                      </div>
-                    )}
+                    <div className="flex justify-between">
+                      <span>Carryover:</span>
+                      <span className={carryoverCash > 0 ? "text-amber-500" : "text-muted-foreground"}>₱{carryoverCash.toLocaleString()}</span>
+                    </div>
                     <div className="flex justify-between">
                       <span>+ Loyverse:</span>
                       <span className="text-green-500">₱{(currentRecord?.cash_expected || 0).toLocaleString()}</span>
