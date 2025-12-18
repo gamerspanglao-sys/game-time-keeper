@@ -96,6 +96,25 @@ const getShiftDate = (): string => {
   return format(manilaTime, 'yyyy-MM-dd');
 };
 
+// Get handover date from shift_start timestamp
+// Night shifts that start after 5 PM belong to the NEXT day's date for handover
+const getHandoverDateFromShiftStart = (shiftStart: string, shiftType: string): string => {
+  const startUtc = new Date(shiftStart);
+  // Convert to Manila time
+  const manilaOffset = 8 * 60;
+  const startManilaTime = new Date(startUtc.getTime() + (startUtc.getTimezoneOffset() + manilaOffset) * 60000);
+  const startHour = startManilaTime.getHours();
+  
+  // Night shift that started after 5 PM - handover date is NEXT day
+  if (shiftType === 'night' && startHour >= 17) {
+    const nextDay = new Date(startManilaTime);
+    nextDay.setDate(nextDay.getDate() + 1);
+    return format(nextDay, 'yyyy-MM-dd');
+  }
+  
+  return format(startManilaTime, 'yyyy-MM-dd');
+};
+
 // Get previous shift type and date for handover lookup
 const getPreviousShiftInfo = (): { shiftType: ShiftType; shiftDate: string } => {
   const currentType = getCurrentShiftType();
@@ -164,7 +183,7 @@ export default function Shift() {
   // Effective shift type based on active shifts
   const effectiveShiftType = activeShifts.length > 0 ? activeShifts[0].type : getCurrentShiftType();
   const currentDate = activeShifts.length > 0 
-    ? format(new Date(activeShifts[0].shift_start), 'yyyy-MM-dd')
+    ? getHandoverDateFromShiftStart(activeShifts[0].shift_start, activeShifts[0].type)
     : getShiftDate();
 
   // Check if all employees have ended (but shift not closed)
@@ -232,7 +251,7 @@ export default function Shift() {
       // Use effective shift type from provided shifts
       const shiftType = shifts.length > 0 ? shifts[0].type : getCurrentShiftType();
       const shiftDate = shifts.length > 0 
-        ? format(new Date(shifts[0].shift_start), 'yyyy-MM-dd')
+        ? getHandoverDateFromShiftStart(shifts[0].shift_start, shifts[0].type)
         : getShiftDate();
 
       const { data } = await supabase
@@ -270,15 +289,16 @@ export default function Shift() {
 
   const loadShiftExpensesWithShifts = async (shifts: ActiveShift[]) => {
     try {
-      // Use Manila date for current shift (same logic as Finance)
-      const manilaTime = getManilaTime();
-      const currentManilaDate = format(manilaTime, 'yyyy-MM-dd');
+      // Use handover date from active shifts
       const shiftType = shifts.length > 0 ? shifts[0].type : getCurrentShiftType();
+      const shiftDate = shifts.length > 0 
+        ? getHandoverDateFromShiftStart(shifts[0].shift_start, shifts[0].type)
+        : getShiftDate();
       
       const { data, error } = await supabase
         .from('cash_expenses')
         .select('*')
-        .eq('date', currentManilaDate)
+        .eq('date', shiftDate)
         .eq('shift', shiftType)
         .eq('expense_type', 'shift')
         .order('created_at', { ascending: false });
