@@ -13,6 +13,7 @@ import {
   Banknote, Smartphone, Loader2, Clock, Users, Pencil, Trash2, Plus, RefreshCw,
   History, ChevronDown, ChevronUp, Send
 } from 'lucide-react';
+import { ActivityLogger } from '@/lib/activityLogger';
 
 interface PendingShift {
   id: string;
@@ -590,6 +591,7 @@ export function CashVerification() {
         .update({ approved: true })
         .eq('id', id);
       toast.success('Expense approved');
+      ActivityLogger.expenseApprove(1);
       loadPendingData();
     } catch (e) {
       toast.error('Failed to approve');
@@ -814,6 +816,7 @@ export function CashVerification() {
       }
 
       toast.success(`Confirmed: ₱${cash.toLocaleString()} cash + ₱${gcash.toLocaleString()} gcash added to storage`);
+      ActivityLogger.cashReceived(cash, gcash, confirmingVerification.date, confirmingVerification.shift);
       setConfirmingVerification(null);
       loadPendingData();
     } catch (e) {
@@ -1004,6 +1007,7 @@ export function CashVerification() {
         .ilike('shift_type', `%${h.shift}%`);
         
       toast.success('Amounts updated');
+      ActivityLogger.cashEdit(h.date, h.shift);
       setEditingHistoryKey(null);
       loadPendingData();
     } catch (e) {

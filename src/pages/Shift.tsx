@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Square, AlertTriangle, CheckCircle2, Send, Lock, Pencil, Trash2 } from 'lucide-react';
+import { ActivityLogger } from '@/lib/activityLogger';
 
 type ShiftType = 'day' | 'night';
 type ShiftStatus = 'open' | 'ended' | 'closed';
@@ -409,6 +410,7 @@ export default function Shift() {
       }
 
       toast.success('Shift started');
+      ActivityLogger.shiftStart(employeeName, newShiftType === 'day' ? 'Day' : 'Night');
       loadData();
     } catch (e) {
       console.error(e);
@@ -452,6 +454,7 @@ export default function Shift() {
       if (error) throw error;
 
       toast.success(`${employeeName} finished work`);
+      ActivityLogger.shiftEnd(employeeName);
       loadData();
     } catch (e) {
       console.error(e);
@@ -529,6 +532,9 @@ export default function Shift() {
         
         if (closeError) throw closeError;
       }
+
+      // Log activity
+      ActivityLogger.shiftClose(effectiveShiftType === 'day' ? 'Day' : 'Night', cash, gcash);
 
       // 3. Send Telegram notifications
       try {
@@ -658,6 +664,7 @@ export default function Shift() {
       if (error) throw error;
 
       toast.success('Expense added');
+      ActivityLogger.expenseAdd(expenseCategory, amount, expenseDescription);
       setShowExpenseDialog(false);
       loadShiftExpenses();
     } catch (e) {
@@ -668,11 +675,12 @@ export default function Shift() {
     }
   };
 
-  const deleteExpense = async (id: string) => {
+  const deleteExpense = async (id: string, category?: string, amount?: number) => {
     try {
       const { error } = await supabase.from('cash_expenses').delete().eq('id', id);
       if (error) throw error;
       toast.success('Expense deleted');
+      if (category && amount) ActivityLogger.expenseDelete(category, amount);
       loadShiftExpenses();
     } catch (e) {
       console.error(e);
@@ -939,7 +947,7 @@ export default function Shift() {
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 text-destructive hover:text-destructive"
-                    onClick={() => deleteExpense(expense.id)}
+                    onClick={() => deleteExpense(expense.id, expense.category, expense.amount)}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>

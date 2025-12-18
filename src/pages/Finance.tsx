@@ -15,6 +15,7 @@ import {
   ClipboardCheck
 } from 'lucide-react';
 import { CashVerification } from '@/components/CashVerification';
+import { ActivityLogger } from '@/lib/activityLogger';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 
@@ -289,6 +290,7 @@ export default function Finance() {
       if (data?.success) {
         await loadData();
         toast.success('Synced');
+        ActivityLogger.syncLoyverse('success');
       }
     } catch (e) {
       toast.error('Sync failed');
