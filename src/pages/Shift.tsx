@@ -11,10 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Square, AlertTriangle, CheckCircle2, Send, Lock, Pencil, Trash2 } from 'lucide-react';
+import { Clock, Play, Banknote, User, Sun, Moon, Plus, Receipt, Square, AlertTriangle, CheckCircle2, Send, Lock, Pencil, Trash2, Users, BarChart3 } from 'lucide-react';
 import { ActivityLogger } from '@/lib/activityLogger';
+import { ShiftDashboard } from '@/components/staff/ShiftDashboard';
 
 type ShiftType = 'day' | 'night';
 type ShiftStatus = 'open' | 'ended' | 'closed';
@@ -803,9 +805,27 @@ export default function Shift() {
         )}
       </div>
 
-      {/* Working Staff */}
-      {activeShifts.length > 0 ? (
-        <div className="space-y-2">
+      {/* Tabs */}
+      <Tabs defaultValue="current" className="w-full">
+        <TabsList className="w-full grid grid-cols-2">
+          <TabsTrigger value="current" className="gap-1.5 text-xs">
+            <Clock className="w-3.5 h-3.5" />
+            Current Shift
+          </TabsTrigger>
+          <TabsTrigger value="dashboard" className="gap-1.5 text-xs">
+            <BarChart3 className="w-3.5 h-3.5" />
+            Dashboard
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard" className="mt-4">
+          <ShiftDashboard />
+        </TabsContent>
+
+        <TabsContent value="current" className="space-y-4 mt-4">
+          {/* Working Staff */}
+          {activeShifts.length > 0 ? (
+            <div className="space-y-2">
           {activeShifts.map(shift => (
             <Card key={shift.id} className={cn(
               shift.status === 'open' 
@@ -1089,6 +1109,8 @@ export default function Shift() {
           </div>
         </DialogContent>
       </Dialog>
+        </TabsContent>
+      </Tabs>
 
       {/* End Work Confirmation Dialog */}
       <AlertDialog open={showEndWorkDialog} onOpenChange={(open) => {
