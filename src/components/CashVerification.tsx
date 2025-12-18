@@ -172,6 +172,7 @@ export function CashVerification() {
 
   const loadPendingData = async () => {
     try {
+      console.log('🔄 loadPendingData called');
       // Load unapproved cash handovers (collective shift closure)
       const { data: handovers } = await supabase
         .from('cash_handovers')
@@ -368,6 +369,7 @@ export function CashVerification() {
       if (handoverError) {
         console.error('Error fetching approved handovers:', handoverError);
       }
+      console.log('📊 Approved handovers loaded:', approvedHandovers?.length || 0, approvedHandovers);
       
       const historyMap: Record<string, ApprovedHistory> = {};
       
@@ -442,6 +444,7 @@ export function CashVerification() {
 
       // Sort by date descending
       const sortedHistory = Object.values(historyMap).sort((a, b) => b.date.localeCompare(a.date));
+      console.log('✅ Setting approvedHistory:', sortedHistory.length, sortedHistory);
       setApprovedHistory(sortedHistory.slice(0, 30));
       
     } catch (e) {
@@ -1837,7 +1840,6 @@ export function CashVerification() {
         </CardHeader>
         {showHistory && (
           <CardContent className="space-y-2 pt-0">
-            <p className="text-xs text-amber-500">DEBUG: approvedHistory has {approvedHistory.length} items, loading={loading ? 'true' : 'false'}</p>
             {approvedHistory.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">No approved shifts yet</p>
             )}
