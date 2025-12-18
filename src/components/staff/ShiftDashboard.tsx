@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import { Sun, Moon, Clock, Users, Calendar, TrendingUp } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Sun, Moon, Clock, Users, Calendar, TrendingUp, Lock, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { toast } from 'sonner';
 
 interface EmployeeStats {
   id: string;
@@ -17,10 +22,38 @@ interface EmployeeStats {
   avg_hours_per_shift: number;
 }
 
+interface ShiftRecord {
+  id: string;
+  date: string;
+  type: string;
+  total_hours: number | null;
+  shift_start: string | null;
+  shift_end: string | null;
+}
+
+const ADMIN_PIN = '8808';
+
 export function ShiftDashboard() {
   const [stats, setStats] = useState<EmployeeStats[]>([]);
   const [period, setPeriod] = useState('current');
   const [loading, setLoading] = useState(true);
+  
+  // Admin state
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showPinDialog, setShowPinDialog] = useState(false);
+  const [pin, setPin] = useState('');
+  const [pendingAction, setPendingAction] = useState<{ type: 'edit' | 'reset'; employeeId?: string } | null>(null);
+  
+  // Edit state
+  const [editingEmployee, setEditingEmployee] = useState<EmployeeStats | null>(null);
+  const [employeeShifts, setEmployeeShifts] = useState<ShiftRecord[]>([]);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingShift, setEditingShift] = useState<ShiftRecord | null>(null);
+  const [editHours, setEditHours] = useState('');
+  
+  // Reset state
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetEmployeeId, setResetEmployeeId] = useState<string | null>(null);
 
   const getPeriodDates = () => {
     const now = new Date();
@@ -37,49 +70,165 @@ export function ShiftDashboard() {
     }
   };
 
+  const loadStats = async () => {
+    setLoading(true);
+    const { start, end } = getPeriodDates();
+    
+    const { data: employees } = await supabase
+      .from('employees')
+      .select('id, name')
+      .eq('active', true);
+
+    const { data: shifts } = await supabase
+      .from('shifts')
+      .select('employee_id, type, total_hours, status')
+      .eq('status', 'closed')
+      .gte('date', format(start, 'yyyy-MM-dd'))
+      .lte('date', format(end, 'yyyy-MM-dd'));
+
+    if (employees && shifts) {
+      const employeeStats: EmployeeStats[] = employees.map(emp => {
+        const empShifts = shifts.filter(s => s.employee_id === emp.id);
+        const dayShifts = empShifts.filter(s => s.type === 'day').length;
+        const nightShifts = empShifts.filter(s => s.type === 'night').length;
+        const totalHours = empShifts.reduce((sum, s) => sum + (Number(s.total_hours) || 0), 0);
+        const totalShifts = dayShifts + nightShifts;
+
+        return {
+          id: emp.id,
+          name: emp.name,
+          total_shifts: totalShifts,
+          day_shifts: dayShifts,
+          night_shifts: nightShifts,
+          total_hours: Math.round(totalHours * 10) / 10,
+          avg_hours_per_shift: totalShifts > 0 ? Math.round((totalHours / totalShifts) * 10) / 10 : 0
+        };
+      }).filter(e => e.total_shifts > 0).sort((a, b) => b.total_shifts - a.total_shifts);
+
+      setStats(employeeStats);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const loadStats = async () => {
-      setLoading(true);
-      const { start, end } = getPeriodDates();
-      
-      const { data: employees } = await supabase
-        .from('employees')
-        .select('id, name')
-        .eq('active', true);
-
-      const { data: shifts } = await supabase
-        .from('shifts')
-        .select('employee_id, type, total_hours, status')
-        .eq('status', 'closed')
-        .gte('date', format(start, 'yyyy-MM-dd'))
-        .lte('date', format(end, 'yyyy-MM-dd'));
-
-      if (employees && shifts) {
-        const employeeStats: EmployeeStats[] = employees.map(emp => {
-          const empShifts = shifts.filter(s => s.employee_id === emp.id);
-          const dayShifts = empShifts.filter(s => s.type === 'day').length;
-          const nightShifts = empShifts.filter(s => s.type === 'night').length;
-          const totalHours = empShifts.reduce((sum, s) => sum + (Number(s.total_hours) || 0), 0);
-          const totalShifts = dayShifts + nightShifts;
-
-          return {
-            id: emp.id,
-            name: emp.name,
-            total_shifts: totalShifts,
-            day_shifts: dayShifts,
-            night_shifts: nightShifts,
-            total_hours: Math.round(totalHours * 10) / 10,
-            avg_hours_per_shift: totalShifts > 0 ? Math.round((totalHours / totalShifts) * 10) / 10 : 0
-          };
-        }).filter(e => e.total_shifts > 0).sort((a, b) => b.total_shifts - a.total_shifts);
-
-        setStats(employeeStats);
-      }
-      setLoading(false);
-    };
-
     loadStats();
   }, [period]);
+
+  const verifyPin = () => {
+    if (pin === ADMIN_PIN) {
+      setIsAdmin(true);
+      setShowPinDialog(false);
+      setPin('');
+      
+      if (pendingAction?.type === 'edit' && pendingAction.employeeId) {
+        openEditDialog(pendingAction.employeeId);
+      } else if (pendingAction?.type === 'reset' && pendingAction.employeeId) {
+        setResetEmployeeId(pendingAction.employeeId);
+        setShowResetDialog(true);
+      }
+      setPendingAction(null);
+    } else {
+      toast.error('Incorrect PIN');
+      setPin('');
+    }
+  };
+
+  const requestAdminAction = (type: 'edit' | 'reset', employeeId: string) => {
+    if (isAdmin) {
+      if (type === 'edit') {
+        openEditDialog(employeeId);
+      } else {
+        setResetEmployeeId(employeeId);
+        setShowResetDialog(true);
+      }
+    } else {
+      setPendingAction({ type, employeeId });
+      setShowPinDialog(true);
+    }
+  };
+
+  const openEditDialog = async (employeeId: string) => {
+    const emp = stats.find(e => e.id === employeeId);
+    if (!emp) return;
+    
+    setEditingEmployee(emp);
+    const { start, end } = getPeriodDates();
+    
+    const { data } = await supabase
+      .from('shifts')
+      .select('id, date, type, total_hours, shift_start, shift_end')
+      .eq('employee_id', employeeId)
+      .eq('status', 'closed')
+      .gte('date', format(start, 'yyyy-MM-dd'))
+      .lte('date', format(end, 'yyyy-MM-dd'))
+      .order('date', { ascending: false });
+    
+    setEmployeeShifts(data || []);
+    setShowEditDialog(true);
+  };
+
+  const updateShiftHours = async () => {
+    if (!editingShift) return;
+    
+    const hours = parseFloat(editHours);
+    if (isNaN(hours) || hours < 0) {
+      toast.error('Invalid hours');
+      return;
+    }
+    
+    const { error } = await supabase
+      .from('shifts')
+      .update({ total_hours: hours })
+      .eq('id', editingShift.id);
+    
+    if (error) {
+      toast.error('Failed to update');
+    } else {
+      toast.success('Hours updated');
+      setEditingShift(null);
+      setEditHours('');
+      openEditDialog(editingEmployee!.id);
+      loadStats();
+    }
+  };
+
+  const deleteShift = async (shiftId: string) => {
+    const { error } = await supabase
+      .from('shifts')
+      .delete()
+      .eq('id', shiftId);
+    
+    if (error) {
+      toast.error('Failed to delete');
+    } else {
+      toast.success('Shift deleted');
+      openEditDialog(editingEmployee!.id);
+      loadStats();
+    }
+  };
+
+  const resetEmployeeShifts = async () => {
+    if (!resetEmployeeId) return;
+    
+    const { start, end } = getPeriodDates();
+    
+    const { error } = await supabase
+      .from('shifts')
+      .delete()
+      .eq('employee_id', resetEmployeeId)
+      .eq('status', 'closed')
+      .gte('date', format(start, 'yyyy-MM-dd'))
+      .lte('date', format(end, 'yyyy-MM-dd'));
+    
+    if (error) {
+      toast.error('Failed to reset');
+    } else {
+      toast.success('Shifts reset');
+      setShowResetDialog(false);
+      setResetEmployeeId(null);
+      loadStats();
+    }
+  };
 
   const totalShifts = stats.reduce((s, e) => s + e.total_shifts, 0);
   const totalHours = stats.reduce((s, e) => s + e.total_hours, 0);
@@ -96,17 +245,30 @@ export function ShiftDashboard() {
         <h3 className="text-sm font-medium flex items-center gap-2">
           <Users className="w-4 h-4 text-primary" />
           Employee Shifts
+          {isAdmin && <Badge className="bg-red-500/20 text-red-500 text-[10px]">Admin</Badge>}
         </h3>
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-32 h-8 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="current">This Month</SelectItem>
-            <SelectItem value="previous">Last Month</SelectItem>
-            <SelectItem value="all">All Time</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          {!isAdmin && (
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              className="h-8 px-2 text-xs text-muted-foreground"
+              onClick={() => setShowPinDialog(true)}
+            >
+              <Lock className="w-3.5 h-3.5" />
+            </Button>
+          )}
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-32 h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="current">This Month</SelectItem>
+              <SelectItem value="previous">Last Month</SelectItem>
+              <SelectItem value="all">All Time</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -167,9 +329,31 @@ export function ShiftDashboard() {
                     </div>
                     <span className="font-medium text-sm">{emp.name}</span>
                   </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {emp.total_shifts} shifts
-                  </Badge>
+                  <div className="flex items-center gap-1">
+                    {isAdmin && (
+                      <>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-6 w-6 p-0 text-blue-500 hover:bg-blue-500/10"
+                          onClick={() => requestAdminAction('edit', emp.id)}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-6 w-6 p-0 text-red-500 hover:bg-red-500/10"
+                          onClick={() => requestAdminAction('reset', emp.id)}
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                        </Button>
+                      </>
+                    )}
+                    <Badge variant="secondary" className="text-xs">
+                      {emp.total_shifts} shifts
+                    </Badge>
+                  </div>
                 </div>
 
                 <Progress 
@@ -204,6 +388,131 @@ export function ShiftDashboard() {
           ))
         )}
       </div>
+
+      {/* PIN Dialog */}
+      <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-4 h-4" />
+              Admin Access
+            </DialogTitle>
+            <DialogDescription>Enter PIN to access admin features</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              type="password"
+              value={pin}
+              onChange={e => setPin(e.target.value)}
+              placeholder="Enter PIN"
+              className="text-center text-lg tracking-widest"
+              onKeyDown={e => e.key === 'Enter' && verifyPin()}
+            />
+            <Button onClick={verifyPin} className="w-full">Unlock</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4" />
+              Edit Shifts - {editingEmployee?.name}
+            </DialogTitle>
+            <DialogDescription>
+              {periodLabel} • {employeeShifts.length} shifts
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {employeeShifts.map(shift => (
+              <div key={shift.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 border border-border/50">
+                <div className="flex items-center gap-2">
+                  {shift.type === 'day' ? (
+                    <Sun className="w-4 h-4 text-amber-500" />
+                  ) : (
+                    <Moon className="w-4 h-4 text-indigo-500" />
+                  )}
+                  <div>
+                    <span className="text-sm font-medium">{shift.date}</span>
+                    <span className="text-xs text-muted-foreground ml-2">
+                      {shift.total_hours ? `${shift.total_hours}h` : 'No hours'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className="h-7 w-7 p-0"
+                    onClick={() => {
+                      setEditingShift(shift);
+                      setEditHours(shift.total_hours?.toString() || '');
+                    }}
+                  >
+                    <Pencil className="w-3 h-3" />
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className="h-7 w-7 p-0 text-red-500"
+                    onClick={() => deleteShift(shift.id)}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {editingShift && (
+            <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 space-y-2">
+              <div className="text-xs font-medium text-blue-600">Edit Hours for {editingShift.date}</div>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={editHours}
+                  onChange={e => setEditHours(e.target.value)}
+                  placeholder="Hours"
+                  className="flex-1"
+                />
+                <Button size="sm" onClick={updateShiftHours}>Save</Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditingShift(null)}>Cancel</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Confirmation Dialog */}
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-500">
+              <RotateCcw className="w-5 h-5" />
+              Reset All Shifts?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete all closed shifts for{' '}
+              <span className="font-bold text-foreground">
+                {stats.find(e => e.id === resetEmployeeId)?.name}
+              </span>{' '}
+              in {periodLabel}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={resetEmployeeShifts}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              Reset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
