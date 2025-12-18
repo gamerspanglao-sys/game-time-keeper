@@ -172,7 +172,6 @@ export function CashVerification() {
 
   const loadPendingData = async () => {
     try {
-      console.log('🔄 loadPendingData called');
       // Load unapproved cash handovers (collective shift closure)
       const { data: handovers } = await supabase
         .from('cash_handovers')
@@ -369,7 +368,6 @@ export function CashVerification() {
       if (handoverError) {
         console.error('Error fetching approved handovers:', handoverError);
       }
-      console.log('📊 Approved handovers loaded:', approvedHandovers?.length || 0, approvedHandovers);
       
       const historyMap: Record<string, ApprovedHistory> = {};
       
@@ -444,7 +442,6 @@ export function CashVerification() {
 
       // Sort by date descending
       const sortedHistory = Object.values(historyMap).sort((a, b) => b.date.localeCompare(a.date));
-      console.log('✅ Setting approvedHistory:', sortedHistory.length, sortedHistory);
       setApprovedHistory(sortedHistory.slice(0, 30));
       
     } catch (e) {
@@ -1310,7 +1307,6 @@ export function CashVerification() {
           <CardContent className="py-8 text-center text-muted-foreground">
             <Check className="w-8 h-8 mx-auto mb-2 text-green-500" />
             <p>No pending approvals</p>
-            <p className="text-xs text-amber-500 mt-2">Debug: History count = {approvedHistory.length}</p>
             <Button 
               variant="ghost" 
               size="sm" 
@@ -1329,12 +1325,6 @@ export function CashVerification() {
 
   return (
     <div className="space-y-4">
-      {/* DEBUG BANNER */}
-      <div className="p-3 bg-yellow-500 text-black rounded-lg text-sm">
-        <strong>DEBUG:</strong> pendingVerifications={pendingVerifications.length}, 
-        standalonePendingExpenses={standalonePendingExpenses.length}, 
-        approvedHistory={approvedHistory.length}
-      </div>
       {/* Header with refresh */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
