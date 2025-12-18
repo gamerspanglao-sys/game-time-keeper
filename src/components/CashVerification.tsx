@@ -486,7 +486,7 @@ export function CashVerification() {
       // Create cash_handover record
       await supabase.from('cash_handovers').insert({
         shift_date: addHistoryDate,
-        shift_type: addHistoryShift === 'night' ? 'Night (5PM-5AM)' : 'Day (5AM-5PM)',
+        shift_type: addHistoryShift, // 'day' or 'night'
         cash_amount: cash,
         gcash_amount: gcash,
         change_fund_amount: changeFund,
