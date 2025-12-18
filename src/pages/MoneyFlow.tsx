@@ -122,23 +122,19 @@ export default function MoneyFlow() {
   const shiftGcashExp = currentShiftExpenses.filter(e => e.payment_source === 'gcash').reduce((s, e) => s + e.amount, 0);
   const totalShiftExpenses = shiftCashExp + shiftGcashExp;
   
-  // Get carryover from previous shift
-  // Night shift receives from day shift of SAME date
-  // Day shift receives from night shift of SAME date
-  const getPreviousShiftInfo = (date: string, shift: string): { date: string; shift: string } => {
-    if (shift === 'night') {
-      // Night shift receives from day shift of the same date
-      return { date, shift: 'day' };
-    } else {
-      // Day shift receives from night shift of the same date
-      return { date, shift: 'night' };
-    }
-  };
-  
-  const prevShiftInfo = getPreviousShiftInfo(selectedDate, selectedShift);
+  // Get carryover from previous shift handover
+  // Handover record: shift_date + shift_type = the shift that HANDED OVER the money
+  // Night shift receives from day shift of SAME date (day shift hands over to night)
+  // Day shift receives from night shift of SAME date (night shift hands over to day)
   const previousHandover = cashHandovers.find(h => {
     const handoverShift = h.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
-    return h.shift_date === prevShiftInfo.date && handoverShift === prevShiftInfo.shift;
+    if (selectedShift === 'night') {
+      // Night receives from day of same date
+      return h.shift_date === selectedDate && handoverShift === 'day';
+    } else {
+      // Day receives from night of same date
+      return h.shift_date === selectedDate && handoverShift === 'night';
+    }
   });
   const carryoverCash = previousHandover?.change_fund_amount || 0;
   
