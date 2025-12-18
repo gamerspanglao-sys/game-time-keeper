@@ -8,10 +8,46 @@ const corsHeaders = {
 
 const STORE_ID = '77f9b0db-9be9-4907-b4ec-9d68653f7a21';
 
-// Get shift boundaries for a specific date and shift
-// Day shift: 5AM - 5PM Manila time
-// Night shift: 5PM - 5AM next day Manila time
-function getShiftDates(dateStr: string, shift: 'day' | 'night'): { start: Date; end: Date } {
+// Get shift time boundaries from the shifts table
+async function getShiftTimesFromDB(supabase: any, dateStr: string, shift: 'day' | 'night'): Promise<{ start: Date; end: Date } | null> {
+  // Find the earliest shift_start and latest shift_end for this date and shift type
+  const { data: shifts, error } = await supabase
+    .from('shifts')
+    .select('shift_start, shift_end')
+    .eq('date', dateStr)
+    .eq('type', shift)
+    .not('shift_start', 'is', null)
+    .order('shift_start', { ascending: true });
+
+  if (error || !shifts || shifts.length === 0) {
+    console.log(`⚠️ No shifts found for ${dateStr} ${shift}, using fallback times`);
+    return null;
+  }
+
+  // Get the earliest start time
+  const earliestStart = shifts[0].shift_start;
+  
+  // Get the latest end time (from closed shifts)
+  const closedShifts = shifts.filter((s: any) => s.shift_end);
+  let latestEnd: string | null = null;
+  
+  if (closedShifts.length > 0) {
+    // Sort by shift_end descending to get the latest
+    closedShifts.sort((a: any, b: any) => new Date(b.shift_end).getTime() - new Date(a.shift_end).getTime());
+    latestEnd = closedShifts[0].shift_end;
+  }
+
+  // If shift is not closed yet, use current time
+  const start = new Date(earliestStart);
+  const end = latestEnd ? new Date(latestEnd) : new Date();
+
+  console.log(`📍 Found shift times from DB: ${dateStr} ${shift} -> ${start.toISOString()} to ${end.toISOString()}`);
+  
+  return { start, end };
+}
+
+// Fallback: Get shift boundaries using fixed times
+function getShiftDatesFallback(dateStr: string, shift: 'day' | 'night'): { start: Date; end: Date } {
   if (shift === 'day') {
     // Day shift: 5AM to 5PM on same date
     const start = new Date(dateStr + 'T05:00:00+08:00');
@@ -19,7 +55,6 @@ function getShiftDates(dateStr: string, shift: 'day' | 'night'): { start: Date; 
     return { start, end };
   } else {
     // Night shift: 5PM previous day to 5AM current day
-    // For date 2025-12-16 night shift - it's from 2025-12-15 5PM to 2025-12-16 5AM
     const prevDay = new Date(dateStr);
     prevDay.setDate(prevDay.getDate() - 1);
     const prevDateStr = prevDay.toISOString().split('T')[0];
@@ -47,7 +82,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
     const { days = 7 } = await req.json().catch(() => ({ days: 7 }));
 
-    console.log(`📊 Starting shift-based sync for ${days} days...`);
+    console.log(`📊 Starting shift-based sync for ${days} days (using real shift times)...`);
 
     // Fetch payment types
     const paymentTypesResponse = await fetch('https://api.loyverse.com/v1.0/payment_types', {
@@ -67,7 +102,6 @@ serve(async (req) => {
     const results: { date: string; shift: string; cashSales: number; gcashSales: number; totalSales: number; status: string }[] = [];
     
     // Process each day and each shift
-    // Start from tomorrow to include tonight's night shift (which is labeled as tomorrow's night shift)
     for (let i = -1; i < days; i++) {
       const date = new Date();
       date.setDate(date.getDate() - i);
@@ -75,9 +109,16 @@ serve(async (req) => {
       
       // Process both shifts for each date
       for (const shift of ['day', 'night'] as const) {
-        const { start, end } = getShiftDates(dateStr, shift);
+        // Try to get actual shift times from DB, fallback to fixed times
+        let shiftTimes = await getShiftTimesFromDB(supabase, dateStr, shift);
+        if (!shiftTimes) {
+          shiftTimes = getShiftDatesFallback(dateStr, shift);
+          console.log(`📅 Processing ${dateStr} ${shift} shift (FALLBACK: ${shiftTimes.start.toISOString()} - ${shiftTimes.end.toISOString()})...`);
+        } else {
+          console.log(`📅 Processing ${dateStr} ${shift} shift (FROM DB: ${shiftTimes.start.toISOString()} - ${shiftTimes.end.toISOString()})...`);
+        }
         
-        console.log(`📅 Processing ${dateStr} ${shift} shift (${start.toISOString()} - ${end.toISOString()})...`);
+        const { start, end } = shiftTimes;
         
         try {
           // Fetch receipts for this shift
