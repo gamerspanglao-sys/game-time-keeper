@@ -232,12 +232,14 @@ export function CashVerification() {
       const groupedVerifications: Record<string, PendingVerification> = {};
       
       // Helper to get previous shift info
+      // Night shift (5PM-5AM) is recorded under the date when it ENDS (next day)
+      // So for day shift Dec 18 (starts 5AM), previous shift is night Dec 18 (ended 5AM Dec 18)
       const getPrevShift = (date: string, shift: string): { date: string; shift: string } => {
         if (shift === 'day') {
-          const prevDate = new Date(date);
-          prevDate.setDate(prevDate.getDate() - 1);
-          return { date: prevDate.toISOString().split('T')[0], shift: 'night' };
+          // Day shift starts at 5AM, previous is night shift that ended at 5AM same date
+          return { date, shift: 'night' };
         } else {
+          // Night shift starts at 5PM, previous is day shift of same date
           return { date, shift: 'day' };
         }
       };
