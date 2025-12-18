@@ -234,22 +234,16 @@ export function ShiftDashboard() {
   const resetAllShifts = async () => {
     const { start, end } = getPeriodDates();
     
-    // Get shift IDs to process
-    const { data: shiftsToDelete } = await supabase
+    // Get shift IDs to process bonuses
+    const { data: shiftsToReset } = await supabase
       .from('shifts')
       .select('id')
       .eq('status', 'closed')
       .gte('date', format(start, 'yyyy-MM-dd'))
       .lte('date', format(end, 'yyyy-MM-dd'));
     
-    if (shiftsToDelete && shiftsToDelete.length > 0) {
-      const shiftIds = shiftsToDelete.map(s => s.id);
-      
-      // Unlink expenses from shifts (keep expenses, just remove shift_id)
-      await supabase
-        .from('cash_expenses')
-        .update({ shift_id: null })
-        .in('shift_id', shiftIds);
+    if (shiftsToReset && shiftsToReset.length > 0) {
+      const shiftIds = shiftsToReset.map(s => s.id);
       
       // Delete bonuses
       await supabase
@@ -258,10 +252,10 @@ export function ShiftDashboard() {
         .in('shift_id', shiftIds);
     }
     
-    // Delete the shifts
+    // Archive shifts instead of deleting (keeps expense links)
     const { error } = await supabase
       .from('shifts')
-      .delete()
+      .update({ status: 'archived' })
       .eq('status', 'closed')
       .gte('date', format(start, 'yyyy-MM-dd'))
       .lte('date', format(end, 'yyyy-MM-dd'));
@@ -270,7 +264,7 @@ export function ShiftDashboard() {
       console.error('Reset error:', error);
       toast.error('Failed to reset: ' + error.message);
     } else {
-      toast.success('All shifts reset');
+      toast.success('All shifts archived');
       setShowResetAllDialog(false);
       loadStats();
     }
