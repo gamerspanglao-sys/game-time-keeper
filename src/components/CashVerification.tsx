@@ -438,21 +438,6 @@ export function CashVerification() {
 
       // Sort by date descending
       const sortedHistory = Object.values(historyMap).sort((a, b) => b.date.localeCompare(a.date));
-      
-      // Debug logging
-      sortedHistory.forEach(h => {
-        console.log(`History ${h.date} ${h.shift}:`, {
-          carryoverCash: h.carryoverCash,
-          loyverseCash: h.loyverseCash,
-          expensesCash: h.expensesCash,
-          cashExpected: h.cashExpected,
-          cashSubmitted: h.cashSubmitted,
-          changeFundLeft: h.changeFundLeft,
-          totalAccountedFor: h.totalAccountedFor,
-          difference: h.difference
-        });
-      });
-      
       setApprovedHistory(sortedHistory.slice(0, 30));
       
     } catch (e) {
@@ -1224,33 +1209,73 @@ export function CashVerification() {
                           </div>
                         </div>
                       ) : (
-                        <div className="bg-background/50 p-2 rounded space-y-1 text-xs">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Total Cash</span>
-                            <span className="font-medium">₱{(h.cashSubmitted + h.changeFundLeft).toLocaleString()}</span>
+                        <div className="bg-background/50 p-2 rounded space-y-2 text-xs">
+                          {/* Summary breakdown */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Total Cash in register</span>
+                              <span className="font-medium">₱{(h.cashSubmitted + h.changeFundLeft).toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">− Change fund left</span>
+                              <span className="text-amber-600">₱{h.changeFundLeft.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between border-t border-border/50 pt-1">
+                              <span className="text-muted-foreground">= Cash handed over</span>
+                              <span>₱{h.cashSubmitted.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between mt-1">
+                              <span className="text-muted-foreground">GCash handed over</span>
+                              <span>₱{h.gcashSubmitted.toLocaleString()}</span>
+                            </div>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">− Change fund</span>
-                            <span className="text-amber-600">₱{h.changeFundLeft.toLocaleString()}</span>
+                          
+                          {/* Detailed comparison table */}
+                          <div className="border-t border-border/50 pt-2 mt-2">
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div></div>
+                              <div className="text-center font-medium">💵 Cash</div>
+                              <div className="text-center font-medium">📱 GCash</div>
+                              
+                              <div className="text-muted-foreground">Expected:</div>
+                              <div className="text-center">₱{h.cashExpected.toLocaleString()}</div>
+                              <div className="text-center">₱{h.gcashExpected.toLocaleString()}</div>
+                              
+                              <div className="text-muted-foreground">Handed:</div>
+                              <div className="text-center">₱{h.cashSubmitted.toLocaleString()}</div>
+                              <div className="text-center">₱{h.gcashSubmitted.toLocaleString()}</div>
+                              
+                              <div className="text-muted-foreground text-amber-600">+ Change left:</div>
+                              <div className="text-center text-amber-600">₱{h.changeFundLeft.toLocaleString()}</div>
+                              <div className="text-center text-muted-foreground">—</div>
+                              
+                              <div className="text-muted-foreground font-medium">= Accounted:</div>
+                              <div className="text-center font-medium">₱{(h.cashSubmitted + h.changeFundLeft).toLocaleString()}</div>
+                              <div className="text-center font-medium">₱{h.gcashSubmitted.toLocaleString()}</div>
+                              
+                              <div className="font-medium">Diff:</div>
+                              <div className={cn("text-center font-bold", ((h.cashSubmitted + h.changeFundLeft) - h.cashExpected) >= 0 ? "text-green-500" : "text-red-500")}>
+                                {((h.cashSubmitted + h.changeFundLeft) - h.cashExpected) >= 0 ? '+' : ''}₱{((h.cashSubmitted + h.changeFundLeft) - h.cashExpected).toLocaleString()}
+                              </div>
+                              <div className={cn("text-center font-bold", (h.gcashSubmitted - h.gcashExpected) >= 0 ? "text-green-500" : "text-red-500")}>
+                                {(h.gcashSubmitted - h.gcashExpected) >= 0 ? '+' : ''}₱{(h.gcashSubmitted - h.gcashExpected).toLocaleString()}
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex justify-between border-t border-border/50 pt-1">
-                            <span className="text-muted-foreground">= Cash handed</span>
-                            <span>₱{h.cashSubmitted.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between mt-2">
-                            <span className="text-muted-foreground">GCash</span>
-                            <span>₱{h.gcashSubmitted.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between border-t border-border/50 pt-1 font-bold">
-                            <span>Total Accounted</span>
-                            <span>₱{h.totalAccountedFor.toLocaleString()}</span>
-                          </div>
-                          <div className={cn(
-                            "flex justify-between pt-1 font-bold",
-                            h.difference >= 0 ? "text-green-500" : "text-red-500"
-                          )}>
-                            <span>vs Expected ₱{(h.cashExpected + h.gcashExpected).toLocaleString()}</span>
-                            <span>{h.difference >= 0 ? '+' : ''}₱{h.difference.toLocaleString()}</span>
+                          
+                          {/* Total summary */}
+                          <div className="border-t border-border/50 pt-2">
+                            <div className="flex justify-between font-bold">
+                              <span>Total Accounted</span>
+                              <span>₱{h.totalAccountedFor.toLocaleString()}</span>
+                            </div>
+                            <div className={cn(
+                              "flex justify-between pt-1 font-bold",
+                              h.difference >= 0 ? "text-green-500" : "text-red-500"
+                            )}>
+                              <span>vs Expected ₱{(h.cashExpected + h.gcashExpected).toLocaleString()}</span>
+                              <span>{h.difference >= 0 ? '+' : ''}₱{h.difference.toLocaleString()}</span>
+                            </div>
                           </div>
                         </div>
                       )}
