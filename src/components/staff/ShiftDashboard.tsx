@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Sun, Moon, Clock, Users, Calendar, TrendingUp, Lock, Pencil, RotateCcw, Trash2, Banknote, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Sun, Moon, Clock, Users, Calendar, TrendingUp, Lock, Pencil, RotateCcw, Trash2, Banknote, AlertTriangle, ChevronRight, CheckCircle, Wallet } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, subWeeks, eachDayOfInterval } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -18,6 +18,7 @@ interface DailyShiftDetail {
   hours: number;
   shortage: number;
   bonus: number;
+  salaryPaid: boolean;
 }
 
 interface EmployeeStats {
@@ -31,6 +32,9 @@ interface EmployeeStats {
   bonuses: number;
   shortages: number;
   dailyDetails: DailyShiftDetail[];
+  salaryPaid: boolean;
+  salaryPaidAmount: number | null;
+  salaryPaidAt: string | null;
 }
 
 interface ShiftRecord {
@@ -41,6 +45,7 @@ interface ShiftRecord {
   shift_start: string | null;
   shift_end: string | null;
   cash_shortage: number | null;
+  salary_paid: boolean | null;
 }
 
 const ADMIN_PIN = '8808';
@@ -69,6 +74,10 @@ export function ShiftDashboard() {
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetEmployeeId, setResetEmployeeId] = useState<string | null>(null);
   const [showResetAllDialog, setShowResetAllDialog] = useState(false);
+  
+  // Pay salary state
+  const [showPayDialog, setShowPayDialog] = useState(false);
+  const [payingEmployee, setPayingEmployee] = useState<EmployeeStats | null>(null);
 
   const getPeriodDates = () => {
     const now = new Date();
@@ -101,7 +110,7 @@ export function ShiftDashboard() {
 
     const { data: shifts } = await supabase
       .from('shifts')
-      .select('employee_id, type, total_hours, status, date, cash_shortage')
+      .select('employee_id, type, total_hours, status, date, cash_shortage, salary_paid, salary_paid_amount, salary_paid_at')
       .eq('status', 'closed')
       .gte('date', format(start, 'yyyy-MM-dd'))
       .lte('date', format(end, 'yyyy-MM-dd'));
@@ -134,9 +143,14 @@ export function ShiftDashboard() {
             type: shift.type || 'day',
             hours: Number(shift.total_hours) || 0,
             shortage: Number(shift.cash_shortage) || 0,
-            bonus: dayBonuses
+            bonus: dayBonuses,
+            salaryPaid: !!shift.salary_paid
           };
         }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        // Check if all shifts are paid
+        const allShiftsPaid = empShifts.length > 0 && empShifts.every(s => s.salary_paid);
+        const paidShift = empShifts.find(s => s.salary_paid);
 
         return {
           id: emp.id,
@@ -148,7 +162,10 @@ export function ShiftDashboard() {
           avg_hours_per_shift: totalShifts > 0 ? Math.round((totalHours / totalShifts) * 10) / 10 : 0,
           bonuses: totalBonuses,
           shortages: totalShortages,
-          dailyDetails
+          dailyDetails,
+          salaryPaid: allShiftsPaid,
+          salaryPaidAmount: paidShift?.salary_paid_amount ?? null,
+          salaryPaidAt: paidShift?.salary_paid_at ?? null
         };
       }).filter(e => e.total_shifts > 0).sort((a, b) => b.total_shifts - a.total_shifts);
 
@@ -208,12 +225,14 @@ export function ShiftDashboard() {
     
     const { data } = await supabase
       .from('shifts')
-      .select('id, date, type, total_hours, shift_start, shift_end, cash_shortage')
+      .select('id, date, type, total_hours, shift_start, shift_end, cash_shortage, salary_paid')
       .eq('employee_id', employeeId)
       .eq('status', 'closed')
       .gte('date', format(start, 'yyyy-MM-dd'))
       .lte('date', format(end, 'yyyy-MM-dd'))
       .order('date', { ascending: false });
+    
+    setEmployeeShifts((data || []) as ShiftRecord[]);
     
     setEmployeeShifts((data || []) as ShiftRecord[]);
     setShowEditDialog(true);
@@ -317,6 +336,36 @@ export function ShiftDashboard() {
     } else {
       toast.success('All shifts archived');
       setShowResetAllDialog(false);
+      loadStats();
+    }
+  };
+
+  const paySalary = async () => {
+    if (!payingEmployee) return;
+    
+    const baseSalary = payingEmployee.total_shifts * SALARY_PER_SHIFT;
+    const netPay = baseSalary + payingEmployee.bonuses - payingEmployee.shortages;
+    const { start, end } = getPeriodDates();
+    
+    const { error } = await supabase
+      .from('shifts')
+      .update({ 
+        salary_paid: true, 
+        salary_paid_amount: netPay,
+        salary_paid_at: new Date().toISOString()
+      })
+      .eq('employee_id', payingEmployee.id)
+      .eq('status', 'closed')
+      .gte('date', format(start, 'yyyy-MM-dd'))
+      .lte('date', format(end, 'yyyy-MM-dd'));
+    
+    if (error) {
+      toast.error('Failed to record payment');
+      console.error(error);
+    } else {
+      toast.success(`Salary paid: ₱${netPay.toLocaleString()} to ${payingEmployee.name}`);
+      setShowPayDialog(false);
+      setPayingEmployee(null);
       loadStats();
     }
   };
@@ -535,7 +584,26 @@ export function ShiftDashboard() {
                               <RotateCcw className="w-3 h-3 mr-1" />
                               Reset
                             </Button>
+                            {!emp.salaryPaid && (
+                              <Button 
+                                size="sm" 
+                                className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
+                                onClick={() => {
+                                  setPayingEmployee(emp);
+                                  setShowPayDialog(true);
+                                }}
+                              >
+                                <Wallet className="w-3 h-3 mr-1" />
+                                Pay Salary
+                              </Button>
+                            )}
                           </>
+                        )}
+                        {emp.salaryPaid && (
+                          <Badge className="bg-emerald-500/20 text-emerald-500 gap-1">
+                            <CheckCircle className="w-3 h-3" />
+                            Paid
+                          </Badge>
                         )}
                       </div>
                     </div>
@@ -583,9 +651,17 @@ export function ShiftDashboard() {
                         </div>
                       )}
                       <div className="border-t border-border pt-2 mt-2">
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                           <span className="font-semibold">Net Pay</span>
-                          <span className="text-xl font-bold text-emerald-500">₱{netPay.toLocaleString()}</span>
+                          <div className="text-right">
+                            <span className="text-xl font-bold text-emerald-500">₱{netPay.toLocaleString()}</span>
+                            {emp.salaryPaid && (
+                              <p className="text-[10px] text-emerald-500 flex items-center gap-1 justify-end">
+                                <CheckCircle className="w-3 h-3" />
+                                Paid {emp.salaryPaidAt && format(new Date(emp.salaryPaidAt), 'MMM d, HH:mm')}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -628,7 +704,12 @@ export function ShiftDashboard() {
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="text-sm font-medium">₱{SALARY_PER_SHIFT}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-sm font-medium">₱{SALARY_PER_SHIFT}</p>
+                                {day.salaryPaid && (
+                                  <CheckCircle className="w-3 h-3 text-emerald-500" />
+                                )}
+                              </div>
                               <div className="flex items-center gap-2 text-[10px]">
                                 {day.bonus > 0 && (
                                   <span className="text-emerald-500">+₱{day.bonus}</span>
@@ -799,6 +880,60 @@ export function ShiftDashboard() {
               className="bg-red-500 hover:bg-red-600"
             >
               Reset All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Pay Salary Dialog */}
+      <AlertDialog open={showPayDialog} onOpenChange={setShowPayDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-emerald-500">
+              <Wallet className="w-5 h-5" />
+              Pay Salary?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Confirm salary payment for{' '}
+                <span className="font-bold text-foreground">{payingEmployee?.name}</span>
+              </p>
+              {payingEmployee && (
+                <div className="mt-3 p-3 rounded-lg bg-muted/50 space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span>Base ({payingEmployee.total_shifts} × ₱{SALARY_PER_SHIFT})</span>
+                    <span>₱{(payingEmployee.total_shifts * SALARY_PER_SHIFT).toLocaleString()}</span>
+                  </div>
+                  {payingEmployee.bonuses > 0 && (
+                    <div className="flex justify-between text-sm text-emerald-500">
+                      <span>+ Bonuses</span>
+                      <span>₱{payingEmployee.bonuses.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {payingEmployee.shortages > 0 && (
+                    <div className="flex justify-between text-sm text-red-500">
+                      <span>− Shortages</span>
+                      <span>₱{payingEmployee.shortages.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-border pt-2 mt-2 flex justify-between font-bold">
+                    <span>Total</span>
+                    <span className="text-emerald-500">
+                      ₱{((payingEmployee.total_shifts * SALARY_PER_SHIFT) + payingEmployee.bonuses - payingEmployee.shortages).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={paySalary}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              <CheckCircle className="w-4 h-4 mr-1" />
+              Confirm Payment
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
