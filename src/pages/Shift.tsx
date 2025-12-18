@@ -219,7 +219,7 @@ export default function Shift() {
 
       // Load expenses with the fresh shifts data
       await loadShiftExpensesWithShifts(mappedShifts);
-      await loadCurrentHandover();
+      await loadCurrentHandoverWithShifts(mappedShifts);
     } catch (e) {
       console.error(e);
     } finally {
@@ -227,12 +227,12 @@ export default function Shift() {
     }
   };
 
-  const loadCurrentHandover = async () => {
+  const loadCurrentHandoverWithShifts = async (shifts: ActiveShift[]) => {
     try {
-      // Use effective shift type from active shifts
-      const shiftType = activeShifts.length > 0 ? activeShifts[0].type : getCurrentShiftType();
-      const shiftDate = activeShifts.length > 0 
-        ? format(new Date(activeShifts[0].shift_start), 'yyyy-MM-dd')
+      // Use effective shift type from provided shifts
+      const shiftType = shifts.length > 0 ? shifts[0].type : getCurrentShiftType();
+      const shiftDate = shifts.length > 0 
+        ? format(new Date(shifts[0].shift_start), 'yyyy-MM-dd')
         : getShiftDate();
 
       const { data } = await supabase
@@ -262,6 +262,10 @@ export default function Shift() {
       console.error(e);
       setCurrentHandover(null);
     }
+  };
+
+  const loadCurrentHandover = async () => {
+    await loadCurrentHandoverWithShifts(activeShifts);
   };
 
   const loadShiftExpensesWithShifts = async (shifts: ActiveShift[]) => {
