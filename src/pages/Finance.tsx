@@ -114,6 +114,25 @@ const getShiftDate = (): string => {
   return format(manilaTime, 'yyyy-MM-dd');
 };
 
+// Get handover date from shift_start timestamp
+// Night shifts that start after 5 PM belong to the NEXT day's date for handover
+const getHandoverDateFromShiftStart = (shiftStart: string, shiftType: string): string => {
+  const startUtc = new Date(shiftStart);
+  // Convert to Manila time
+  const manilaOffset = 8 * 60;
+  const startManilaTime = new Date(startUtc.getTime() + (startUtc.getTimezoneOffset() + manilaOffset) * 60000);
+  const startHour = startManilaTime.getHours();
+  
+  // Night shift that started after 5 PM - handover date is NEXT day
+  if (shiftType === 'night' && startHour >= 17) {
+    const nextDay = new Date(startManilaTime);
+    nextDay.setDate(nextDay.getDate() + 1);
+    return format(nextDay, 'yyyy-MM-dd');
+  }
+  
+  return format(startManilaTime, 'yyyy-MM-dd');
+};
+
 export default function Finance() {
   const [records, setRecords] = useState<CashRecord[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -140,7 +159,7 @@ export default function Finance() {
       if (data && data.length > 0) {
         const activeShift = data[0];
         setSelectedShift(activeShift.type as ShiftType);
-        setSelectedDate(format(new Date(activeShift.shift_start), 'yyyy-MM-dd'));
+        setSelectedDate(getHandoverDateFromShiftStart(activeShift.shift_start, activeShift.type));
       }
       setInitialShiftLoaded(true);
     };
