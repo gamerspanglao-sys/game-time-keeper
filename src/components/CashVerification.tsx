@@ -1813,7 +1813,7 @@ export function CashVerification() {
           <CardTitle className="text-sm flex items-center justify-between">
             <span className="flex items-center gap-2 cursor-pointer" onClick={() => setShowHistory(!showHistory)}>
               <History className="w-4 h-4 text-muted-foreground" />
-              Confirmation History ({approvedHistory.length})
+              История ({approvedHistory.length})
               {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </span>
             <Button
@@ -1832,131 +1832,122 @@ export function CashVerification() {
         {showHistory && (
           <CardContent className="space-y-2 pt-0">
             {approvedHistory.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">No approved shifts yet</p>
+              <p className="text-sm text-muted-foreground text-center py-4">Нет подтверждённых смен</p>
             )}
-              {approvedHistory.map(h => {
-                const totalSubmitted = h.cashSubmitted + h.gcashSubmitted;
-                const totalActual = h.cashActual + h.gcashActual;
-                const totalExpected = h.cashExpected + h.gcashExpected;
-                const adminDiff = totalActual - totalSubmitted;
-                // Use pre-calculated difference that includes change fund left
-                const displayDiff = h.difference;
-                
-                return (
-                  <div key={`${h.date}-${h.shift}`} className="p-3 rounded-lg bg-muted/30 text-sm space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium flex items-center gap-2">
-                        <Clock className="w-3 h-3 text-muted-foreground" />
-                        {h.date} • {h.shift === 'day' ? '☀️ Day' : '🌙 Night'}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {h.shortage > 0 && (
-                          <Badge variant="outline" className="text-red-500 border-red-500/30 text-xs">
-                            Shortage: ₱{h.shortage.toLocaleString()}
-                          </Badge>
+            {approvedHistory.map(h => {
+              const totalActual = h.cashActual + h.gcashActual;
+              const totalExpected = h.cashExpected + h.gcashExpected;
+              const displayDiff = h.difference;
+              const isPositive = displayDiff > 0;
+              const isNegative = displayDiff < 0;
+              const isMatch = displayDiff === 0;
+              
+              return (
+                <div key={`${h.date}-${h.shift}`} className="rounded-lg border overflow-hidden">
+                  {/* Header */}
+                  <div className={cn(
+                    "flex items-center justify-between px-3 py-2",
+                    isPositive && "bg-green-500/10",
+                    isNegative && "bg-red-500/10",
+                    isMatch && "bg-blue-500/10"
+                  )}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{h.shift === 'day' ? '☀️' : '🌙'}</span>
+                      <div>
+                        <p className="font-medium text-sm">{h.date}</p>
+                        <p className="text-xs text-muted-foreground">{h.employees.join(', ')}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Badge className={cn(
+                        "text-xs font-bold",
+                        isPositive && "bg-green-500",
+                        isNegative && "bg-red-500",
+                        isMatch && "bg-blue-500"
+                      )}>
+                        {isMatch ? '✓ Сошлось' : `${displayDiff > 0 ? '+' : ''}₱${displayDiff.toLocaleString()}`}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => sendHistoryToTelegram(h)}
+                        disabled={processing === `${h.date}-${h.shift}-tg`}
+                      >
+                        {processing === `${h.date}-${h.shift}-tg` ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Send className="w-3 h-3" />
                         )}
-                        <Badge variant="outline" className={cn(
-                          "text-xs",
-                          displayDiff >= 0 ? "text-green-500 border-green-500/30" : "text-red-500 border-red-500/30"
-                        )}>
-                          {displayDiff >= 0 ? '+' : ''}₱{displayDiff.toLocaleString()}
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => sendHistoryToTelegram(h)}
-                          disabled={processing === `${h.date}-${h.shift}-tg`}
-                        >
-                          {processing === `${h.date}-${h.shift}-tg` ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <Send className="w-3 h-3" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-red-500 hover:bg-red-500/10"
-                          onClick={() => {
-                            if (confirm('Delete this history entry?')) {
-                              deleteHistoryEntry(h);
-                            }
-                          }}
-                          disabled={processing === `${h.date}-${h.shift}-del`}
-                        >
-                          {processing === `${h.date}-${h.shift}-del` ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-3 h-3" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <p className="text-xs text-muted-foreground">
-                      {h.employees.join(', ')}
-                    </p>
-                    
-                    {/* Calculation Breakdown */}
-                    <div className="p-2 rounded bg-background/60 text-xs space-y-1">
-                      <div className="grid grid-cols-3 gap-1 text-[10px] text-muted-foreground">
-                        <span></span>
-                        <span className="text-center"><Banknote className="w-2.5 h-2.5 inline" /> Cash</span>
-                        <span className="text-center"><Smartphone className="w-2.5 h-2.5 inline" /> GCash</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-1">
-                        <span className="text-muted-foreground">Carryover:</span>
-                        <span className="text-center">₱{h.carryoverCash.toLocaleString()}</span>
-                        <span className="text-center">₱0</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-1">
-                        <span className="text-muted-foreground">+ Sales:</span>
-                        <span className="text-center text-green-600">₱{h.loyverseCash.toLocaleString()}</span>
-                        <span className="text-center text-green-600">₱{h.loyverseGcash.toLocaleString()}</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-1">
-                        <span className="text-muted-foreground">− Expenses:</span>
-                        <span className="text-center text-red-500">₱{h.expensesCash.toLocaleString()}</span>
-                        <span className="text-center text-red-500">₱{h.expensesGcash.toLocaleString()}</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-1 pt-1 border-t border-border font-medium">
-                        <span>= Expected:</span>
-                        <span className="text-center">₱{h.cashExpected.toLocaleString()}</span>
-                        <span className="text-center">₱{h.gcashExpected.toLocaleString()}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-2 text-xs pt-1">
-                      <div>
-                        <p className="text-muted-foreground">Submitted</p>
-                        <p className="font-medium">₱{totalSubmitted.toLocaleString()}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          Left: ₱{h.changeFundLeft.toLocaleString()}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Admin Actual</p>
-                        <p className="font-medium">₱{totalActual.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">vs Expected</p>
-                        <p className={cn(
-                          "font-medium",
-                          displayDiff > 0 && "text-green-500",
-                          displayDiff < 0 && "text-red-500",
-                          displayDiff === 0 && "text-muted-foreground"
-                        )}>
-                          {displayDiff === 0 ? 'Match' : `${displayDiff > 0 ? '+' : ''}₱${displayDiff.toLocaleString()}`}
-                        </p>
-                      </div>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-red-500"
+                        onClick={() => {
+                          if (confirm('Удалить эту запись?')) {
+                            deleteHistoryEntry(h);
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
                     </div>
                   </div>
-                );
-              })}
-            </CardContent>
-          )}
-        </Card>
+                  
+                  {/* Body - simplified */}
+                  <div className="p-3 space-y-3">
+                    {/* Quick stats row */}
+                    <div className="grid grid-cols-4 gap-2 text-center">
+                      <div className="p-2 rounded bg-muted/50">
+                        <p className="text-[10px] text-muted-foreground uppercase">Размен</p>
+                        <p className="font-bold text-sm">₱{h.carryoverCash.toLocaleString()}</p>
+                      </div>
+                      <div className="p-2 rounded bg-muted/50">
+                        <p className="text-[10px] text-muted-foreground uppercase">Продажи</p>
+                        <p className="font-bold text-sm text-green-600">₱{(h.loyverseCash + h.loyverseGcash).toLocaleString()}</p>
+                      </div>
+                      <div className="p-2 rounded bg-muted/50">
+                        <p className="text-[10px] text-muted-foreground uppercase">Расходы</p>
+                        <p className="font-bold text-sm text-red-500">₱{(h.expensesCash + h.expensesGcash).toLocaleString()}</p>
+                      </div>
+                      <div className="p-2 rounded bg-muted/50">
+                        <p className="text-[10px] text-muted-foreground uppercase">Оставлено</p>
+                        <p className="font-bold text-sm">₱{h.changeFundLeft.toLocaleString()}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Expected vs Actual */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-2 rounded bg-background border">
+                        <p className="text-xs text-muted-foreground mb-1">Ожидалось</p>
+                        <div className="flex justify-between text-sm">
+                          <span><Banknote className="w-3 h-3 inline mr-1" />₱{h.cashExpected.toLocaleString()}</span>
+                          <span><Smartphone className="w-3 h-3 inline mr-1" />₱{h.gcashExpected.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <div className="p-2 rounded bg-background border">
+                        <p className="text-xs text-muted-foreground mb-1">Получено</p>
+                        <div className="flex justify-between text-sm">
+                          <span><Banknote className="w-3 h-3 inline mr-1" />₱{h.cashActual.toLocaleString()}</span>
+                          <span><Smartphone className="w-3 h-3 inline mr-1" />₱{h.gcashActual.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {h.shortage > 0 && (
+                      <div className="flex items-center justify-center gap-2 p-2 rounded bg-red-500/10 text-red-600 text-sm">
+                        <AlertTriangle className="w-4 h-4" />
+                        Недостача записана: ₱{h.shortage.toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        )}
+      </Card>
 
       <Dialog open={!!editingExpense} onOpenChange={(open) => !open && setEditingExpense(null)}>
         <DialogContent className="max-w-xs">
