@@ -1807,7 +1807,7 @@ export function CashVerification() {
         </Card>
       )}
 
-      {/* Approved History - Always show */}
+      {/* Approved History - Simplified */}
       <Card>
         <CardHeader className="py-3 pb-2">
           <CardTitle className="text-sm flex items-center justify-between">
@@ -1830,117 +1830,82 @@ export function CashVerification() {
           </CardTitle>
         </CardHeader>
         {showHistory && (
-          <CardContent className="space-y-2 pt-0">
+          <CardContent className="space-y-1 pt-0">
             {approvedHistory.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">Нет подтверждённых смен</p>
             )}
             {approvedHistory.map(h => {
-              const totalActual = h.cashActual + h.gcashActual;
-              const totalExpected = h.cashExpected + h.gcashExpected;
               const displayDiff = h.difference;
               const isPositive = displayDiff > 0;
               const isNegative = displayDiff < 0;
               const isMatch = displayDiff === 0;
               
               return (
-                <div key={`${h.date}-${h.shift}`} className="rounded-lg border overflow-hidden">
-                  {/* Header */}
-                  <div className={cn(
-                    "flex items-center justify-between px-3 py-2",
-                    isPositive && "bg-green-500/10",
-                    isNegative && "bg-red-500/10",
-                    isMatch && "bg-blue-500/10"
-                  )}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{h.shift === 'day' ? '☀️' : '🌙'}</span>
-                      <div>
-                        <p className="font-medium text-sm">{h.date}</p>
-                        <p className="text-xs text-muted-foreground">{h.employees.join(', ')}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Badge className={cn(
-                        "text-xs font-bold",
-                        isPositive && "bg-green-500",
-                        isNegative && "bg-red-500",
-                        isMatch && "bg-blue-500"
-                      )}>
-                        {isMatch ? '✓ Сошлось' : `${displayDiff > 0 ? '+' : ''}₱${displayDiff.toLocaleString()}`}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => sendHistoryToTelegram(h)}
-                        disabled={processing === `${h.date}-${h.shift}-tg`}
-                      >
-                        {processing === `${h.date}-${h.shift}-tg` ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Send className="w-3 h-3" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-red-500"
-                        onClick={() => {
-                          if (confirm('Удалить эту запись?')) {
-                            deleteHistoryEntry(h);
-                          }
-                        }}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+                <div 
+                  key={`${h.date}-${h.shift}`} 
+                  className={cn(
+                    "flex items-center justify-between p-3 rounded-lg border",
+                    isPositive && "bg-green-500/5 border-green-500/20",
+                    isNegative && "bg-red-500/5 border-red-500/20",
+                    isMatch && "bg-blue-500/5 border-blue-500/20"
+                  )}
+                >
+                  {/* Left: Date & Shift */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">{h.shift === 'day' ? '☀️' : '🌙'}</span>
+                    <div>
+                      <p className="font-medium">{h.date}</p>
+                      <p className="text-xs text-muted-foreground">{h.employees.join(', ')}</p>
                     </div>
                   </div>
                   
-                  {/* Body - simplified */}
-                  <div className="p-3 space-y-3">
-                    {/* Quick stats row */}
-                    <div className="grid grid-cols-4 gap-2 text-center">
-                      <div className="p-2 rounded bg-muted/50">
-                        <p className="text-[10px] text-muted-foreground uppercase">Размен</p>
-                        <p className="font-bold text-sm">₱{h.carryoverCash.toLocaleString()}</p>
-                      </div>
-                      <div className="p-2 rounded bg-muted/50">
-                        <p className="text-[10px] text-muted-foreground uppercase">Продажи</p>
-                        <p className="font-bold text-sm text-green-600">₱{(h.loyverseCash + h.loyverseGcash).toLocaleString()}</p>
-                      </div>
-                      <div className="p-2 rounded bg-muted/50">
-                        <p className="text-[10px] text-muted-foreground uppercase">Расходы</p>
-                        <p className="font-bold text-sm text-red-500">₱{(h.expensesCash + h.expensesGcash).toLocaleString()}</p>
-                      </div>
-                      <div className="p-2 rounded bg-muted/50">
-                        <p className="text-[10px] text-muted-foreground uppercase">Оставлено</p>
-                        <p className="font-bold text-sm">₱{h.changeFundLeft.toLocaleString()}</p>
-                      </div>
+                  {/* Center: Key numbers */}
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="text-center">
+                      <p className="text-[10px] text-muted-foreground">Получили</p>
+                      <p className="font-medium">₱{h.carryoverCash.toLocaleString()}</p>
                     </div>
-                    
-                    {/* Expected vs Actual */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-2 rounded bg-background border">
-                        <p className="text-xs text-muted-foreground mb-1">Ожидалось</p>
-                        <div className="flex justify-between text-sm">
-                          <span><Banknote className="w-3 h-3 inline mr-1" />₱{h.cashExpected.toLocaleString()}</span>
-                          <span><Smartphone className="w-3 h-3 inline mr-1" />₱{h.gcashExpected.toLocaleString()}</span>
-                        </div>
-                      </div>
-                      <div className="p-2 rounded bg-background border">
-                        <p className="text-xs text-muted-foreground mb-1">Получено</p>
-                        <div className="flex justify-between text-sm">
-                          <span><Banknote className="w-3 h-3 inline mr-1" />₱{h.cashActual.toLocaleString()}</span>
-                          <span><Smartphone className="w-3 h-3 inline mr-1" />₱{h.gcashActual.toLocaleString()}</span>
-                        </div>
-                      </div>
+                    <div className="text-center">
+                      <p className="text-[10px] text-muted-foreground">Оставили</p>
+                      <p className="font-medium">₱{h.changeFundLeft.toLocaleString()}</p>
                     </div>
-                    
-                    {h.shortage > 0 && (
-                      <div className="flex items-center justify-center gap-2 p-2 rounded bg-red-500/10 text-red-600 text-sm">
-                        <AlertTriangle className="w-4 h-4" />
-                        Недостача записана: ₱{h.shortage.toLocaleString()}
-                      </div>
-                    )}
+                  </div>
+                  
+                  {/* Right: Result & Actions */}
+                  <div className="flex items-center gap-2">
+                    <Badge className={cn(
+                      "text-xs font-bold min-w-16 justify-center",
+                      isPositive && "bg-green-500",
+                      isNegative && "bg-red-500",
+                      isMatch && "bg-blue-500"
+                    )}>
+                      {isMatch ? '✓ OK' : `${displayDiff > 0 ? '+' : ''}₱${displayDiff.toLocaleString()}`}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => sendHistoryToTelegram(h)}
+                      disabled={processing === `${h.date}-${h.shift}-tg`}
+                    >
+                      {processing === `${h.date}-${h.shift}-tg` ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Send className="w-3 h-3" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-red-500"
+                      onClick={() => {
+                        if (confirm('Удалить?')) {
+                          deleteHistoryEntry(h);
+                        }
+                      }}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
                   </div>
                 </div>
               );
