@@ -161,14 +161,14 @@ export function Navigation({ compact, isPaused = false, activeTimersCount = 0, o
             <span>Shift</span>
           </NavLink>
 
+          <NavLink to="/finance" className={navLinkClass}>
+            <Wallet className="w-5 h-5" />
+            <span>Finance</span>
+          </NavLink>
+
           {/* Admin sections - only visible when admin mode is active */}
           {isAdmin && (
             <>
-              <NavLink to="/finance" className={navLinkClass}>
-                <Wallet className="w-5 h-5" />
-                <span>Finance</span>
-              </NavLink>
-
               <NavLink to="/inventory" className={navLinkClass}>
                 <Package className="w-5 h-5" />
                 <span>Stock</span>
