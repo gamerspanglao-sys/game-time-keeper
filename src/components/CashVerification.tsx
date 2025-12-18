@@ -200,12 +200,44 @@ export function CashVerification() {
         .eq('expense_type', 'shift')
         .order('date', { ascending: false });
       
-      // Also load unapproved expenses for the pending list
-      const { data: unapprovedExpenses } = await supabase
-        .from('cash_expenses')
-        .select('*')
-        .eq('approved', false)
-        .order('date', { ascending: false });
+      // Also load unapproved expenses ONLY from closed shifts (not from active/ended shifts)
+      // First get all closed shift IDs
+      const { data: closedShiftsForExpenses } = await supabase
+        .from('shifts')
+        .select('id')
+        .eq('status', 'closed');
+      
+      const closedShiftIds = (closedShiftsForExpenses || []).map(s => s.id);
+      
+      // Load unapproved expenses only from closed shifts OR standalone expenses (no shift_id)
+      let unapprovedExpenses: any[] = [];
+      if (closedShiftIds.length > 0) {
+        const { data: shiftExpenses } = await supabase
+          .from('cash_expenses')
+          .select('*')
+          .eq('approved', false)
+          .in('shift_id', closedShiftIds)
+          .order('date', { ascending: false });
+        
+        const { data: standaloneExpenses } = await supabase
+          .from('cash_expenses')
+          .select('*')
+          .eq('approved', false)
+          .is('shift_id', null)
+          .order('date', { ascending: false });
+        
+        unapprovedExpenses = [...(shiftExpenses || []), ...(standaloneExpenses || [])];
+      } else {
+        // Only load standalone expenses if no closed shifts
+        const { data: standaloneExpenses } = await supabase
+          .from('cash_expenses')
+          .select('*')
+          .eq('approved', false)
+          .is('shift_id', null)
+          .order('date', { ascending: false });
+        
+        unapprovedExpenses = standaloneExpenses || [];
+      }
 
       // Load cash register records for expected and actual values
       const { data: registers } = await supabase
