@@ -11,7 +11,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { 
   Loader2, Sun, Moon, Plus, Trash2, Banknote, Smartphone, 
-  Wallet, Minus, ShoppingCart, Receipt, TrendingUp, CircleDollarSign, Clock
+  Wallet, Minus, ShoppingCart, Receipt, TrendingUp, CircleDollarSign, Clock,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -270,16 +271,42 @@ export default function MoneyFlow() {
         <TabsContent value="shift" className="space-y-4 mt-4">
           {/* Shift selector */}
           <div className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border">
-            <div className="flex items-center gap-2">
-              {selectedShift === 'day' ? (
-                <Sun className="w-5 h-5 text-amber-500" />
-              ) : (
-                <Moon className="w-5 h-5 text-indigo-500" />
-              )}
-              <div>
-                <p className="font-medium">{selectedDate}</p>
-                <p className="text-xs text-muted-foreground">{selectedShift === 'day' ? 'Дневная смена' : 'Ночная смена'}</p>
+            <div className="flex items-center gap-3">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                onClick={() => {
+                  const d = new Date(selectedDate);
+                  d.setDate(d.getDate() - 1);
+                  setSelectedDate(format(d, 'yyyy-MM-dd'));
+                }}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <div className="flex items-center gap-2">
+                {selectedShift === 'day' ? (
+                  <Sun className="w-5 h-5 text-amber-500" />
+                ) : (
+                  <Moon className="w-5 h-5 text-indigo-500" />
+                )}
+                <div>
+                  <p className="font-medium">{selectedDate}</p>
+                  <p className="text-xs text-muted-foreground">{selectedShift === 'day' ? 'Дневная смена' : 'Ночная смена'}</p>
+                </div>
               </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                onClick={() => {
+                  const d = new Date(selectedDate);
+                  d.setDate(d.getDate() + 1);
+                  setSelectedDate(format(d, 'yyyy-MM-dd'));
+                }}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
             </div>
             <div className="flex gap-1">
               <Button
