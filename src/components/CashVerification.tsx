@@ -365,6 +365,11 @@ export function CashVerification() {
         .order('shift_date', { ascending: false })
         .limit(30);
       
+      if (handoverError) {
+        console.error('Error fetching approved handovers:', handoverError);
+      }
+      console.log('APPROVED HANDOVERS COUNT:', approvedHandovers?.length, approvedHandovers);
+      
       const historyMap: Record<string, ApprovedHistory> = {};
       
       (approvedHandovers || []).forEach((h: any) => {
@@ -438,6 +443,7 @@ export function CashVerification() {
 
       // Sort by date descending
       const sortedHistory = Object.values(historyMap).sort((a, b) => b.date.localeCompare(a.date));
+      console.log('FINAL HISTORY COUNT:', sortedHistory.length, sortedHistory);
       setApprovedHistory(sortedHistory.slice(0, 30));
       
     } catch (e) {
