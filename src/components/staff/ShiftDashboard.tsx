@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Sun, Moon, Clock, Users, Calendar, TrendingUp, Lock, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { Sun, Moon, Clock, Users, Calendar, TrendingUp, Lock, Pencil, RotateCcw, Trash2, Banknote } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -32,6 +32,7 @@ interface ShiftRecord {
 }
 
 const ADMIN_PIN = '8808';
+const SALARY_PER_SHIFT = 500;
 
 export function ShiftDashboard() {
   const [stats, setStats] = useState<EmployeeStats[]>([]);
@@ -274,6 +275,7 @@ export function ShiftDashboard() {
   const totalHours = stats.reduce((s, e) => s + e.total_hours, 0);
   const totalDayShifts = stats.reduce((s, e) => s + e.day_shifts, 0);
   const totalNightShifts = stats.reduce((s, e) => s + e.night_shifts, 0);
+  const totalSalary = totalShifts * SALARY_PER_SHIFT;
   const maxShifts = Math.max(...stats.map(e => e.total_shifts), 1);
 
   const periodLabel = period === 'current' ? 'This Month' : period === 'previous' ? 'Last Month' : 'All Time';
@@ -347,16 +349,27 @@ export function ShiftDashboard() {
         </Card>
       </div>
 
-      {/* Total Hours */}
-      <Card className="border-green-500/20 bg-gradient-to-r from-green-500/10 to-transparent">
-        <CardContent className="p-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5 text-green-500" />
-            <span className="text-sm font-medium">Total Hours ({periodLabel})</span>
-          </div>
-          <span className="text-xl font-bold text-green-500">{totalHours.toLocaleString()}h</span>
-        </CardContent>
-      </Card>
+      {/* Total Hours & Salary */}
+      <div className="grid grid-cols-2 gap-2">
+        <Card className="border-green-500/20 bg-gradient-to-r from-green-500/10 to-transparent">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Clock className="w-4 h-4 text-green-500" />
+              <span className="text-xs text-muted-foreground">Total Hours</span>
+            </div>
+            <span className="text-lg font-bold text-green-500">{totalHours.toLocaleString()}h</span>
+          </CardContent>
+        </Card>
+        <Card className="border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 to-transparent">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Banknote className="w-4 h-4 text-emerald-500" />
+              <span className="text-xs text-muted-foreground">Total Salary</span>
+            </div>
+            <span className="text-lg font-bold text-emerald-500">₱{totalSalary.toLocaleString()}</span>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Employee List */}
       <div className="space-y-2">
@@ -402,7 +415,7 @@ export function ShiftDashboard() {
                       </>
                     )}
                     <Badge variant="secondary" className="text-xs">
-                      {emp.total_shifts} shifts
+                      ₱{(emp.total_shifts * SALARY_PER_SHIFT).toLocaleString()}
                     </Badge>
                   </div>
                 </div>
