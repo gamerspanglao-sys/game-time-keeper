@@ -234,6 +234,31 @@ export function ShiftDashboard() {
   const resetAllShifts = async () => {
     const { start, end } = getPeriodDates();
     
+    // First get shift IDs to delete related expenses
+    const { data: shiftsToDelete } = await supabase
+      .from('shifts')
+      .select('id')
+      .eq('status', 'closed')
+      .gte('date', format(start, 'yyyy-MM-dd'))
+      .lte('date', format(end, 'yyyy-MM-dd'));
+    
+    if (shiftsToDelete && shiftsToDelete.length > 0) {
+      const shiftIds = shiftsToDelete.map(s => s.id);
+      
+      // Delete related cash_expenses first
+      await supabase
+        .from('cash_expenses')
+        .delete()
+        .in('shift_id', shiftIds);
+      
+      // Delete related bonuses
+      await supabase
+        .from('bonuses')
+        .delete()
+        .in('shift_id', shiftIds);
+    }
+    
+    // Now delete the shifts
     const { error } = await supabase
       .from('shifts')
       .delete()
