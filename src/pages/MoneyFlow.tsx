@@ -123,13 +123,15 @@ export default function MoneyFlow() {
   const totalShiftExpenses = shiftCashExp + shiftGcashExp;
   
   // Get carryover from previous shift
+  // Night shift receives from day shift of SAME date
+  // Day shift receives from night shift of SAME date
   const getPreviousShiftInfo = (date: string, shift: string): { date: string; shift: string } => {
-    if (shift === 'day') {
-      return { date, shift: 'night' };
+    if (shift === 'night') {
+      // Night shift receives from day shift of the same date
+      return { date, shift: 'day' };
     } else {
-      const prevDate = new Date(date);
-      prevDate.setDate(prevDate.getDate() - 1);
-      return { date: prevDate.toISOString().split('T')[0], shift: 'day' };
+      // Day shift receives from night shift of the same date
+      return { date, shift: 'night' };
     }
   };
   
