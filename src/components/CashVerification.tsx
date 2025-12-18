@@ -265,21 +265,20 @@ export function CashVerification() {
       const groupedVerifications: Record<string, PendingVerification> = {};
       
       // Helper to get previous shift info
-      // Day shift: previous is night of PREVIOUS day (ended at 5AM today)
-      // Night shift: previous is day of SAME day
+      // Night shift is recorded under the date when it ENDS (morning)
+      // Day shift 18 Dec (5AM-5PM): previous is night shift 18 Dec (which ended 5AM Dec 18)
+      // Night shift 18 Dec (5PM-5AM): previous is day shift 18 Dec (same day)
       const getPrevShift = (date: string, shift: string): { date: string; shift: string } => {
         if (shift === 'day') {
-          // Day shift (5AM-5PM), previous is night shift that started YESTERDAY and ended today 5AM
-          const prevDate = new Date(date);
-          prevDate.setDate(prevDate.getDate() - 1);
-          return { date: prevDate.toISOString().split('T')[0], shift: 'night' };
+          // Day shift, previous is night shift of SAME date (night ended this morning)
+          return { date, shift: 'night' };
         } else {
-          // Night shift (5PM-5AM), previous is day shift of same date
+          // Night shift, previous is day shift of SAME date
           return { date, shift: 'day' };
         }
       };
       
-      // SIMPLIFIED: Get carryover from previous shift's APPROVED handover change_fund_amount
+      // SIMPLIFIED: Get carryover from previous shift's handover change_fund_amount
       const findCarryover = (date: string, shift: string): number => {
         const prev = getPrevShift(date, shift);
         // Find previous shift's handover (approved or not)
@@ -643,21 +642,28 @@ export function CashVerification() {
     }
   };
 
-  // Save carryover (opening balance) amount - this is what was received at shift START
+  // Save carryover (opening balance) amount - update the previous shift's handover change_fund
   const saveCarryover = async (verification: PendingVerification, amount: number) => {
     try {
-      // Update change_fund_received on all shifts for this date/shift
-      for (const shift of verification.shifts) {
-        await supabase
-          .from('shifts')
-          .update({ change_fund_received: amount })
-          .eq('id', shift.id);
-      }
-      toast.success('Opening balance updated');
+      // Find the previous shift type and date
+      const prevShift = verification.shift === 'day' ? 'night' : 'day';
+      const prevDate = verification.date; // Same date for both (night ends morning of same day)
+      
+      // Update the previous shift's handover change_fund_amount
+      const { error } = await supabase
+        .from('cash_handovers')
+        .update({ change_fund_amount: amount })
+        .eq('shift_date', prevDate)
+        .ilike('shift_type', `%${prevShift}%`);
+      
+      if (error) throw error;
+      
+      toast.success('Размен обновлён');
       setEditingCarryover(null);
       loadPendingData();
     } catch (e) {
-      toast.error('Failed to update');
+      console.error('Failed to update carryover:', e);
+      toast.error('Ошибка при обновлении');
     }
   };
 
