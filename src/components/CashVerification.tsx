@@ -1554,13 +1554,21 @@ export function CashVerification() {
                     <div className="text-center">₱{v.cashExpected.toLocaleString()}</div>
                     <div className="text-center">₱{v.gcashExpected.toLocaleString()}</div>
                     
-                    <div className="text-muted-foreground">Submitted:</div>
+                    <div className="text-muted-foreground">Handed:</div>
                     <div className="text-center">₱{v.cashSubmitted.toLocaleString()}</div>
                     <div className="text-center">₱{v.gcashSubmitted.toLocaleString()}</div>
                     
+                    <div className="text-muted-foreground text-amber-600">+ Change left:</div>
+                    <div className="text-center text-amber-600">₱{v.changeFundLeaving.toLocaleString()}</div>
+                    <div className="text-center text-muted-foreground">—</div>
+                    
+                    <div className="text-muted-foreground font-medium">= Accounted:</div>
+                    <div className="text-center font-medium">₱{(v.cashSubmitted + v.changeFundLeaving).toLocaleString()}</div>
+                    <div className="text-center font-medium">₱{v.gcashSubmitted.toLocaleString()}</div>
+                    
                     <div className="font-medium">Diff:</div>
-                    <div className={cn("text-center font-bold", (v.cashSubmitted - v.cashExpected) >= 0 ? "text-green-500" : "text-red-500")}>
-                      {(v.cashSubmitted - v.cashExpected) >= 0 ? '+' : ''}₱{(v.cashSubmitted - v.cashExpected).toLocaleString()}
+                    <div className={cn("text-center font-bold", ((v.cashSubmitted + v.changeFundLeaving) - v.cashExpected) >= 0 ? "text-green-500" : "text-red-500")}>
+                      {((v.cashSubmitted + v.changeFundLeaving) - v.cashExpected) >= 0 ? '+' : ''}₱{((v.cashSubmitted + v.changeFundLeaving) - v.cashExpected).toLocaleString()}
                     </div>
                     <div className={cn("text-center font-bold", (v.gcashSubmitted - v.gcashExpected) >= 0 ? "text-green-500" : "text-red-500")}>
                       {(v.gcashSubmitted - v.gcashExpected) >= 0 ? '+' : ''}₱{(v.gcashSubmitted - v.gcashExpected).toLocaleString()}
