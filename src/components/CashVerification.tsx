@@ -494,8 +494,8 @@ export function CashVerification() {
 
       // Calculate totalAccountedFor and differences
       Object.values(historyMap).forEach(h => {
-        // Total accounted = submitted + change fund (expenses already subtracted from expected)
-        h.totalAccountedFor = h.cashSubmitted + h.gcashSubmitted + h.changeFundLeft;
+        // Total accounted = submitted + change fund - expenses (expenses were taken from register)
+        h.totalAccountedFor = h.cashSubmitted + h.gcashSubmitted + h.changeFundLeft - h.expensesCash - h.expensesGcash;
         // Difference = accounted vs expected
         h.difference = h.totalAccountedFor - (h.cashExpected + h.gcashExpected);
       });
@@ -1587,6 +1587,12 @@ export function CashVerification() {
                       <span className="text-muted-foreground">GCash:</span>
                       <span className="text-blue-500">₱{v.gcashSubmitted.toLocaleString()}</span>
                     </div>
+                    {(v.expensesCash > 0 || v.expensesGcash > 0) && (
+                      <div className="flex justify-between text-sm text-red-400">
+                        <span>Расходы за смену:</span>
+                        <span>-₱{(v.expensesCash + v.expensesGcash).toLocaleString()}</span>
+                      </div>
+                    )}
                   </div>
                 )}
                 
