@@ -389,8 +389,8 @@ export function CashVerification() {
         v.gcashExpected = v.carryoverGcash + v.loyverseGcash - v.expensesGcash;
         v.totalExpected = v.cashExpected + v.gcashExpected;
         v.totalSubmitted = v.cashSubmitted + v.gcashSubmitted;
-        // Total accounted = cash + gcash + change fund (expenses already subtracted from expected)
-        v.totalAccountedFor = v.cashSubmitted + v.gcashSubmitted + v.changeFundLeaving;
+        // Total accounted = cash + gcash + change fund - expenses (expenses taken from register)
+        v.totalAccountedFor = v.cashSubmitted + v.gcashSubmitted + v.changeFundLeaving - v.expensesCash - v.expensesGcash;
         // Difference = what was accounted for minus what was expected
         v.difference = v.totalAccountedFor - v.totalExpected;
       });
