@@ -264,21 +264,34 @@ export function CashVerification() {
       // Group by date+shift from cash_handovers
       const groupedVerifications: Record<string, PendingVerification> = {};
       
-      // Helper to get previous shift info
-      // Night shift is recorded under the date when it ENDS (morning of that date)
-      // So "night 18 Dec" = worked evening 17 Dec to morning 18 Dec
-      // Day shift 18 Dec (5AM-5PM): previous is night shift 18 Dec (which ended 5AM Dec 18)
-      // Night shift 18 Dec: previous is day shift of PREVIOUS day (17 Dec)
+      // Handover dates are recorded by when the shift ENDS:
+      // - Night shift that starts Dec 18 evening → handover recorded as Dec 19 night (ends Dec 19 morning)
+      // - Day shift Dec 19 → handover recorded as Dec 19 day
+      // 
+      // Previous shift logic (who gave you change fund):
+      // - Day shift Dec 19: previous = night Dec 19 (night that ended this morning at 5AM)
+      // - Night shift Dec 19: previous = day Dec 19 (day that ended this evening at 5PM)
       const getPrevShift = (date: string, shift: string): { date: string; shift: string } => {
         if (shift === 'day') {
-          // Day shift receives from night shift of SAME date (night ended this morning)
+          // Day shift receives from night shift of SAME date (night ended this morning at 5AM)
           return { date, shift: 'night' };
         } else {
-          // Night shift receives from day shift of PREVIOUS date
-          const prevDate = new Date(date);
-          prevDate.setDate(prevDate.getDate() - 1);
-          return { date: prevDate.toISOString().split('T')[0], shift: 'day' };
+          // Night shift receives from day shift of SAME date (day ended this evening at 5PM)
+          return { date, shift: 'day' };
         }
+      };
+      
+      // Loyverse records sales by when the shift STARTS:
+      // - Night shift handover Dec 19 = shift that started Dec 18 evening → Loyverse date = Dec 18
+      // - Day shift handover Dec 19 = shift that started Dec 19 morning → Loyverse date = Dec 19
+      const getLoyverseSalesDate = (handoverDate: string, shift: string): string => {
+        if (shift === 'night') {
+          // Night shift handover on Dec 19 = sales recorded under Dec 18 night
+          const prevDate = new Date(handoverDate);
+          prevDate.setDate(prevDate.getDate() - 1);
+          return prevDate.toISOString().split('T')[0];
+        }
+        return handoverDate;
       };
       
       // Get carryover from previous shift's handover change_fund_amount
@@ -308,7 +321,9 @@ export function CashVerification() {
         };
         
         if (!groupedVerifications[key]) {
-          const register = registers?.find(r => r.date === h.shift_date && r.shift === shiftType);
+          // Find Loyverse sales - night shifts are recorded by START date (previous day)
+          const salesDate = getLoyverseSalesDate(h.shift_date, shiftType);
+          const register = registers?.find(r => r.date === salesDate && r.shift === shiftType);
           
           // Get carryover from previous shift's handover
           const carryover = findCarryover(h.shift_date, shiftType);
@@ -405,7 +420,9 @@ export function CashVerification() {
         const key = `${h.shift_date}-${shiftType}`;
         
         if (!historyMap[key]) {
-          const register = registers?.find(r => r.date === h.shift_date && r.shift === shiftType);
+          // Find Loyverse sales - night shifts are recorded by START date (previous day)
+          const salesDate = getLoyverseSalesDate(h.shift_date, shiftType);
+          const register = registers?.find(r => r.date === salesDate && r.shift === shiftType);
           
           // Get carryover from previous shift's handover
           const carryover = findCarryover(h.shift_date, shiftType);
