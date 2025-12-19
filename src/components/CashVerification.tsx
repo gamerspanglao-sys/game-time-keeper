@@ -383,14 +383,14 @@ export function CashVerification() {
           .filter(e => e.payment_source === 'gcash')
           .reduce((sum, e) => sum + e.amount, 0);
         
-        // Expected = Opening Cash (change_fund) + Loyverse Sales (without subtracting expenses)
+        // Expected = Opening Cash (change_fund) + Loyverse Sales - Expenses (expenses taken from register)
         // carryoverCash is already set from change_fund_amount in handover record
-        v.cashExpected = v.carryoverCash + v.loyverseCash;
-        v.gcashExpected = v.carryoverGcash + v.loyverseGcash;
+        v.cashExpected = v.carryoverCash + v.loyverseCash - v.expensesCash;
+        v.gcashExpected = v.carryoverGcash + v.loyverseGcash - v.expensesGcash;
         v.totalExpected = v.cashExpected + v.gcashExpected;
         v.totalSubmitted = v.cashSubmitted + v.gcashSubmitted;
-        // Total accounted = cash submitted + gcash submitted + change fund left + expenses (money that left the register)
-        v.totalAccountedFor = v.cashSubmitted + v.gcashSubmitted + v.changeFundLeaving + v.expensesCash + v.expensesGcash;
+        // Total accounted = cash submitted + gcash submitted + change fund left for next shift
+        v.totalAccountedFor = v.cashSubmitted + v.gcashSubmitted + v.changeFundLeaving;
         // Difference = what was accounted for minus what was expected
         v.difference = v.totalAccountedFor - v.totalExpected;
       });
@@ -462,8 +462,8 @@ export function CashVerification() {
             loyverseGcash,
             expensesCash,
             expensesGcash,
-            cashExpected: carryover + loyverseCash,
-            gcashExpected: loyverseGcash,
+            cashExpected: carryover + loyverseCash - expensesCash,
+            gcashExpected: loyverseGcash - expensesGcash,
             cashSubmitted: h.cash_amount || 0,
             gcashSubmitted: h.gcash_amount || 0,
             cashActual: register?.cash_actual || 0,
@@ -494,8 +494,8 @@ export function CashVerification() {
 
       // Calculate totalAccountedFor and differences
       Object.values(historyMap).forEach(h => {
-        // Total accounted = submitted + change fund left + expenses (money that left the register)
-        h.totalAccountedFor = h.cashSubmitted + h.gcashSubmitted + h.changeFundLeft + h.expensesCash + h.expensesGcash;
+        // Total accounted = submitted + change fund left for next shift
+        h.totalAccountedFor = h.cashSubmitted + h.gcashSubmitted + h.changeFundLeft;
         // Difference = accounted vs expected
         h.difference = h.totalAccountedFor - (h.cashExpected + h.gcashExpected);
       });
@@ -1496,9 +1496,16 @@ export function CashVerification() {
                 </div>
                 
                 {(v.expensesCash > 0 || v.expensesGcash > 0) && (
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>📝 Расходы за смену:</span>
-                    <span className="text-orange-500">₱{(v.expensesCash + v.expensesGcash).toLocaleString()}</span>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">− Расходы (Cash):</span>
+                    <span className="text-red-500">₱{v.expensesCash.toLocaleString()}</span>
+                  </div>
+                )}
+                
+                {v.expensesGcash > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">− Расходы (GCash):</span>
+                    <span className="text-red-500">₱{v.expensesGcash.toLocaleString()}</span>
                   </div>
                 )}
                 
@@ -1580,12 +1587,6 @@ export function CashVerification() {
                       <span className="text-muted-foreground">GCash:</span>
                       <span className="text-blue-500">₱{v.gcashSubmitted.toLocaleString()}</span>
                     </div>
-                    {(v.expensesCash > 0 || v.expensesGcash > 0) && (
-                      <div className="flex justify-between text-sm pt-1 border-t border-border/50">
-                        <span className="text-muted-foreground">+ Расходы за смену:</span>
-                        <span className="text-orange-500">₱{(v.expensesCash + v.expensesGcash).toLocaleString()}</span>
-                      </div>
-                    )}
                   </div>
                 )}
                 
@@ -1593,7 +1594,7 @@ export function CashVerification() {
                   <span>Итого учтено:</span>
                   <span>
                     ₱{editingSubmitted === key 
-                      ? ((parseInt(editTotalCash) || 0) + (parseInt(editGcashSubmitted) || 0) + v.expensesCash + v.expensesGcash).toLocaleString()
+                      ? ((parseInt(editTotalCash) || 0) + (parseInt(editGcashSubmitted) || 0)).toLocaleString()
                       : v.totalAccountedFor.toLocaleString()
                     }
                   </span>
