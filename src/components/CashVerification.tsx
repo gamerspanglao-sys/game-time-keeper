@@ -383,14 +383,13 @@ export function CashVerification() {
           .filter(e => e.payment_source === 'gcash')
           .reduce((sum, e) => sum + e.amount, 0);
         
-        // Expected = Opening Cash (change_fund) + Loyverse Sales - Expenses
-        // Expenses reduce what should remain in register
-        v.cashExpected = v.carryoverCash + v.loyverseCash - v.expensesCash;
-        v.gcashExpected = v.carryoverGcash + v.loyverseGcash - v.expensesGcash;
+        // Ожидаемая касса = остаток + продажи (сколько ДОЛЖНО быть)
+        v.cashExpected = v.carryoverCash + v.loyverseCash;
+        v.gcashExpected = v.carryoverGcash + v.loyverseGcash;
         v.totalExpected = v.cashExpected + v.gcashExpected;
         v.totalSubmitted = v.cashSubmitted + v.gcashSubmitted;
-        // Фактическая касса = то что реально сдали (без размена - он учитывается отдельно)
-        v.totalAccountedFor = v.cashSubmitted + v.gcashSubmitted;
+        // Фактическая касса = сданные + размен + расходы (всё что было в кассе)
+        v.totalAccountedFor = v.cashSubmitted + v.gcashSubmitted + v.changeFundLeaving + v.expensesCash + v.expensesGcash;
         // Difference = what was accounted for minus what was expected
         v.difference = v.totalAccountedFor - v.totalExpected;
       });
@@ -494,10 +493,14 @@ export function CashVerification() {
 
       // Calculate totalAccountedFor and differences
       Object.values(historyMap).forEach(h => {
-        // Фактическая касса = то что реально сдали (без размена)
-        h.totalAccountedFor = h.cashSubmitted + h.gcashSubmitted;
+        // Ожидаемая = остаток + продажи (БЕЗ вычитания расходов)
+        // Но h.cashExpected уже посчитан с вычитанием, нужно добавить расходы обратно
+        const expectedCash = h.cashExpected + h.expensesCash;
+        const expectedGcash = h.gcashExpected + h.expensesGcash;
+        // Фактическая касса = сданные + размен + расходы
+        h.totalAccountedFor = h.cashSubmitted + h.gcashSubmitted + h.changeFundLeft + h.expensesCash + h.expensesGcash;
         // Difference = фактическая - ожидаемая
-        h.difference = h.totalAccountedFor - (h.cashExpected + h.gcashExpected);
+        h.difference = h.totalAccountedFor - (expectedCash + expectedGcash);
       });
 
       // Sort by date descending
