@@ -389,8 +389,8 @@ export function CashVerification() {
         v.gcashExpected = v.carryoverGcash + v.loyverseGcash - v.expensesGcash;
         v.totalExpected = v.cashExpected + v.gcashExpected;
         v.totalSubmitted = v.cashSubmitted + v.gcashSubmitted;
-        // Total accounted = cash + gcash + change fund (expenses already taken from register before handover)
-        v.totalAccountedFor = v.cashSubmitted + v.gcashSubmitted + v.changeFundLeaving;
+        // Фактическая касса = то что реально сдали (без размена - он учитывается отдельно)
+        v.totalAccountedFor = v.cashSubmitted + v.gcashSubmitted;
         // Difference = what was accounted for minus what was expected
         v.difference = v.totalAccountedFor - v.totalExpected;
       });
@@ -494,9 +494,9 @@ export function CashVerification() {
 
       // Calculate totalAccountedFor and differences
       Object.values(historyMap).forEach(h => {
-        // Total accounted = submitted + change fund - expenses (expenses were taken from register)
-        h.totalAccountedFor = h.cashSubmitted + h.gcashSubmitted + h.changeFundLeft - h.expensesCash - h.expensesGcash;
-        // Difference = accounted vs expected
+        // Фактическая касса = то что реально сдали (без размена)
+        h.totalAccountedFor = h.cashSubmitted + h.gcashSubmitted;
+        // Difference = фактическая - ожидаемая
         h.difference = h.totalAccountedFor - (h.cashExpected + h.gcashExpected);
       });
 
