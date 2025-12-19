@@ -1577,8 +1577,8 @@ export function CashVerification() {
                     </div>
                     {(v.expensesCash > 0 || v.expensesGcash > 0) && (
                       <div className="flex justify-between text-sm pt-1 border-t border-border/50">
-                        <span className="text-muted-foreground">+ Расходы за смену:</span>
-                        <span className="text-orange-500">₱{(v.expensesCash + v.expensesGcash).toLocaleString()}</span>
+                        <span className="text-muted-foreground">− Расходы за смену:</span>
+                        <span className="text-red-500">-₱{(v.expensesCash + v.expensesGcash).toLocaleString()}</span>
                       </div>
                     )}
                   </div>
