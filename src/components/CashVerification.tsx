@@ -268,16 +268,19 @@ export function CashVerification() {
       // - Night shift that starts Dec 18 evening → handover recorded as Dec 19 night (ends Dec 19 morning)
       // - Day shift Dec 19 → handover recorded as Dec 19 day
       // 
-      // Previous shift logic (who gave you change fund):
-      // - Day shift Dec 19: previous = night Dec 19 (night that ended this morning at 5AM)
-      // - Night shift Dec 19: previous = day Dec 19 (day that ended this evening at 5PM)
+      // Previous shift logic (who gave you change fund when you STARTED your shift):
+      // - Day shift Dec 19: previous = night Dec 19 (night that ended this morning at 5AM, gave you change fund)
+      // - Night shift handover Dec 19: shift STARTED Dec 18 evening, received from day Dec 18
       const getPrevShift = (date: string, shift: string): { date: string; shift: string } => {
         if (shift === 'day') {
           // Day shift receives from night shift of SAME date (night ended this morning at 5AM)
           return { date, shift: 'night' };
         } else {
-          // Night shift receives from day shift of SAME date (day ended this evening at 5PM)
-          return { date, shift: 'day' };
+          // Night shift handover on Dec 19 = shift started Dec 18 evening
+          // Received change fund from day shift of Dec 18 (who ended that evening at 5PM)
+          const prevDate = new Date(date);
+          prevDate.setDate(prevDate.getDate() - 1);
+          return { date: prevDate.toISOString().split('T')[0], shift: 'day' };
         }
       };
       
