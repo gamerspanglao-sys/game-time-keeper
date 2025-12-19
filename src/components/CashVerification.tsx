@@ -159,15 +159,17 @@ export function CashVerification() {
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
 
   // Helper to get previous shift date/type
+  // Previous shift = who gave you change fund when you STARTED your shift
   const getPreviousShift = (date: string, shift: string): { date: string; shift: string } => {
     if (shift === 'day') {
-      // Previous shift is night of previous day
+      // Day shift receives from night shift of SAME date (night ended this morning at 5AM)
+      return { date, shift: 'night' };
+    } else {
+      // Night shift handover on date X = shift started X-1 evening
+      // Received change fund from day shift of X-1 (who ended that evening at 5PM)
       const prevDate = new Date(date);
       prevDate.setDate(prevDate.getDate() - 1);
-      return { date: prevDate.toISOString().split('T')[0], shift: 'night' };
-    } else {
-      // Previous shift is day of same date
-      return { date, shift: 'day' };
+      return { date: prevDate.toISOString().split('T')[0], shift: 'day' };
     }
   };
 

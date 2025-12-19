@@ -116,7 +116,7 @@ const getHandoverDateFromShiftStart = (shiftStart: string, shiftType: string): s
 };
 
 // Get previous shift type and date for handover lookup
-// Night shifts that start after 5 PM are recorded with the NEXT day's date
+// Previous shift = who gave you change fund when you STARTED your shift
 const getPreviousShiftInfo = (): { shiftType: ShiftType; shiftDate: string } => {
   const currentType = getCurrentShiftType();
   const manilaTime = getManilaTime();
@@ -136,7 +136,8 @@ const getPreviousShiftInfo = (): { shiftType: ShiftType; shiftDate: string } => 
       return { shiftType: 'night', shiftDate: today };
     }
   } else {
-    // Night shift - previous was day shift today
+    // Night shift started THIS evening - previous was day shift of TODAY
+    // (day shift that ended this evening at 5PM gave you change fund)
     return { shiftType: 'day', shiftDate: today };
   }
 };

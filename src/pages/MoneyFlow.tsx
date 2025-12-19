@@ -125,14 +125,17 @@ export default function MoneyFlow() {
   const totalShiftExpenses = shiftCashExp + shiftGcashExp;
   
   // Get carryover from previous shift handover
-  // Handover record: shift_date + shift_type = the shift that HANDED OVER the money
-  // Night shift receives from day shift of SAME date (day shift hands over to night)
-  // Day shift receives from night shift of SAME date (night shift hands over to day)
+  // Previous shift = who gave you change fund when you STARTED your shift
+  // Day shift on date X: receives from night shift X (night ended this morning at 5AM)
+  // Night shift on date X: shift started X-1 evening, received from day shift X-1
   const previousHandover = cashHandovers.find(h => {
     const handoverShift = h.shift_type?.toLowerCase().includes('night') ? 'night' : 'day';
     if (selectedShift === 'night') {
-      // Night receives from day of same date
-      return h.shift_date === selectedDate && handoverShift === 'day';
+      // Night shift on X = started X-1 evening, received from day X-1
+      const prevDate = new Date(selectedDate);
+      prevDate.setDate(prevDate.getDate() - 1);
+      const prevDateStr = prevDate.toISOString().split('T')[0];
+      return h.shift_date === prevDateStr && handoverShift === 'day';
     } else {
       // Day receives from night of same date
       return h.shift_date === selectedDate && handoverShift === 'night';

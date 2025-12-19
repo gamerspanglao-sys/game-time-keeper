@@ -219,15 +219,18 @@ export default function Finance() {
   const gcashDiscrepancy = (currentRecord?.gcash_actual || 0) - employeeGcashSubmitted;
   
   // Get carryover (change fund) from PREVIOUS shift's approved handover
-  // Previous shift: if current is day -> previous is night of previous day
-  //                 if current is night -> previous is day of same day
+  // Previous shift = who gave you change fund when you STARTED your shift
+  // Day shift on date X: receives from night shift X (night ended this morning at 5AM)
+  // Night shift on date X: shift started X-1 evening, received from day shift X-1
   const getPreviousShiftInfo = (date: string, shift: string): { date: string; shift: string } => {
     if (shift === 'day') {
+      // Day shift receives from night shift of SAME date
+      return { date, shift: 'night' };
+    } else {
+      // Night shift on X = started X-1 evening, received from day X-1
       const prevDate = new Date(date);
       prevDate.setDate(prevDate.getDate() - 1);
-      return { date: prevDate.toISOString().split('T')[0], shift: 'night' };
-    } else {
-      return { date, shift: 'day' };
+      return { date: prevDate.toISOString().split('T')[0], shift: 'day' };
     }
   };
   
