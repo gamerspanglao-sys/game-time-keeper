@@ -1495,7 +1495,12 @@ export function CashVerification() {
                   <span className="text-blue-500">₱{v.loyverseGcash.toLocaleString()}</span>
                 </div>
                 
-                {/* Expenses moved to "Сдано сотрудниками" section */}
+                {(v.expensesCash > 0 || v.expensesGcash > 0) && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>📝 Расходы за смену:</span>
+                    <span className="text-orange-500">₱{(v.expensesCash + v.expensesGcash).toLocaleString()}</span>
+                  </div>
+                )}
                 
                 <div className="flex justify-between text-sm pt-2 border-t border-border font-bold">
                   <span>= Должно быть:</span>
