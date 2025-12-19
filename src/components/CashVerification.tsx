@@ -364,7 +364,10 @@ export function CashVerification() {
         // Expenses are recorded by shift START date (same as Loyverse)
         // So for night shift handover on Dec 19, expenses are under Dec 18
         const expenseDate = getLoyverseSalesDate(v.date, v.shift);
-        const shiftExpenses = (allExpenses || []).filter(e => e.date === expenseDate && e.shift === v.shift);
+        // Only count 'shift' expenses, not 'balance' (investor) expenses
+        const shiftExpenses = (allExpenses || []).filter(e => 
+          e.date === expenseDate && e.shift === v.shift && e.expense_type === 'shift'
+        );
         v.expenses = shiftExpenses as PendingExpense[];
         
         // Calculate expenses by payment source
@@ -430,8 +433,11 @@ export function CashVerification() {
           const carryover = findCarryover(h.shift_date, shiftType);
           
           // Get expenses for this shift - expenses are recorded by shift START date
+          // Only count 'shift' expenses, not 'balance' (investor) expenses
           const expenseDate = getLoyverseSalesDate(h.shift_date, shiftType);
-          const shiftExpenses = (allExpenses || []).filter(e => e.date === expenseDate && e.shift === shiftType);
+          const shiftExpenses = (allExpenses || []).filter(e => 
+            e.date === expenseDate && e.shift === shiftType && e.expense_type === 'shift'
+          );
           const expensesCash = shiftExpenses
             .filter(e => e.payment_source === 'cash')
             .reduce((sum, e) => sum + e.amount, 0);
