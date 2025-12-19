@@ -361,8 +361,10 @@ export function CashVerification() {
 
       // Add related expenses and calculate totals
       Object.values(groupedVerifications).forEach(v => {
-        // Use ALL expenses for calculation (not just unapproved)
-        const shiftExpenses = (allExpenses || []).filter(e => e.date === v.date && e.shift === v.shift);
+        // Expenses are recorded by shift START date (same as Loyverse)
+        // So for night shift handover on Dec 19, expenses are under Dec 18
+        const expenseDate = getLoyverseSalesDate(v.date, v.shift);
+        const shiftExpenses = (allExpenses || []).filter(e => e.date === expenseDate && e.shift === v.shift);
         v.expenses = shiftExpenses as PendingExpense[];
         
         // Calculate expenses by payment source
@@ -427,8 +429,9 @@ export function CashVerification() {
           // Get carryover from previous shift's handover
           const carryover = findCarryover(h.shift_date, shiftType);
           
-          // Get expenses for this shift
-          const shiftExpenses = (allExpenses || []).filter(e => e.date === h.shift_date && e.shift === shiftType);
+          // Get expenses for this shift - expenses are recorded by shift START date
+          const expenseDate = getLoyverseSalesDate(h.shift_date, shiftType);
+          const shiftExpenses = (allExpenses || []).filter(e => e.date === expenseDate && e.shift === shiftType);
           const expensesCash = shiftExpenses
             .filter(e => e.payment_source === 'cash')
             .reduce((sum, e) => sum + e.amount, 0);
